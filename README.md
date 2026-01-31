@@ -82,13 +82,22 @@ correctme config model gpt-5.1-codex-mini
 Note: For API providers, the setup will fetch the model list and let you choose.  
 For CLI providers, you can still choose a model manually (default is a cheap/fast model).
 
-### 3. Test It
+### 3. Configure Hotkey
+
+```bash
+correctme config hotkey
+```
+
+Choose a preset or press your desired hotkey.  
+If CorrectMe is already running, the auto-start script will restart it to apply the new hotkey.
+
+### 4. Test It
 
 ```bash
 correctme test
 ```
 
-### 4. Run
+### 5. Run
 
 ```bash
 correctme run

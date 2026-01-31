@@ -523,35 +523,7 @@ struct CorrectMeApp {
             print("✓ Model set to: \(args[3])")
             
         case "hotkey":
-            print("""
-            
-            Hotkey Configuration:
-            ────────────────────
-            Currently set to: \(config.hotkey.displayName)
-            
-            To change the hotkey, edit ~/.correctme/config.json manually:
-            
-            {
-              "hotkey": {
-                "keyCode": 14,      // 14 = E key (see key codes below)
-                "modifiers": 1310720, // Command + Shift
-                "displayName": "⌘⇧E"
-              }
-            }
-            
-            Common Key Codes:
-            - E: 14, C: 8, V: 9, S: 1, D: 2
-            - 1-0: 18-29
-            
-            Modifier Values (add together):
-            - Command: 1048576
-            - Shift: 131072
-            - Control: 262144
-            - Option: 524288
-            
-            Example: Command + Shift = 1048576 + 131072 = 1179648
-            
-            """)
+            configureHotkey()
             
         default:
             print("Unknown option: \(option)")
@@ -564,6 +536,235 @@ struct CorrectMeApp {
         } catch {
             print("❌ Failed to save config: \(error)")
         }
+    }
+
+    static func configureHotkey() {
+        print("""
+        
+        Hotkey Configuration:
+        ────────────────────
+        Currently set to: \(config.hotkey.displayName)
+        
+        Choose a preset or press a custom hotkey:
+        1) ⌘⇧E (default)
+        2) ⌘⇧C
+        3) ⌘⇧V
+        4) ⌘⇧S
+        5) ⌘⇧D
+        6) Custom (press hotkey now)
+        7) Cancel
+        
+        """)
+
+        guard let choice = readLine(), let option = Int(choice.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            print("Invalid selection.")
+            return
+        }
+
+        let presets: [HotkeyPreset] = [
+            HotkeyPreset(keyCode: 14, modifiers: CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue, displayName: "⌘⇧E"),
+            HotkeyPreset(keyCode: 8, modifiers: CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue, displayName: "⌘⇧C"),
+            HotkeyPreset(keyCode: 9, modifiers: CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue, displayName: "⌘⇧V"),
+            HotkeyPreset(keyCode: 1, modifiers: CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue, displayName: "⌘⇧S"),
+            HotkeyPreset(keyCode: 2, modifiers: CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue, displayName: "⌘⇧D")
+        ]
+
+        switch option {
+        case 1...5:
+            let preset = presets[option - 1]
+            config.hotkey = Config.HotkeyConfig(
+                keyCode: preset.keyCode,
+                modifiers: preset.modifiers,
+                displayName: preset.displayName
+            )
+            saveConfig()
+            restartDaemonIfRunning()
+            print("✓ Hotkey set to: \(preset.displayName)")
+
+        case 6:
+            if let captured = captureHotkey() {
+                print("Detected: \(captured.displayName). Save? [Y/n] ", terminator: "")
+                let input = (readLine() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if input.isEmpty || input.lowercased() == "y" {
+                    config.hotkey = Config.HotkeyConfig(
+                        keyCode: captured.keyCode,
+                        modifiers: captured.modifiers,
+                        displayName: captured.displayName
+                    )
+                    saveConfig()
+                    restartDaemonIfRunning()
+                    print("✓ Hotkey set to: \(captured.displayName)")
+                } else {
+                    print("Hotkey not changed.")
+                }
+            } else {
+                print("Hotkey capture canceled.")
+            }
+
+        case 7:
+            print("Canceled.")
+        default:
+            print("Invalid selection.")
+        }
+    }
+
+    struct HotkeyPreset {
+        let keyCode: UInt16
+        let modifiers: UInt64
+        let displayName: String
+    }
+
+    static func parseHotkey(_ input: String) -> HotkeyPreset? {
+        if input.isEmpty { return nil }
+        let tokens = input
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .split(separator: "+")
+            .map { String($0) }
+
+        if tokens.isEmpty { return nil }
+
+        var modifiers: CGEventFlags = []
+        var keyToken: String? = nil
+
+        for token in tokens {
+            switch token {
+            case "cmd", "command", "⌘":
+                modifiers.insert(.maskCommand)
+            case "shift", "⇧":
+                modifiers.insert(.maskShift)
+            case "ctrl", "control", "⌃":
+                modifiers.insert(.maskControl)
+            case "opt", "option", "alt", "⌥":
+                modifiers.insert(.maskAlternate)
+            default:
+                keyToken = token
+            }
+        }
+
+        guard let key = keyToken, let keyCode = keyCodeForToken(key) else {
+            return nil
+        }
+
+        let displayName = modifiersDisplayName(modifiers) + key.uppercased()
+        return HotkeyPreset(keyCode: keyCode, modifiers: modifiers.rawValue, displayName: displayName)
+    }
+
+    static func keyCodeForToken(_ token: String) -> UInt16? {
+        let map: [String: UInt16] = [
+            "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5,
+            "z": 6, "x": 7, "c": 8, "v": 9, "b": 11,
+            "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
+            "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23,
+            "=": 24, "9": 25, "7": 26, "-": 27, "8": 28, "0": 29,
+            "u": 32, "i": 34, "o": 31, "p": 35, "l": 37, "j": 38,
+            "k": 40, "m": 46, "n": 45
+        ]
+        return map[token]
+    }
+
+    static func modifiersDisplayName(_ modifiers: CGEventFlags) -> String {
+        var parts = ""
+        if modifiers.contains(.maskCommand) { parts += "⌘" }
+        if modifiers.contains(.maskShift) { parts += "⇧" }
+        if modifiers.contains(.maskControl) { parts += "⌃" }
+        if modifiers.contains(.maskAlternate) { parts += "⌥" }
+        return parts
+    }
+
+    static func restartDaemonIfRunning() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "if pgrep -f \"/usr/local/bin/correctme run\" >/dev/null 2>&1; then pkill -f \"/usr/local/bin/correctme run\" >/dev/null 2>&1 || true; nohup /usr/local/bin/correctme run >/tmp/correctme.log 2>/tmp/correctme.error.log & fi"]
+        do {
+            try process.run()
+        } catch {
+            // Best-effort restart; ignore failures.
+        }
+    }
+
+    static func captureHotkey() -> HotkeyPreset? {
+        print("Press your hotkey now (Esc to cancel)...")
+
+        let context = HotkeyCaptureContext()
+        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: hotkeyCaptureCallback,
+            userInfo: Unmanaged.passUnretained(context).toOpaque()
+        ) else {
+            print("❌ Failed to capture hotkey (accessibility permission required).")
+            return nil
+        }
+
+        context.runLoop = CFRunLoopGetCurrent()
+
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(context.runLoop, source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+
+        CFRunLoopRun()
+
+        CGEvent.tapEnable(tap: tap, enable: false)
+        CFRunLoopRemoveSource(context.runLoop, source, .commonModes)
+
+        return context.captured
+    }
+
+    private final class HotkeyCaptureContext {
+        var runLoop: CFRunLoop?
+        var captured: HotkeyPreset?
+    }
+
+    private static let hotkeyCaptureCallback: CGEventTapCallBack = { _, type, event, refcon in
+        guard type == .keyDown else { return Unmanaged.passUnretained(event) }
+        guard let refcon else { return Unmanaged.passUnretained(event) }
+        let context = Unmanaged<HotkeyCaptureContext>.fromOpaque(refcon).takeUnretainedValue()
+        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+        // Esc to cancel
+        if keyCode == 53 {
+            if let loop = context.runLoop {
+                CFRunLoopStop(loop)
+            }
+            return nil
+        }
+
+        let flags = event.flags
+        let relevant: CGEventFlags = [
+            .maskCommand,
+            .maskShift,
+            .maskControl,
+            .maskAlternate
+        ]
+        let modifiers = flags.intersection(relevant)
+        let displayName = modifiersDisplayName(modifiers) + keyNameForCode(keyCode)
+
+        context.captured = HotkeyPreset(
+            keyCode: keyCode,
+            modifiers: modifiers.rawValue,
+            displayName: displayName
+        )
+        if let loop = context.runLoop {
+            CFRunLoopStop(loop)
+        }
+        return nil
+    }
+
+    static func keyNameForCode(_ keyCode: UInt16) -> String {
+        let map: [UInt16: String] = [
+            0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G",
+            6: "Z", 7: "X", 8: "C", 9: "V", 11: "B",
+            12: "Q", 13: "W", 14: "E", 15: "R", 16: "Y", 17: "T",
+            18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5",
+            24: "=", 25: "9", 26: "7", 27: "-", 28: "8", 29: "0",
+            31: "O", 32: "U", 34: "I", 35: "P",
+            37: "L", 38: "J", 40: "K", 45: "N", 46: "M"
+        ]
+        return map[keyCode] ?? "KeyCode\(keyCode)"
     }
     
     static func testCorrection() {
