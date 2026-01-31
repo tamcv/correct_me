@@ -872,11 +872,20 @@ struct CorrectMeApp {
 
     static func runUpdate() {
         print("Checking for updates...")
+        let installerURLs = [
+            "https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/install.sh",
+            "https://raw.githubusercontent.com/tamcv/correct_me/master/scripts/install.sh",
+            "https://raw.githubusercontent.com/tamcv/correct_me/HEAD/scripts/install.sh"
+        ]
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
-            "curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/install.sh | sh"
+            "set -e; " +
+            "for url in " + installerURLs.map { "\"\($0)\"" }.joined(separator: " ") + "; do " +
+            "echo \"Trying: $url\"; " +
+            "if curl -fsSL \"$url\" | sh; then exit 0; fi; " +
+            "done; exit 1"
         ]
         do {
             try process.run()

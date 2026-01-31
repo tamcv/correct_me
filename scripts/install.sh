@@ -9,12 +9,15 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-LATEST_JSON="$(curl -fsSL "https://raw.githubusercontent.com/$REPO/main/dist/latest.json" 2>/dev/null || true)"
+LATEST_JSON_URL="https://raw.githubusercontent.com/$REPO/main/dist/latest.json"
+echo "Checking latest metadata: $LATEST_JSON_URL"
+LATEST_JSON="$(curl -fsSL "$LATEST_JSON_URL" 2>/dev/null || true)"
 if [ -n "$LATEST_JSON" ]; then
     TAG="$(echo "$LATEST_JSON" | /usr/bin/grep -m 1 '\"tag\"' | /usr/bin/sed -E 's/.*\"tag\": \"([^\"]+)\".*/\1/')"
     ASSET="$(echo "$LATEST_JSON" | /usr/bin/grep -m 1 '\"asset\"' | /usr/bin/sed -E 's/.*\"asset\": \"([^\"]+)\".*/\1/')"
     SHA256_EXPECTED="$(echo "$LATEST_JSON" | /usr/bin/grep -m 1 '\"sha256\"' | /usr/bin/sed -E 's/.*\"sha256\": \"([^\"]+)\".*/\1/')"
 else
+    echo "Falling back to GitHub Releases API..."
     LATEST_JSON="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest")"
     TAG="$(echo "$LATEST_JSON" | /usr/bin/grep -m 1 '\"tag_name\"' | /usr/bin/sed -E 's/.*\"tag_name\": \"([^\"]+)\".*/\1/')"
 fi
@@ -26,6 +29,7 @@ fi
 
 VERSION="${TAG#v}"
 URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
+echo "Downloading release: $URL"
 
 TMP_DIR="$(mktemp -d)"
 ZIP_PATH="$TMP_DIR/$ASSET"
