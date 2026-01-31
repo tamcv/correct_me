@@ -21,8 +21,17 @@ log "Bumping version to $VERSION"
 
 log "Committing version bump"
 git add VERSION Sources/Version.swift
-git commit -m "Bump version to $VERSION"
-git tag "v$VERSION"
+if git diff --cached --quiet; then
+    log "No version changes to commit"
+else
+    git commit -m "Bump version to $VERSION"
+fi
+
+if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+    log "Tag v$VERSION already exists"
+else
+    git tag "v$VERSION"
+fi
 
 log "Building and creating release artifacts"
 ./scripts/release.sh
