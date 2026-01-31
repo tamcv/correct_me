@@ -29,11 +29,11 @@ A native macOS tool that automatically corrects spelling and grammar of selected
 # Clone or download the project
 cd correct-me
 
-# Build
+# Build & install
 chmod +x build.sh
 ./build.sh
 
-# Follow prompts to install to /usr/local/bin
+# Follow prompts to install and enable auto-start
 ```
 
 ## Setup
@@ -44,40 +44,43 @@ CorrectMe needs accessibility access to read selected text and simulate keyboard
 
 1. Open **System Settings** → **Privacy & Security** → **Accessibility**
 2. Click the **+** button
-3. Add **Terminal** (or iTerm, Warp, etc.)
+3. Add **/usr/local/bin/correctme** (use Cmd+Shift+G → `/usr/local/bin`)
 4. Enable the toggle
 
 ### 2. Configure AI Provider
 
-You can also run an interactive setup:
+Run the interactive setup (recommended):
 
 ```bash
 correctme setup
 ```
 
-Choose one of five options:
+You’ll see available providers (CLI providers are verified before being marked ready).
 
 ```bash
-# Option A: Claude Code (recommended if you have it)
+# Option A: Claude Code (local CLI)
 correctme config provider claude-code
-
-# Option B: Claude API
-correctme config provider claude
-correctme config claude-key sk-ant-api03-xxxxx
 
 # Option B: Codex Code (local CLI)
 correctme config provider codex-code
 correctme config model gpt-5.1-codex-mini
 
-# Option C: Google Gemini
+# Option C: Claude API
+export ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
+correctme config provider claude
+
+# Option D: Google Gemini
 export GEMINI_API_KEY=AIzaSyxxxxx
 correctme config provider gemini
 
-# Option D: OpenAI API (Codex via API)
+# Option E: OpenAI API (Codex via API)
 export OPENAI_API_KEY=sk-xxxxx
 correctme config provider codex
 correctme config model gpt-5.1-codex-mini
 ```
+
+Note: For API providers, the setup will fetch the model list and let you choose.  
+For CLI providers, you can still choose a model manually (default is a cheap/fast model).
 
 ### 3. Test It
 
@@ -97,20 +100,18 @@ correctme run
 2. **Press ⌘⇧E** (or your custom hotkey)
 3. **Text is replaced** with the corrected version
 
-## Auto-start on Login
+## Auto-start on Terminal Launch
 
-To run CorrectMe automatically when you log in:
+`build.sh` can add auto-start to your `~/.zshrc`. This starts CorrectMe when you open iTerm/Terminal.
 
 ```bash
-cp com.correctme.daemon.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.correctme.daemon.plist
+~/.correctme/correctme-autostart.sh
 ```
 
-To stop auto-start:
+To disable auto-start:
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.correctme.daemon.plist
-rm ~/Library/LaunchAgents/com.correctme.daemon.plist
+sed -i '' '/correctme-autostart.sh/d' ~/.zshrc
 ```
 
 ## Commands
@@ -140,7 +141,7 @@ Config file location: `~/.correctme/config.json`
   "anthropicAPIKey": null,
   "geminiAPIKey": null,
   "openaiAPIKey": null,
-  "model": "gpt-5.1-codex-mini",
+  "model": "claude-haiku-4-5-20251001",
   "hotkey": {
     "keyCode": 14,
     "modifiers": 1179648,
@@ -173,7 +174,7 @@ Edit `~/.correctme/config.json` and change the `hotkey` section:
 
 ### "Failed to create event tap"
 
-Accessibility permissions not granted. Go to System Settings → Privacy & Security → Accessibility and enable your terminal app.
+Accessibility permissions not granted. Go to System Settings → Privacy & Security → Accessibility and enable `/usr/local/bin/correctme`.
 
 ### "No text selected"
 
