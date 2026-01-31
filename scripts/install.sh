@@ -20,6 +20,8 @@ else
     echo "Falling back to GitHub Releases API..."
     LATEST_JSON="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest")"
     TAG="$(echo "$LATEST_JSON" | /usr/bin/grep -m 1 '\"tag_name\"' | /usr/bin/sed -E 's/.*\"tag_name\": \"([^\"]+)\".*/\1/')"
+    VERSION="${TAG#v}"
+    ASSET="CorrectMe-v$VERSION-macos.zip"
 fi
 
 if [ -z "$TAG" ]; then
