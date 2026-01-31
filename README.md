@@ -36,6 +36,20 @@ chmod +x build.sh
 # Follow prompts to install and enable auto-start
 ```
 
+### One-command install (GitHub Releases)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tam-chau/correct_me/main/scripts/install.sh | sh
+```
+
+Note: update the repo URL in `scripts/install.sh` if you fork this project.
+
+### Auto-update
+
+```bash
+correctme update
+```
+
 ## Setup
 
 ### 1. Grant Accessibility Permissions
@@ -131,6 +145,8 @@ sed -i '' '/correctme-autostart.sh/d' ~/.zshrc
 | `correctme run` | Run as daemon |
 | `correctme setup` | Interactive setup |
 | `correctme config` | Show current configuration |
+| `correctme version` | Show version |
+| `correctme update` | Update to latest release |
 | `correctme config provider <name>` | Set AI provider |
 | `correctme config claude-key <key>` | Set Claude API key |
 | `correctme config gemini-key <key>` | Set Gemini API key |

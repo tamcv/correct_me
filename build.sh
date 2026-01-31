@@ -17,6 +17,7 @@ fi
 
 echo "✅ Build successful!"
 echo ""
+echo "Version: $(cat VERSION)"
 
 # Ask user if they want to install (default: yes)
 read -p "Install to /usr/local/bin/correctme? [Y/n] " -r

@@ -28,6 +28,12 @@ struct CorrectMeApp {
         case "help", "--help", "-h":
             printHelp()
             
+        case "version", "--version", "-v":
+            print("CorrectMe \(AppVersion.current)")
+            
+        case "update":
+            runUpdate()
+            
         case "setup":
             setupWizard()
             
@@ -61,6 +67,8 @@ struct CorrectMeApp {
             correctme run                 Run as background daemon
             correctme setup               Interactive setup (choose provider + keys)
             correctme config              Show current configuration
+            correctme version             Show version
+            correctme update              Update to the latest release
             correctme config provider <claude-code|codex-code|claude|gemini|codex>
             correctme config claude-key <API_KEY>
             correctme config gemini-key <API_KEY>
@@ -860,6 +868,28 @@ struct CorrectMeApp {
         
         // Run the event loop
         RunLoop.current.run()
+    }
+
+    static func runUpdate() {
+        print("Checking for updates...")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "curl -fsSL https://raw.githubusercontent.com/tam-chau/correct_me/main/scripts/install.sh | sh"
+        ]
+        do {
+            try process.run()
+            process.waitUntilExit()
+            if process.terminationStatus == 0 {
+                restartDaemonIfRunning()
+                print("✅ Update complete.")
+            } else {
+                print("❌ Update failed.")
+            }
+        } catch {
+            print("❌ Update failed: \(error)")
+        }
     }
     
     static func handleHotkey() {
