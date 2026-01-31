@@ -1,6 +1,7 @@
 # CorrectMe 📝
 
 An AI‑powered, macOS‑native text fixer built for developers.  
+Uses **your own AI** (Claude Code, Codex, or your API keys)—CorrectMe does **not** provide AI.  
 Correct any language quickly while chatting, writing docs, or reviewing PRs—just select text, press a hotkey, and keep going.
 
 ## One‑command install (GitHub Releases)
@@ -13,6 +14,36 @@ Then run:
 
 ```bash
 correctme setup
+```
+
+After setup, you can start it manually:
+
+```bash
+correctme run
+```
+
+### Auto‑start in Terminal (recommended)
+
+If you want CorrectMe to start automatically whenever you open iTerm/Terminal,
+first install the auto‑start script:
+
+```bash
+mkdir -p ~/.correctme
+curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/correctme-autostart.sh \
+  -o ~/.correctme/correctme-autostart.sh
+chmod +x ~/.correctme/correctme-autostart.sh
+```
+
+Then you can run it once:
+
+```bash
+~/.correctme/correctme-autostart.sh
+```
+
+To enable it permanently (run once):
+
+```bash
+echo "~/.correctme/correctme-autostart.sh" >> ~/.zshrc
 ```
 
 ## Features
