@@ -2,7 +2,7 @@
 
 set -e
 
-REPO="tam-chau/correct_me"
+REPO="tamcv/correct_me"
 
 if [ "$(uname -s)" != "Darwin" ]; then
     echo "This installer currently supports macOS only."

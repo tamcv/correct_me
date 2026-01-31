@@ -1,8 +1,19 @@
 # CorrectMe 📝
 
-A native macOS tool that automatically corrects spelling and grammar of selected text using AI.
+An AI‑powered, macOS‑native text fixer built for developers.  
+Correct any language quickly while chatting, writing docs, or reviewing PRs—just select text, press a hotkey, and keep going.
 
-**Select text → Press hotkey → Text is corrected in place!**
+## One‑command install (GitHub Releases)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/install.sh | sh
+```
+
+Then run:
+
+```bash
+correctme setup
+```
 
 ## Features
 
@@ -23,7 +34,7 @@ A native macOS tool that automatically corrects spelling and grammar of selected
   - Google Gemini API key, or
   - OpenAI API key
 
-## Installation
+## Installation (from source)
 
 ```bash
 # Clone or download the project
@@ -34,12 +45,6 @@ chmod +x build.sh
 ./build.sh
 
 # Follow prompts to install and enable auto-start
-```
-
-### One-command install (GitHub Releases)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/tam-chau/correct_me/main/scripts/install.sh | sh
 ```
 
 Note: update the repo URL in `scripts/install.sh` if you fork this project.

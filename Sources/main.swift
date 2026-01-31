@@ -876,7 +876,7 @@ struct CorrectMeApp {
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
-            "curl -fsSL https://raw.githubusercontent.com/tam-chau/correct_me/main/scripts/install.sh | sh"
+            "curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/install.sh | sh"
         ]
         do {
             try process.run()
@@ -885,7 +885,7 @@ struct CorrectMeApp {
                 restartDaemonIfRunning()
                 print("✅ Update complete.")
             } else {
-                print("❌ Update failed.")
+                print("❌ Update failed. Could not download installer or install release.")
             }
         } catch {
             print("❌ Update failed: \(error)")
