@@ -5,13 +5,17 @@ struct Config: Codable {
     var aiProvider: AIProvider
     var anthropicAPIKey: String?
     var geminiAPIKey: String?
+    var openaiAPIKey: String?
     var hotkey: HotkeyConfig
     var customPrompt: String?
+    var model: String?
     
     enum AIProvider: String, Codable {
         case claude = "claude"
         case gemini = "gemini"
         case claudeCode = "claude-code"
+        case codex = "codex"
+        case codexCode = "codex-code"
     }
     
     struct HotkeyConfig: Codable {
@@ -33,9 +37,17 @@ struct Config: Codable {
             aiProvider: .claudeCode,
             anthropicAPIKey: nil,
             geminiAPIKey: nil,
+            openaiAPIKey: nil,
             hotkey: .default,
-            customPrompt: nil
+            customPrompt: nil,
+            model: nil
         )
+    }
+
+    enum DefaultModels {
+        static let anthropic = "claude-haiku-4-5-20251001"
+        static let gemini = "gemini-2.0-flash"
+        static let openaiCodex = "gpt-5.1-codex-mini"
     }
     
     static var configPath: URL {

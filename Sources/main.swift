@@ -28,6 +28,9 @@ struct CorrectMeApp {
         case "help", "--help", "-h":
             printHelp()
             
+        case "setup":
+            setupWizard()
+            
         case "config":
             if args.count > 2 {
                 configureOption(args)
@@ -56,10 +59,13 @@ struct CorrectMeApp {
         USAGE:
             correctme                     Run as background daemon
             correctme run                 Run as background daemon
+            correctme setup               Interactive setup (choose provider + keys)
             correctme config              Show current configuration
-            correctme config provider <claude-code|claude|gemini>
+            correctme config provider <claude-code|codex-code|claude|gemini|codex>
             correctme config claude-key <API_KEY>
             correctme config gemini-key <API_KEY>
+            correctme config openai-key <API_KEY>
+            correctme config model <MODEL_NAME>
             correctme config hotkey       Show hotkey configuration instructions
             correctme test                Test AI correction with sample text
             correctme help                Show this help message
@@ -72,13 +78,22 @@ struct CorrectMeApp {
                # Option A: Use Claude Code (if you have it installed)
                correctme config provider claude-code
                
-               # Option B: Use Claude API
+               # Option B: Use Codex Code (if you have it installed)
+               correctme config provider codex-code
+               correctme config model gpt-5.1-codex-mini
+               
+               # Option C: Use Claude API
                correctme config provider claude
                correctme config claude-key sk-ant-xxxxx
                
-               # Option C: Use Gemini API
+               # Option D: Use Gemini API
                correctme config provider gemini
                correctme config gemini-key AIzaSyxxxxx
+
+               # Option E: Use OpenAI API (Codex via API)
+               correctme config provider codex
+               correctme config openai-key sk-xxxxx
+               correctme config model gpt-5.1-codex-mini
             
             3. Run the daemon:
                correctme run
@@ -100,10 +115,353 @@ struct CorrectMeApp {
         Provider:     \(config.aiProvider.rawValue)
         Claude Key:   \(config.anthropicAPIKey?.prefix(10).description ?? "not set")...
         Gemini Key:   \(config.geminiAPIKey?.prefix(10).description ?? "not set")...
+        OpenAI Key:   \(config.openaiAPIKey?.prefix(10).description ?? "not set")...
         Hotkey:       \(config.hotkey.displayName)
+        Model:        \(config.model ?? "default (low-cost)")
         Config Path:  \(Config.configPath.path)
         
         """)
+    }
+    
+    static func setupWizard() {
+        print("Checking CLI availability...")
+        let claudeStatus = checkClaudeCLI()
+        let codexStatus = checkCodexCLI()
+        
+        print("""
+        
+        Setup - Choose AI provider:
+        1) Claude Code (local CLI) \(cliStatusLabel(claudeStatus))
+        2) Codex Code (local CLI) \(cliStatusLabel(codexStatus))
+        3) OpenAI API (key required)
+        4) Gemini (API key required)
+        5) Claude API (API key required)
+        6) Cancel
+        
+        """)
+        
+        guard let choice = readLine(), let option = Int(choice.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            print("Invalid selection.")
+            return
+        }
+        
+        switch option {
+        case 1:
+            if case .ready = claudeStatus {
+                // ok
+            } else {
+                print("⚠️  Claude CLI not ready. Install Claude Code and ensure you can run it.")
+                return
+            }
+            config.aiProvider = .claudeCode
+            promptAndSetModel(defaultModel: Config.DefaultModels.anthropic)
+            saveConfig()
+            print("✓ Provider set to: claude-code")
+            
+        case 2:
+            if case .ready = codexStatus {
+                // ok
+            } else {
+                print("⚠️  Codex CLI not ready. Install Codex and ensure you can run it.")
+                return
+            }
+            config.aiProvider = .codexCode
+            promptAndSetModel(defaultModel: Config.DefaultModels.openaiCodex)
+            saveConfig()
+            print("✓ Provider set to: codex-code")
+            
+        case 3:
+            config.aiProvider = .codex
+            if !promptAndSetKey(label: "OpenAI API key", envVar: "OPENAI_API_KEY", setter: { config.openaiAPIKey = $0 }) {
+                return
+            }
+            promptAndSetModelFromAPI(
+                defaultModel: Config.DefaultModels.openaiCodex,
+                fetcher: fetchOpenAIModels
+            )
+            saveConfig()
+            print("✓ Provider set to: codex")
+            
+        case 4:
+            config.aiProvider = .gemini
+            if !promptAndSetKey(label: "Gemini API key", envVar: "GEMINI_API_KEY", setter: { config.geminiAPIKey = $0 }) {
+                return
+            }
+            promptAndSetModelFromAPI(
+                defaultModel: Config.DefaultModels.gemini,
+                fetcher: fetchGeminiModels
+            )
+            saveConfig()
+            print("✓ Provider set to: gemini")
+            
+        case 5:
+            config.aiProvider = .claude
+            if !promptAndSetKey(label: "Claude API key", envVar: "ANTHROPIC_API_KEY", setter: { config.anthropicAPIKey = $0 }) {
+                return
+            }
+            promptAndSetModelFromAPI(
+                defaultModel: Config.DefaultModels.anthropic,
+                fetcher: fetchAnthropicModels
+            )
+            saveConfig()
+            print("✓ Provider set to: claude")
+            
+        default:
+            print("Setup canceled.")
+        }
+    }
+    
+    static func promptAndSetKey(label: String, envVar: String, setter: (String) -> Void) -> Bool {
+        print("\(label) (press Enter to use \(envVar)): ", terminator: "")
+        let input = readLine() ?? ""
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            setter(trimmed)
+            return true
+        }
+        if let env = ProcessInfo.processInfo.environment[envVar], !env.isEmpty {
+            setter(env)
+            return true
+        }
+        print("Key is required. Set \(envVar) or paste the key.")
+        return false
+    }
+    
+    static func promptAndSetModel(defaultModel: String) {
+        print("Model (press Enter for default low-cost: \(defaultModel)): ", terminator: "")
+        let input = readLine() ?? ""
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.model = trimmed.isEmpty ? defaultModel : trimmed
+    }
+
+    static func promptAndSetModelFromAPI(defaultModel: String, fetcher: (String) -> [String]?) {
+        let apiKey: String?
+        switch config.aiProvider {
+        case .claude:
+            apiKey = config.anthropicAPIKey
+        case .gemini:
+            apiKey = config.geminiAPIKey
+        case .codex:
+            apiKey = config.openaiAPIKey
+        default:
+            apiKey = nil
+        }
+
+        guard let key = apiKey, let models = fetcher(key), !models.isEmpty else {
+            print("⚠️  Could not fetch models. Enter a model name manually.")
+            promptAndSetModel(defaultModel: defaultModel)
+            return
+        }
+
+        let sorted = models.sorted()
+        let defaultChoice = sorted.firstIndex(of: defaultModel).map { $0 + 1 } ?? 0
+
+        print("\nAvailable models:")
+        for (idx, name) in sorted.enumerated() {
+            let marker = (name == defaultModel) ? " (default)" : ""
+            print("\(idx + 1)) \(name)\(marker)")
+        }
+        print("\nChoose a model by number (or press Enter for default \(defaultModel)):", terminator: " ")
+
+        let input = (readLine() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if input.isEmpty {
+            config.model = defaultModel
+            return
+        }
+        if let index = Int(input), index >= 1, index <= sorted.count {
+            config.model = sorted[index - 1]
+            return
+        }
+        config.model = input
+        if defaultChoice == 0 {
+            print("Note: default model not found in API list. Using custom entry.")
+        }
+    }
+    
+    static func commandExists(_ name: String) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["which", name]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    private enum CLIStatus {
+        case ready
+        case notFound
+        case failed(String)
+    }
+
+    private static func cliStatusLabel(_ status: CLIStatus) -> String {
+        switch status {
+        case .ready:
+            return "[ready]"
+        case .notFound:
+            return "[not found]"
+        case .failed:
+            return "[not ready]"
+        }
+    }
+
+    private static func checkClaudeCLI() -> CLIStatus {
+        guard commandExists("claude") else { return .notFound }
+        let prompt = "Respond with OK only."
+        let result = runProcess(
+            command: "/usr/bin/env",
+            args: ["claude", "-p", prompt],
+            stdin: nil
+        )
+        if result.exitCode == 0, !result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .ready
+        }
+        return .failed(result.stderr)
+    }
+
+    private static func checkCodexCLI() -> CLIStatus {
+        guard commandExists("codex") else { return .notFound }
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("correctme_codex_check_\(UUID().uuidString).txt")
+        let prompt = "Respond with OK only."
+        let result = runProcess(
+            command: "/usr/bin/env",
+            args: ["codex", "exec", "--output-last-message", outputURL.path, "-"],
+            stdin: prompt
+        )
+        let fileData = (try? Data(contentsOf: outputURL)) ?? Data()
+        let output = String(data: fileData, encoding: .utf8) ?? ""
+        try? FileManager.default.removeItem(at: outputURL)
+        if result.exitCode == 0, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .ready
+        }
+        return .failed(result.stderr)
+    }
+
+    private static func runProcess(command: String, args: [String], stdin: String?) -> (exitCode: Int32, stdout: String, stderr: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: command)
+        process.arguments = args
+
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = errPipe
+
+        if let stdin {
+            let inPipe = Pipe()
+            process.standardInput = inPipe
+            do {
+                try process.run()
+                if let data = stdin.data(using: .utf8) {
+                    inPipe.fileHandleForWriting.write(data)
+                }
+                inPipe.fileHandleForWriting.closeFile()
+            } catch {
+                return (1, "", "\(error)")
+            }
+        } else {
+            do {
+                try process.run()
+            } catch {
+                return (1, "", "\(error)")
+            }
+        }
+
+        process.waitUntilExit()
+
+        let stdoutData = outPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrData = errPipe.fileHandleForReading.readDataToEndOfFile()
+        let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+        let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+        return (process.terminationStatus, stdout, stderr)
+    }
+
+    static func fetchOpenAIModels(apiKey: String) -> [String]? {
+        let url = URL(string: "https://api.openai.com/v1/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: [String]? = nil
+
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            defer { semaphore.signal() }
+            guard let data, let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                return
+            }
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let dataArray = json["data"] as? [[String: Any]] else {
+                return
+            }
+            result = dataArray.compactMap { $0["id"] as? String }
+        }.resume()
+
+        semaphore.wait()
+        return result
+    }
+
+    static func fetchAnthropicModels(apiKey: String) -> [String]? {
+        let url = URL(string: "https://api.anthropic.com/v1/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: [String]? = nil
+
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            defer { semaphore.signal() }
+            guard let data, let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                return
+            }
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let dataArray = json["data"] as? [[String: Any]] else {
+                return
+            }
+            result = dataArray.compactMap { $0["id"] as? String }
+        }.resume()
+
+        semaphore.wait()
+        return result
+    }
+
+    static func fetchGeminiModels(apiKey: String) -> [String]? {
+        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models?key=\(apiKey)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: [String]? = nil
+
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            defer { semaphore.signal() }
+            guard let data, let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                return
+            }
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let modelsArray = json["models"] as? [[String: Any]] else {
+                return
+            }
+            result = modelsArray.compactMap { model in
+                if let name = model["name"] as? String {
+                    return name.hasPrefix("models/") ? String(name.dropFirst("models/".count)) : name
+                }
+                return nil
+            }
+        }.resume()
+
+        semaphore.wait()
+        return result
     }
     
     static func configureOption(_ args: [String]) {
@@ -117,11 +475,11 @@ struct CorrectMeApp {
         switch option {
         case "provider":
             guard args.count >= 4 else {
-                print("Usage: correctme config provider <claude-code|claude|gemini>")
+                print("Usage: correctme config provider <claude-code|codex-code|claude|gemini|codex>")
                 return
             }
             guard let provider = Config.AIProvider(rawValue: args[3]) else {
-                print("Invalid provider. Use: claude-code, claude, or gemini")
+                print("Invalid provider. Use: claude-code, codex-code, claude, gemini, or codex")
                 return
             }
             config.aiProvider = provider
@@ -145,6 +503,24 @@ struct CorrectMeApp {
             config.geminiAPIKey = args[3]
             saveConfig()
             print("✓ Gemini API key saved")
+
+        case "openai-key":
+            guard args.count >= 4 else {
+                print("Usage: correctme config openai-key <API_KEY>")
+                return
+            }
+            config.openaiAPIKey = args[3]
+            saveConfig()
+            print("✓ OpenAI API key saved")
+
+        case "model":
+            guard args.count >= 4 else {
+                print("Usage: correctme config model <MODEL_NAME>")
+                return
+            }
+            config.model = args[3]
+            saveConfig()
+            print("✓ Model set to: \(args[3])")
             
         case "hotkey":
             print("""
@@ -197,7 +573,7 @@ struct CorrectMeApp {
             aiProvider = try createAIProvider(from: config)
         } catch {
             print("❌ \(error.localizedDescription)")
-            print("Configure a provider first: correctme config provider <claude-code|claude|gemini>")
+            print("Configure a provider first: correctme config provider <claude-code|codex-code|claude|gemini|codex>")
             return
         }
         

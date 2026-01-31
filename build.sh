@@ -18,11 +18,11 @@ fi
 echo "✅ Build successful!"
 echo ""
 
-# Ask user if they want to install
-read -p "Install to /usr/local/bin/correctme? [y/N] " -n 1 -r
+# Ask user if they want to install (default: yes)
+read -p "Install to /usr/local/bin/correctme? [Y/n] " -r
 echo ""
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
     sudo cp "$BINARY_PATH" /usr/local/bin/correctme
     sudo chmod +x /usr/local/bin/correctme
     echo "✅ Installed to /usr/local/bin/correctme"

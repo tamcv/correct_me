@@ -7,7 +7,7 @@ A native macOS tool that automatically corrects spelling and grammar of selected
 ## Features
 
 - 🎯 **Global hotkey** - Works in any app (default: ⌘⇧E)
-- 🤖 **Multiple AI providers** - Claude Code, Claude API, or Google Gemini
+- 🤖 **Multiple AI providers** - Claude Code, Codex Code, Claude API, Google Gemini, or OpenAI API
 - 🌍 **Multi-language** - Preserves original language (Vietnamese, English, etc.)
 - ⚡ **Fast** - Native Swift, minimal overhead
 - 🔒 **Privacy** - Runs locally, API keys stored in `~/.correctme/`
@@ -18,8 +18,10 @@ A native macOS tool that automatically corrects spelling and grammar of selected
 - Xcode Command Line Tools (`xcode-select --install`)
 - One of:
   - [Claude Code](https://claude.ai/code) installed, or
+  - Codex CLI installed, or
   - Anthropic API key, or
-  - Google Gemini API key
+  - Google Gemini API key, or
+  - OpenAI API key
 
 ## Installation
 
@@ -47,7 +49,13 @@ CorrectMe needs accessibility access to read selected text and simulate keyboard
 
 ### 2. Configure AI Provider
 
-Choose one of three options:
+You can also run an interactive setup:
+
+```bash
+correctme setup
+```
+
+Choose one of five options:
 
 ```bash
 # Option A: Claude Code (recommended if you have it)
@@ -57,9 +65,18 @@ correctme config provider claude-code
 correctme config provider claude
 correctme config claude-key sk-ant-api03-xxxxx
 
+# Option B: Codex Code (local CLI)
+correctme config provider codex-code
+correctme config model gpt-5.1-codex-mini
+
 # Option C: Google Gemini
+export GEMINI_API_KEY=AIzaSyxxxxx
 correctme config provider gemini
-correctme config gemini-key AIzaSyxxxxx
+
+# Option D: OpenAI API (Codex via API)
+export OPENAI_API_KEY=sk-xxxxx
+correctme config provider codex
+correctme config model gpt-5.1-codex-mini
 ```
 
 ### 3. Test It
@@ -102,10 +119,13 @@ rm ~/Library/LaunchAgents/com.correctme.daemon.plist
 |---------|-------------|
 | `correctme` | Run as daemon |
 | `correctme run` | Run as daemon |
+| `correctme setup` | Interactive setup |
 | `correctme config` | Show current configuration |
 | `correctme config provider <name>` | Set AI provider |
 | `correctme config claude-key <key>` | Set Claude API key |
 | `correctme config gemini-key <key>` | Set Gemini API key |
+| `correctme config openai-key <key>` | Set OpenAI API key |
+| `correctme config model <name>` | Set model name |
 | `correctme config hotkey` | Show hotkey configuration help |
 | `correctme test` | Test AI correction |
 | `correctme help` | Show help |
@@ -119,6 +139,8 @@ Config file location: `~/.correctme/config.json`
   "aiProvider": "claude-code",
   "anthropicAPIKey": null,
   "geminiAPIKey": null,
+  "openaiAPIKey": null,
+  "model": "gpt-5.1-codex-mini",
   "hotkey": {
     "keyCode": 14,
     "modifiers": 1179648,
