@@ -74,6 +74,7 @@ The LaunchAgent plist is stored at `~/Library/LaunchAgents/com.correctme.daemon.
 ## Features
 
 - 🎯 **Global hotkey** - Works in any app (default: ⌘⇧E)
+- 💬 **Cursor HUD** - Small floating window near cursor shows real-time correction status
 - 🤖 **Multiple AI providers** - Claude Code, Codex Code, Claude API, Google Gemini, or OpenAI API
 - 🌍 **Multi-language** - Preserves original language (Vietnamese, English, etc.)
 - ⚡ **Fast** - Native Swift, minimal overhead

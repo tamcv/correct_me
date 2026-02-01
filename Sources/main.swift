@@ -7,6 +7,7 @@ struct CorrectMeApp {
     static var hotkeyManager: HotkeyManager?
     static var aiProvider: AIProvider?
     static var statusBar: StatusBarController?
+    static var hud: HUDWindow?
     static var isProcessing = false
     
     static func main() {
@@ -946,6 +947,9 @@ struct CorrectMeApp {
         statusBar = StatusBarController()
         statusBar?.setIdle()
 
+        // Set up HUD window
+        hud = HUDWindow()
+
         // Run the event loop
         RunLoop.current.run()
     }
@@ -986,37 +990,43 @@ struct CorrectMeApp {
             print("⏳ Already processing...")
             return
         }
-        
+
         isProcessing = true
         statusBar?.setBusy()
-        
+
+        // Show HUD loading state near cursor
+        hud?.showLoading()
+
         // Longer delay to let the hotkey event fully complete
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             guard let selectedText = AccessibilityHelper.getSelectedText(), !selectedText.isEmpty else {
                 print("⚠️  No text selected")
                 isProcessing = false
                 statusBar?.setIdle()
+                hud?.showError()
                 return
             }
-            
+
             let preview = selectedText.prefix(50)
             print("📝 Correcting: \"\(preview)\(selectedText.count > 50 ? "..." : "")\"")
-            
+
             Task {
                 do {
                     let correctedText = try await aiProvider!.correctText(selectedText)
-                    
+
                     await MainActor.run {
                         AccessibilityHelper.replaceSelectedText(with: correctedText)
                         print("✅ Corrected!")
                         isProcessing = false
                         statusBar?.setIdle()
+                        hud?.showSuccess()
                     }
                 } catch {
                     await MainActor.run {
                         print("❌ Error: \(error.localizedDescription)")
                         isProcessing = false
                         statusBar?.setError()
+                        hud?.showError()
                     }
                 }
             }

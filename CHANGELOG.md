@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cursor HUD** - Small floating window appears near mouse cursor showing real-time correction status
+  - Loading spinner when processing
+  - Success checkmark when done
+  - Error indicator on failure
+  - Auto-dismisses after completion
+
 ### Changed
 - **BREAKING**: Simplified command structure for better user experience
   - `correctme start` now always runs in background and auto-enables LaunchAgent
