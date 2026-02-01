@@ -86,6 +86,9 @@ struct CorrectMeApp {
             print("Note: 'correctme run' is deprecated. Use 'correctme start' instead.")
             DaemonManager.startDaemon(background: false)
 
+        case "uninstall":
+            uninstallCorrectMe()
+
         default:
             print("Unknown command: \(command)")
             print("Use 'correctme help' for usage information.")
@@ -110,6 +113,7 @@ struct CorrectMeApp {
             correctme test                Test AI correction with sample text
             correctme version             Show version
             correctme update              Update to the latest release
+            correctme uninstall           Uninstall CorrectMe
             correctme help                Show this help message
 
         DAEMON MANAGEMENT:
@@ -996,5 +1000,118 @@ struct CorrectMeApp {
                 }
             }
         }
+    }
+
+    static func uninstallCorrectMe() {
+        print("""
+
+        ╔══════════════════════════════════════════╗
+        ║       Uninstall CorrectMe                ║
+        ╚══════════════════════════════════════════╝
+
+        This will remove:
+          • Binary: /usr/local/bin/correctme
+          • Config: ~/.correctme/
+          • Auto-start from ~/.zshrc
+          • LaunchAgent (if installed)
+
+        """)
+
+        print("Are you sure you want to uninstall? [y/N] ", terminator: "")
+        guard let response = readLine()?.lowercased(),
+              response == "y" || response == "yes" else {
+            print("Uninstall cancelled.")
+            exit(0)
+        }
+
+        print("")
+        var removedItems: [String] = []
+
+        // 1. Stop daemon if running
+        if DaemonManager.getDaemonPID() != nil {
+            print("🛑 Stopping daemon...")
+            _ = DaemonManager.stopDaemon()
+            removedItems.append("Stopped daemon")
+        }
+
+        // 2. Remove LaunchAgent if present
+        let launchAgentPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/com.correctme.daemon.plist")
+
+        if FileManager.default.fileExists(atPath: launchAgentPath.path) {
+            print("🗑  Removing LaunchAgent...")
+
+            // Unload first
+            let unloadProcess = Process()
+            unloadProcess.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            unloadProcess.arguments = ["unload", launchAgentPath.path]
+            try? unloadProcess.run()
+            unloadProcess.waitUntilExit()
+
+            // Remove file
+            try? FileManager.default.removeItem(at: launchAgentPath)
+            removedItems.append("Removed LaunchAgent")
+        }
+
+        // 3. Remove auto-start from .zshrc
+        let zshrcPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".zshrc")
+
+        if FileManager.default.fileExists(atPath: zshrcPath.path) {
+            do {
+                let content = try String(contentsOf: zshrcPath, encoding: .utf8)
+                let lines = content.components(separatedBy: .newlines)
+                let filtered = lines.filter { line in
+                    !line.contains("correctme-autostart.sh") &&
+                    !line.contains("# CorrectMe auto-start")
+                }
+
+                if filtered.count != lines.count {
+                    print("🗑  Removing auto-start from ~/.zshrc...")
+                    try filtered.joined(separator: "\n").write(to: zshrcPath, atomically: true, encoding: .utf8)
+                    removedItems.append("Removed auto-start from ~/.zshrc")
+                }
+            } catch {
+                print("⚠️  Warning: Could not update ~/.zshrc")
+            }
+        }
+
+        // 4. Remove config directory
+        let configDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".correctme")
+
+        if FileManager.default.fileExists(atPath: configDir.path) {
+            print("🗑  Removing config directory...")
+            try? FileManager.default.removeItem(at: configDir)
+            removedItems.append("Removed ~/.correctme/")
+        }
+
+        // 5. Remove binary (this will fail if not run with proper permissions)
+        let binaryPath = "/usr/local/bin/correctme"
+        if FileManager.default.fileExists(atPath: binaryPath) {
+            print("""
+
+            ⚠️  To remove the binary, run:
+                sudo rm /usr/local/bin/correctme
+
+            Or use the uninstall script:
+                curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/uninstall.sh | sh
+
+            """)
+        }
+
+        // Summary
+        print("")
+        print("✅ Uninstall complete!")
+        print("")
+        if !removedItems.isEmpty {
+            print("Removed:")
+            for item in removedItems {
+                print("  ✓ \(item)")
+            }
+        }
+        print("")
+        print("👋 Thanks for using CorrectMe!")
+        print("")
     }
 }

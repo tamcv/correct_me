@@ -135,6 +135,23 @@ Note: Update the repo URL in `scripts/install.sh` if you fork this project.
 correctme update
 ```
 
+### Uninstall
+
+If you no longer need CorrectMe:
+
+```bash
+# Option 1: Use uninstall command
+correctme uninstall
+
+# Option 2: Use uninstall script (also removes binary)
+curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/uninstall.sh | sh
+
+# Option 3: Manual removal
+sudo rm /usr/local/bin/correctme
+rm -rf ~/.correctme
+sed -i '' '/correctme-autostart.sh/d' ~/.zshrc
+```
+
 ## Setup
 
 ### 1. Grant Accessibility Permissions
