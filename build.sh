@@ -85,4 +85,3 @@ else
     echo "Binary location: $BINARY_PATH"
     echo "You can run it directly or copy it to your PATH manually."
 fi
-prom
