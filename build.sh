@@ -26,6 +26,7 @@ echo ""
 if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
     sudo cp "$BINARY_PATH" /usr/local/bin/correctme
     sudo chmod +x /usr/local/bin/correctme
+    sudo codesign --force --deep --sign - /usr/local/bin/correctme
     echo "✅ Installed to /usr/local/bin/correctme"
     echo ""
     # Optional: enable auto-start via zshrc (recommended for iTerm/Terminal)
