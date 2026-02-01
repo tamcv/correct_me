@@ -47,17 +47,29 @@ if [ -n "$SHA256_EXPECTED" ]; then
     fi
 fi
 
-echo "📦 Installing to /usr/local/bin/correctme..."
+echo "📦 Installing CorrectMe..."
 unzip -q "$ZIP_PATH" -d "$TMP_DIR"
-sudo mv "$TMP_DIR/correctme" /usr/local/bin/correctme
-sudo chmod +x /usr/local/bin/correctme
 
-# Code sign to prevent macOS Gatekeeper issues
-echo "🔐 Code signing binary..."
-sudo codesign --force --deep --sign - /usr/local/bin/correctme
+# Remove old installation if exists
+if [ -d "/Applications/CorrectMe.app" ]; then
+    echo "🗑  Removing old version..."
+    rm -rf /Applications/CorrectMe.app
+fi
+
+# Install .app to Applications
+echo "📱 Installing CorrectMe.app to /Applications..."
+mv "$TMP_DIR/CorrectMe.app" /Applications/
+
+# Create CLI symlink
+echo "🔗 Creating CLI symlink at /usr/local/bin/correctme..."
+sudo ln -sf /Applications/CorrectMe.app/Contents/MacOS/correctme /usr/local/bin/correctme
 
 echo ""
 echo "✅ Installed CorrectMe $VERSION"
+echo ""
+echo "Installed:"
+echo "  • App: /Applications/CorrectMe.app"
+echo "  • CLI: /usr/local/bin/correctme"
 echo ""
 
 # Clean up
@@ -74,22 +86,28 @@ echo ""
 if [ -z "$REPLY" ] || echo "$REPLY" | grep -iq "^y"; then
     correctme setup
     echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Installation Complete!"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "Next steps:"
-    echo "  1. Grant Accessibility permissions:"
-    echo "     System Settings → Privacy & Security → Accessibility"
-    echo "     Add and enable: /usr/local/bin/correctme"
-    echo ""
-    echo "  2. Start the daemon:"
-    echo "     correctme start -d"
-    echo ""
-    echo "  3. Select text and press ⌘⇧E to correct it!"
-    echo ""
-else
-    echo "Setup skipped. To configure later, run:"
-    echo "  correctme setup"
+fi
+
+# Ask if they want to start the daemon
+read -p "Start CorrectMe daemon now? [Y/n] " -r
+echo ""
+
+if [ -z "$REPLY" ] || echo "$REPLY" | grep -iq "^y"; then
+    correctme start
     echo ""
 fi
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Installation Complete!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "CorrectMe is now installed and will auto-start at login!"
+echo ""
+echo "Quick start:"
+echo "  • Select any text and press ⌘⇧E to correct it"
+echo "  • Run 'correctme status' to check daemon status"
+echo "  • Run 'correctme help' for more commands"
+echo ""
+echo "To disable auto-start at login:"
+echo "  correctme disable"
+echo ""

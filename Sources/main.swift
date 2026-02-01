@@ -63,8 +63,19 @@ struct CorrectMeApp {
             testCorrection()
 
         case "start":
-            let isDaemon = args.contains("-d") || args.contains("--daemon")
-            DaemonManager.startDaemon(background: isDaemon)
+            // Auto-enable LaunchAgent if not already enabled
+            let launchAgentsDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/LaunchAgents")
+            let targetPlist = launchAgentsDir.appendingPathComponent("com.correctme.daemon.plist")
+
+            if !FileManager.default.fileExists(atPath: targetPlist.path) {
+                print("🔧 Auto-start is not enabled. Enabling it now...")
+                enableAutoStart()
+                print("")
+            }
+
+            // Always start in background mode
+            DaemonManager.startDaemon(background: true)
 
         case "stop":
             _ = DaemonManager.stopDaemon()
@@ -86,6 +97,14 @@ struct CorrectMeApp {
             print("Note: 'correctme run' is deprecated. Use 'correctme start' instead.")
             DaemonManager.startDaemon(background: false)
 
+        case "enable":
+            enableAutoStart()
+            exit(0)
+
+        case "disable":
+            disableAutoStart()
+            exit(0)
+
         case "uninstall":
             uninstallCorrectMe()
 
@@ -102,12 +121,12 @@ struct CorrectMeApp {
         CorrectMe - AI-powered text correction for macOS
 
         USAGE:
-            correctme start               Start daemon in foreground
-            correctme start -d            Start daemon in background
-            correctme start --daemon      Start daemon in background
+            correctme start               Start daemon (auto-enables at login)
             correctme stop                Stop the daemon
             correctme restart             Restart the daemon
             correctme status              Check daemon status
+            correctme enable              Enable auto-start at login
+            correctme disable             Disable auto-start at login
             correctme setup               Interactive setup (choose provider + keys)
             correctme config              Show current configuration
             correctme test                Test AI correction with sample text
@@ -117,11 +136,12 @@ struct CorrectMeApp {
             correctme help                Show this help message
 
         DAEMON MANAGEMENT:
-            start                         Start daemon in foreground (interactive mode)
-            start -d, --daemon            Start daemon in background
+            start                         Start daemon (runs in background, auto-enables at login)
             stop                          Stop the running daemon
-            restart                       Restart the daemon (background mode)
-            status                        Show daemon status and info
+            restart                       Restart the daemon
+            status                        Show daemon status and uptime
+            enable                        Enable auto-start at login (via LaunchAgent)
+            disable                       Disable auto-start at login
 
         CONFIGURATION:
             config                        Show current configuration
@@ -159,17 +179,18 @@ struct CorrectMeApp {
                correctme config model gpt-5.1-codex-mini
 
             3. Start the daemon:
-               correctme start -d
+               correctme start
 
             4. Select text anywhere and press ⌘⇧E to correct it!
 
         DEFAULT HOTKEY: ⌘⇧E (Cmd + Shift + E)
 
         FILES:
-            Config:    ~/.correctme/config.json
-            PID:       ~/.correctme/correctme.pid
-            Logs:      ~/.correctme/correctme.log
-                       ~/.correctme/correctme.error.log
+            Config:       ~/.correctme/config.json
+            PID:          ~/.correctme/correctme.pid
+            LaunchAgent:  ~/Library/LaunchAgents/com.correctme.daemon.plist
+            Logs:         /tmp/correctme.log
+                          /tmp/correctme.error.log
 
         """)
     }
@@ -1002,6 +1023,125 @@ struct CorrectMeApp {
         }
     }
 
+    static func enableAutoStart() {
+        let launchAgentsDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents")
+        let targetPlist = launchAgentsDir.appendingPathComponent("com.correctme.daemon.plist")
+
+        // Check if already enabled
+        if FileManager.default.fileExists(atPath: targetPlist.path) {
+            print("✓ Auto-start is already enabled")
+            print("  LaunchAgent: \(targetPlist.path)")
+            return
+        }
+
+        // Create LaunchAgents directory if needed
+        if !FileManager.default.fileExists(atPath: launchAgentsDir.path) {
+            do {
+                try FileManager.default.createDirectory(at: launchAgentsDir, withIntermediateDirectories: true)
+            } catch {
+                print("❌ Failed to create LaunchAgents directory: \(error)")
+                exit(1)
+            }
+        }
+
+        // Create plist content (use .app path for better Accessibility integration)
+        let plistContent = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>Label</key>
+            <string>com.correctme.daemon</string>
+
+            <key>ProgramArguments</key>
+            <array>
+                <string>/Applications/CorrectMe.app/Contents/MacOS/correctme</string>
+                <string>start</string>
+            </array>
+
+            <key>RunAtLoad</key>
+            <true/>
+
+            <key>KeepAlive</key>
+            <true/>
+
+            <key>StandardOutPath</key>
+            <string>/tmp/correctme.log</string>
+
+            <key>StandardErrorPath</key>
+            <string>/tmp/correctme.error.log</string>
+        </dict>
+        </plist>
+        """
+
+        // Write plist file
+        do {
+            try plistContent.write(to: targetPlist, atomically: true, encoding: .utf8)
+        } catch {
+            print("❌ Failed to write LaunchAgent plist: \(error)")
+            exit(1)
+        }
+
+        // Load the LaunchAgent
+        let loadProcess = Process()
+        loadProcess.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        loadProcess.arguments = ["load", targetPlist.path]
+
+        do {
+            try loadProcess.run()
+            loadProcess.waitUntilExit()
+
+            if loadProcess.terminationStatus == 0 {
+                print("✅ Auto-start enabled!")
+                print("  CorrectMe will now start automatically at login")
+                print("  LaunchAgent: \(targetPlist.path)")
+            } else {
+                print("⚠️  LaunchAgent created but failed to load")
+                print("  You may need to load it manually:")
+                print("  launchctl load \(targetPlist.path)")
+            }
+        } catch {
+            print("❌ Failed to load LaunchAgent: \(error)")
+            print("  Plist created at: \(targetPlist.path)")
+            print("  Load it manually with: launchctl load \(targetPlist.path)")
+        }
+    }
+
+    static func disableAutoStart() {
+        let launchAgentsDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents")
+        let targetPlist = launchAgentsDir.appendingPathComponent("com.correctme.daemon.plist")
+
+        // Check if LaunchAgent exists
+        if !FileManager.default.fileExists(atPath: targetPlist.path) {
+            print("✓ Auto-start is already disabled")
+            return
+        }
+
+        // Unload the LaunchAgent
+        let unloadProcess = Process()
+        unloadProcess.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        unloadProcess.arguments = ["unload", targetPlist.path]
+
+        do {
+            try unloadProcess.run()
+            unloadProcess.waitUntilExit()
+        } catch {
+            print("⚠️  Warning: Failed to unload LaunchAgent: \(error)")
+        }
+
+        // Remove the plist file
+        do {
+            try FileManager.default.removeItem(at: targetPlist)
+            print("✅ Auto-start disabled!")
+            print("  LaunchAgent removed from: \(targetPlist.path)")
+        } catch {
+            print("❌ Failed to remove LaunchAgent: \(error)")
+            exit(1)
+        }
+    }
+
     static func uninstallCorrectMe() {
         print("""
 
@@ -1010,7 +1150,8 @@ struct CorrectMeApp {
         ╚══════════════════════════════════════════╝
 
         This will remove:
-          • Binary: /usr/local/bin/correctme
+          • App: /Applications/CorrectMe.app
+          • CLI symlink: /usr/local/bin/correctme
           • Config: ~/.correctme/
           • Auto-start from ~/.zshrc
           • LaunchAgent (if installed)
@@ -1086,12 +1227,20 @@ struct CorrectMeApp {
             removedItems.append("Removed ~/.correctme/")
         }
 
-        // 5. Remove binary (this will fail if not run with proper permissions)
+        // 5. Remove .app from Applications
+        let appPath = "/Applications/CorrectMe.app"
+        if FileManager.default.fileExists(atPath: appPath) {
+            print("🗑  Removing CorrectMe.app...")
+            try? FileManager.default.removeItem(atPath: appPath)
+            removedItems.append("Removed /Applications/CorrectMe.app")
+        }
+
+        // 6. Remove CLI symlink (this will fail if not run with proper permissions)
         let binaryPath = "/usr/local/bin/correctme"
         if FileManager.default.fileExists(atPath: binaryPath) {
             print("""
 
-            ⚠️  To remove the binary, run:
+            ⚠️  To remove the CLI symlink, run:
                 sudo rm /usr/local/bin/correctme
 
             Or use the uninstall script:

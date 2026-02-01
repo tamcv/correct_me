@@ -8,7 +8,8 @@ echo "║       Uninstall CorrectMe                ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 echo "This will remove:"
-echo "  • Binary: /usr/local/bin/correctme"
+echo "  • App: /Applications/CorrectMe.app"
+echo "  • CLI symlink: /usr/local/bin/correctme"
 echo "  • Config: ~/.correctme/"
 echo "  • Auto-start from ~/.zshrc"
 echo "  • LaunchAgent (if installed)"
@@ -60,9 +61,16 @@ if [ -d "$HOME/.correctme" ]; then
     REMOVED+=("Removed ~/.correctme/")
 fi
 
-# 5. Remove binary
-if [ -f "/usr/local/bin/correctme" ]; then
-    echo "🗑  Removing binary..."
+# 5. Remove .app from Applications
+if [ -d "/Applications/CorrectMe.app" ]; then
+    echo "🗑  Removing CorrectMe.app..."
+    rm -rf /Applications/CorrectMe.app
+    REMOVED+=("Removed /Applications/CorrectMe.app")
+fi
+
+# 6. Remove CLI symlink
+if [ -L "/usr/local/bin/correctme" ] || [ -f "/usr/local/bin/correctme" ]; then
+    echo "🗑  Removing CLI symlink..."
     sudo rm -f /usr/local/bin/correctme
     REMOVED+=("Removed /usr/local/bin/correctme")
 fi

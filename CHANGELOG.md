@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING**: Simplified command structure for better user experience
+  - `correctme start` now always runs in background and auto-enables LaunchAgent
+  - Removed `-d/--daemon` flags from `start` command
+  - Added `correctme enable` and `correctme disable` commands for LaunchAgent management
+- **BREAKING**: Changed distribution format from standalone binary to .app bundle
+  - Now installs to `/Applications/CorrectMe.app` instead of `/usr/local/bin/correctme`
+  - CLI access via symlink at `/usr/local/bin/correctme`
+  - Appears as "CorrectMe" in System Settings → Accessibility (much easier to add)
+  - LaunchAgent now uses .app path for better system integration
+- Simplified installer flow: asks to run setup and start daemon
+- Updated all documentation to reflect simplified commands and .app bundle installation
+- Logs now stored in `/tmp/correctme.log` and `/tmp/correctme.error.log`
+
+### Added
+- Proper macOS .app bundle with Info.plist
+- LSUIElement set to true (runs as background agent, no dock icon)
+- Auto-start via LaunchAgent is now automatic when running `correctme start`
+- New `enable` command to manually enable auto-start at login
+- New `disable` command to manually disable auto-start at login
+- `scripts/build-app.sh` - Script to build the .app bundle
+
 ## [0.2.1] - 2026-02-01
 
 ### Fixed

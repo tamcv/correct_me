@@ -2,87 +2,80 @@
 
 set -e
 
-echo "🔨 Building CorrectMe..."
+# Build the .app bundle
+./scripts/build-app.sh release
 
-# Build release binary
-swift build -c release
-
-# Get the binary path
-BINARY_PATH=".build/release/CorrectMe"
-
-if [ ! -f "$BINARY_PATH" ]; then
-    echo "❌ Build failed!"
-    exit 1
-fi
-
-echo "✅ Build successful!"
-echo ""
-echo "Version: $(cat VERSION)"
+APP_DIR=".build/CorrectMe.app"
+BINARY_PATH="${APP_DIR}/Contents/MacOS/correctme"
 
 # Ask user if they want to install (default: yes)
-read -p "Install to /usr/local/bin/correctme? [Y/n] " -r
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Installation Options"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+read -p "Install CorrectMe.app to /Applications? [Y/n] " -r
 echo ""
 
 if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
-    sudo cp "$BINARY_PATH" /usr/local/bin/correctme
-    sudo chmod +x /usr/local/bin/correctme
-    sudo codesign --force --deep --sign - /usr/local/bin/correctme
-    echo "✅ Installed to /usr/local/bin/correctme"
+    # Remove old app if exists
+    if [ -d "/Applications/CorrectMe.app" ]; then
+        echo "🗑  Removing old version..."
+        rm -rf /Applications/CorrectMe.app
+    fi
+
+    # Copy .app bundle to /Applications
+    echo "📦 Installing CorrectMe.app to /Applications..."
+    cp -R "$APP_DIR" /Applications/
+
+    # Create symlink for CLI access
+    echo "🔗 Creating CLI symlink at /usr/local/bin/correctme..."
+    sudo ln -sf "/Applications/CorrectMe.app/Contents/MacOS/correctme" /usr/local/bin/correctme
+
+    echo "✅ Installation complete!"
     echo ""
-    # Optional: enable auto-start via zshrc (recommended for iTerm/Terminal)
-    read -p "Enable auto-start on terminal launch (zshrc)? [Y/n] " -r
+    echo "Installed:"
+    echo "  • App: /Applications/CorrectMe.app"
+    echo "  • CLI: /usr/local/bin/correctme (symlink)"
+    echo ""
+
+    # Ask if they want to configure now
+    read -p "Run setup wizard now? [Y/n] " -r
     echo ""
     if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
-        # Remove LaunchAgent if present
-        PLIST_DST="$HOME/Library/LaunchAgents/com.correctme.daemon.plist"
-        if [ -f "$PLIST_DST" ]; then
-            launchctl unload "$PLIST_DST" >/dev/null 2>&1 || true
-            rm -f "$PLIST_DST"
-        fi
-
-        # Install autostart script
-        AUTOSTART_DIR="$HOME/.correctme"
-        AUTOSTART_SRC="scripts/correctme-autostart.sh"
-        AUTOSTART_DST="$AUTOSTART_DIR/correctme-autostart.sh"
-        mkdir -p "$AUTOSTART_DIR"
-        cp "$AUTOSTART_SRC" "$AUTOSTART_DST"
-        chmod +x "$AUTOSTART_DST"
-
-        # Add to ~/.zshrc if missing
-        ZSHRC="$HOME/.zshrc"
-        if [ -f "$ZSHRC" ]; then
-            if ! /usr/bin/grep -q "correctme-autostart.sh" "$ZSHRC"; then
-                {
-                    echo ""
-                    echo "# CorrectMe auto-start"
-                    echo "$AUTOSTART_DST"
-                } >> "$ZSHRC"
-            fi
-        else
-            {
-                echo "# CorrectMe auto-start"
-                echo "$AUTOSTART_DST"
-            } > "$ZSHRC"
-        fi
-
-        echo "✅ Auto-start enabled via ~/.zshrc"
+        correctme setup
         echo ""
-        echo "The daemon will start automatically when you open a new terminal."
-        echo "To start it now, run:"
-        echo "  correctme start -d"
-        echo ""
-        echo "Or open a new terminal and the autostart script will run automatically."
-    else
-        echo "Auto-start not enabled."
-        echo ""
-        echo "To start manually: correctme start -d"
-        echo "To enable auto-start later:"
-        echo "  echo '~/.correctme/correctme-autostart.sh' >> ~/.zshrc"
     fi
+
+    # Ask if they want to start the daemon
+    read -p "Start CorrectMe daemon now? [Y/n] " -r
     echo ""
-    echo "Run 'correctme help' to get started!"
+    if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+        correctme start
+        echo ""
+    fi
+
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "✅ Setup Complete!"
+    echo ""
+    echo "Quick start:"
+    echo "  • The daemon is now running and will auto-start at login"
+    echo "  • Select any text and press ⌘⇧E to correct it"
+    echo "  • Run 'correctme help' for more commands"
+    echo ""
+    echo "Accessibility permissions:"
+    echo "  • Go to: System Settings → Privacy & Security → Accessibility"
+    echo "  • Add 'CorrectMe' from the Applications folder"
+    echo "  • This allows CorrectMe to read selected text and type corrections"
+    echo ""
+    echo "Useful commands:"
+    echo "  correctme status     - Check daemon status"
+    echo "  correctme disable    - Disable auto-start at login"
+    echo "  correctme setup      - Change AI provider"
+    echo ""
 else
+    echo "Installation cancelled."
     echo ""
-    echo "Binary location: $BINARY_PATH"
-    echo "You can run it directly or copy it to your PATH manually."
+    echo "App bundle location: $APP_DIR"
+    echo "You can manually copy it to /Applications if needed."
 fi

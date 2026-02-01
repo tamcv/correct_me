@@ -20,12 +20,18 @@ After installation:
 
 1. **Grant Accessibility permissions** (required):
    - System Settings → Privacy & Security → Accessibility
-   - Add `/usr/local/bin/correctme` and enable it
+   - Click the **+** button and select **CorrectMe** from Applications folder
+   - Enable the toggle next to CorrectMe
+   - **Important**: If the daemon was already running, restart it:
+     ```bash
+     correctme restart
+     ```
 
-2. **Start the daemon**:
+2. **Start the daemon** (if not already started):
    ```bash
-   correctme start -d
+   correctme start
    ```
+   This will start the daemon in background and enable auto-start at login.
 
 3. **Test it**: Select any text and press ⌘⇧E!
 
@@ -48,44 +54,22 @@ The daemon management is robust and handles:
 - ✅ Graceful shutdown with proper cleanup
 - ✅ Process validation (ensures PID is actually CorrectMe)
 
-### Auto-start Options (Optional)
+### Auto-start Management
 
-You have three options to auto-start CorrectMe:
-
-#### Option 1: LaunchAgent (Recommended)
-Best for production use. Starts automatically at login, runs independently of terminal.
+CorrectMe automatically enables auto-start at login when you run `correctme start` for the first time. It uses a macOS LaunchAgent that runs independently of terminal sessions.
 
 ```bash
-# Copy plist to LaunchAgents
-cp com.correctme.daemon.plist ~/Library/LaunchAgents/
+# Check if auto-start is enabled
+correctme status
 
-# Load and start
-launchctl load ~/Library/LaunchAgents/com.correctme.daemon.plist
+# Disable auto-start at login
+correctme disable
 
-# To stop auto-start
-launchctl unload ~/Library/LaunchAgents/com.correctme.daemon.plist
-rm ~/Library/LaunchAgents/com.correctme.daemon.plist
+# Re-enable auto-start at login
+correctme enable
 ```
 
-#### Option 2: Terminal Auto-start (Simple)
-Good for development. Starts when you open a new terminal.
-
-```bash
-# Download autostart script
-mkdir -p ~/.correctme
-curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/correctme-autostart.sh \
-  -o ~/.correctme/correctme-autostart.sh
-chmod +x ~/.correctme/correctme-autostart.sh
-
-# Add to shell config
-echo '~/.correctme/correctme-autostart.sh' >> ~/.zshrc
-
-# To disable
-sed -i '' '/correctme-autostart.sh/d' ~/.zshrc
-```
-
-#### Option 3: Manual Start
-Just run `correctme start -d` when you need it.
+The LaunchAgent plist is stored at `~/Library/LaunchAgents/com.correctme.daemon.plist`.
 
 ## Features
 
@@ -115,17 +99,20 @@ cd correct_me
 
 # Build & install
 chmod +x build.sh
+chmod +x scripts/build-app.sh
 ./build.sh
 
 # Follow prompts to:
-# 1. Install to /usr/local/bin
-# 2. Enable terminal auto-start (optional)
+# 1. Install CorrectMe.app to /Applications
+# 2. Run setup wizard
+# 3. Start the daemon
 ```
 
 The build script will:
-- Build release binary
-- Install to `/usr/local/bin/correctme` with code signing
-- Optionally setup auto-start via `~/.zshrc`
+- Build the .app bundle with proper Info.plist
+- Install to `/Applications/CorrectMe.app` with code signing
+- Create a symlink at `/usr/local/bin/correctme` for CLI access
+- Optionally run setup and start the daemon
 
 Note: Update the repo URL in `scripts/install.sh` if you fork this project.
 
@@ -140,16 +127,16 @@ correctme update
 If you no longer need CorrectMe:
 
 ```bash
-# Option 1: Use uninstall command
+# Option 1: Use uninstall command (interactive, safer)
 correctme uninstall
 
-# Option 2: Use uninstall script (also removes binary)
+# Option 2: Use uninstall script (complete removal including binary)
 curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/uninstall.sh | sh
 
 # Option 3: Manual removal
-sudo rm /usr/local/bin/correctme
-rm -rf ~/.correctme
-sed -i '' '/correctme-autostart.sh/d' ~/.zshrc
+correctme disable                                          # Disable auto-start
+sudo rm /usr/local/bin/correctme                           # Remove binary
+rm -rf ~/.correctme                                        # Remove config
 ```
 
 ## Setup
@@ -160,8 +147,10 @@ CorrectMe needs accessibility access to read selected text and simulate keyboard
 
 1. Open **System Settings** → **Privacy & Security** → **Accessibility**
 2. Click the **+** button
-3. Add **/usr/local/bin/correctme** (use Cmd+Shift+G → `/usr/local/bin`)
-4. Enable the toggle
+3. Navigate to **Applications** and select **CorrectMe.app**
+4. Enable the toggle next to CorrectMe
+
+The app will now appear in the Accessibility list as "CorrectMe" instead of a binary path.
 
 ### 2. Configure AI Provider
 
@@ -220,16 +209,13 @@ correctme test
 ### 5. Start the Daemon
 
 ```bash
-# Start in background
-correctme start -d
-
-# Or start in foreground for debugging
+# Start in background (auto-enables at login)
 correctme start
 ```
 
 ## Usage
 
-1. **Start the daemon**: `correctme start -d`
+1. **Start the daemon**: `correctme start`
 2. **Select text** in any application
 3. **Press ⌘⇧E** (or your custom hotkey)
 4. **Text is replaced** with the corrected version
@@ -240,12 +226,12 @@ correctme start
 
 | Command | Description |
 |---------|-------------|
-| `correctme start` | Start daemon in foreground |
-| `correctme start -d` | Start daemon in background |
-| `correctme start --daemon` | Start daemon in background |
+| `correctme start` | Start daemon in background (auto-enables at login) |
 | `correctme stop` | Stop the daemon |
 | `correctme restart` | Restart the daemon |
-| `correctme status` | Check daemon status |
+| `correctme status` | Check daemon status and uptime |
+| `correctme enable` | Enable auto-start at login |
+| `correctme disable` | Disable auto-start at login |
 
 ### Configuration
 
@@ -267,6 +253,7 @@ correctme start
 | `correctme test` | Test AI correction with sample text |
 | `correctme version` | Show version |
 | `correctme update` | Update to latest release |
+| `correctme uninstall` | Uninstall CorrectMe (removes config, auto-start, prompts for binary removal) |
 | `correctme help` | Show help message |
 
 ## Configuration
@@ -275,8 +262,9 @@ correctme start
 
 - Config: `~/.correctme/config.json`
 - PID file: `~/.correctme/correctme.pid`
-- Logs: `~/.correctme/correctme.log`
-- Error logs: `~/.correctme/correctme.error.log`
+- LaunchAgent: `~/Library/LaunchAgents/com.correctme.daemon.plist`
+- Logs: `/tmp/correctme.log`
+- Error logs: `/tmp/correctme.error.log`
 
 ### Config File Format
 
@@ -326,12 +314,12 @@ This can happen if the process was killed abruptly (kill -9, system crash, etc.)
 If the issue persists, manually remove the PID file:
 ```bash
 rm ~/.correctme/correctme.pid
-correctme start -d
+correctme start
 ```
 
 ### "Failed to create event tap"
 
-Accessibility permissions not granted. Go to System Settings → Privacy & Security → Accessibility and enable `/usr/local/bin/correctme`.
+Accessibility permissions not granted. Go to System Settings → Privacy & Security → Accessibility and add **CorrectMe.app** from the Applications folder.
 
 ### "No text selected"
 

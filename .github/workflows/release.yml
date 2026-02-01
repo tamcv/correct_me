@@ -26,19 +26,25 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-    - name: Build release binary
+    - name: Build release app bundle
       run: |
         echo "Building CorrectMe v${{ steps.get_version.outputs.VERSION }}..."
-        swift build -c release
 
-        # Verify binary exists
-        if [ ! -f ".build/release/CorrectMe" ]; then
-          echo "Build failed - binary not found"
+        # Update version in Info.plist
+        sed -i '' "s/0.2.1/${{ steps.get_version.outputs.VERSION }}/g" Resources/Info.plist
+
+        # Build .app bundle
+        chmod +x scripts/build-app.sh
+        ./scripts/build-app.sh release
+
+        # Verify app bundle exists
+        if [ ! -d ".build/CorrectMe.app" ]; then
+          echo "Build failed - app bundle not found"
           exit 1
         fi
 
         echo "Build successful!"
-        ls -lh .build/release/CorrectMe
+        ls -lh .build/CorrectMe.app/Contents/MacOS/correctme
 
     - name: Run tests
       run: |
@@ -51,26 +57,21 @@ jobs:
         fi
       continue-on-error: true
 
-    - name: Code sign binary
-      run: |
-        echo "Code signing binary..."
-        codesign --force --deep --sign - .build/release/CorrectMe
-
-        # Verify signature
-        codesign -dvvv .build/release/CorrectMe
-
     - name: Prepare release assets
       run: |
         # Create release directory
         mkdir -p release
 
-        # Copy binary with lowercase name
-        cp .build/release/CorrectMe release/correctme
-        chmod +x release/correctme
+        # Copy .app bundle
+        cp -R .build/CorrectMe.app release/
 
-        # Create zip archive
+        # Create symlink for CLI access (will be in the zip)
+        mkdir -p release/cli
+        ln -s ../CorrectMe.app/Contents/MacOS/correctme release/cli/correctme
+
+        # Create zip archive with both .app and CLI symlink
         cd release
-        zip -r CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip correctme
+        zip -r CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip CorrectMe.app cli
 
         # Calculate SHA256
         shasum -a 256 CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip | awk '{print $1}' > sha256.txt
@@ -93,22 +94,35 @@ jobs:
 
           ### Installation
 
-          One-command install:
+          **Option 1: One-command install (Recommended)**
           ```bash
           curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh
           ```
 
-          Or download the binary manually and install:
+          **Option 2: Download and install manually**
           ```bash
+          # Download and extract
           unzip CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
-          sudo mv correctme /usr/local/bin/correctme
-          sudo chmod +x /usr/local/bin/correctme
-          sudo codesign --force --deep --sign - /usr/local/bin/correctme
+
+          # Install .app to Applications
+          mv CorrectMe.app /Applications/
+
+          # Create CLI symlink
+          sudo ln -sf /Applications/CorrectMe.app/Contents/MacOS/correctme /usr/local/bin/correctme
+
+          # Run setup
+          correctme setup
+          correctme start
           ```
 
           ### What's Changed
 
           See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+
+          ### Package Contents
+
+          - `CorrectMe.app` - macOS application bundle (install to /Applications)
+          - `cli/correctme` - Symlink for CLI access
 
           ### SHA256 Checksum
 
