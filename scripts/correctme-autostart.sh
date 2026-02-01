@@ -1,26 +1,15 @@
 #!/bin/sh
 
-# Auto-start CorrectMe once per machine session.
-# Safe to run multiple times (e.g., from tmux shells).
+# Auto-start CorrectMe when terminal launches.
+# Safe to run multiple times - daemon management handles duplicate detection.
 
+# Check if correctme is installed
 if ! command -v correctme >/dev/null 2>&1; then
     exit 0
 fi
 
 # Check if daemon is already running
-if correctme status | grep -q "Running"; then
-    # If config changed recently, restart to pick up new hotkey/model.
-    CONFIG_FILE="$HOME/.correctme/config.json"
-    PID_FILE="$HOME/.correctme/correctme.pid"
-    if [ -f "$PID_FILE" ] && [ -f "$CONFIG_FILE" ]; then
-        PID=$(cat "$PID_FILE" 2>/dev/null)
-        if [ -n "$PID" ]; then
-            START_TIME=$(ps -p "$PID" -o lstart= 2>/dev/null)
-            if [ -n "$START_TIME" ] && find "$CONFIG_FILE" -newermt "$START_TIME" >/dev/null 2>&1; then
-                correctme restart >/dev/null 2>&1
-            fi
-        fi
-    fi
+if correctme status 2>/dev/null | grep -q "Running"; then
     exit 0
 fi
 

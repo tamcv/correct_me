@@ -45,25 +45,44 @@ The daemon management is robust and handles:
 - ✅ Graceful shutdown with proper cleanup
 - ✅ Process validation (ensures PID is actually CorrectMe)
 
-### Auto‑start on Boot (optional)
+### Auto-start Options (Optional)
 
-If you want CorrectMe to start automatically when you login:
+You have three options to auto-start CorrectMe:
+
+#### Option 1: LaunchAgent (Recommended)
+Best for production use. Starts automatically at login, runs independently of terminal.
 
 ```bash
-# Install to system LaunchAgents
-sudo cp com.correctme.daemon.plist ~/Library/LaunchAgents/
+# Copy plist to LaunchAgents
+cp com.correctme.daemon.plist ~/Library/LaunchAgents/
+
+# Load and start
 launchctl load ~/Library/LaunchAgents/com.correctme.daemon.plist
+
+# To stop auto-start
+launchctl unload ~/Library/LaunchAgents/com.correctme.daemon.plist
+rm ~/Library/LaunchAgents/com.correctme.daemon.plist
 ```
 
-Or for terminal-based auto-start:
+#### Option 2: Terminal Auto-start (Simple)
+Good for development. Starts when you open a new terminal.
 
 ```bash
+# Download autostart script
 mkdir -p ~/.correctme
 curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/correctme-autostart.sh \
   -o ~/.correctme/correctme-autostart.sh
 chmod +x ~/.correctme/correctme-autostart.sh
-echo "~/.correctme/correctme-autostart.sh" >> ~/.zshrc
+
+# Add to shell config
+echo '~/.correctme/correctme-autostart.sh' >> ~/.zshrc
+
+# To disable
+sed -i '' '/correctme-autostart.sh/d' ~/.zshrc
 ```
+
+#### Option 3: Manual Start
+Just run `correctme start -d` when you need it.
 
 ## Features
 
@@ -87,17 +106,26 @@ echo "~/.correctme/correctme-autostart.sh" >> ~/.zshrc
 ## Installation (from source)
 
 ```bash
-# Clone or download the project
-cd correct-me
+# Clone the project
+git clone https://github.com/tamcv/correct_me.git
+cd correct_me
 
 # Build & install
 chmod +x build.sh
 ./build.sh
 
-# Follow prompts to install and enable auto-start
+# Follow prompts to:
+# 1. Install to /usr/local/bin
+# 2. Enable terminal auto-start (optional)
 ```
 
-Note: update the repo URL in `scripts/install.sh` if you fork this project.
+The build script will:
+- Build release binary
+- Install to `/usr/local/bin/correctme`
+- Optionally setup auto-start via `~/.zshrc`
+- Restart daemon if already running
+
+Note: Update the repo URL in `scripts/install.sh` if you fork this project.
 
 ### Auto-update
 
@@ -157,8 +185,12 @@ For CLI providers, you can still choose a model manually (default is a cheap/fas
 correctme config hotkey
 ```
 
-Choose a preset or press your desired hotkey.  
-If CorrectMe is already running, the auto-start script will restart it to apply the new hotkey.
+Choose a preset or press your desired hotkey.
+
+**Note:** After changing config (hotkey, model, provider), restart the daemon:
+```bash
+correctme restart
+```
 
 ### 4. Test It
 

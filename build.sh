@@ -64,17 +64,21 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
             } > "$ZSHRC"
         fi
 
-        # Restart to ensure new binary is running
-        if pgrep -f "/usr/local/bin/correctme run" >/dev/null 2>&1; then
-            pkill -f "/usr/local/bin/correctme run" >/dev/null 2>&1 || true
-            sleep 0.2
+        # Restart daemon if already running to use new binary
+        if correctme status 2>/dev/null | grep -q "Running"; then
+            correctme restart >/dev/null 2>&1 || true
+        else
+            correctme start -d >/dev/null 2>&1 || true
         fi
-        "$AUTOSTART_DST" >/dev/null 2>&1 || true
 
         echo "✅ Auto-start enabled via ~/.zshrc"
+        echo "   Daemon will start automatically when you open a new terminal"
     else
-        echo "Auto-start not enabled. You can enable it later by running:"
-        echo "  ~/.correctme/correctme-autostart.sh"
+        echo "Auto-start not enabled."
+        echo ""
+        echo "To start manually: correctme start -d"
+        echo "To enable auto-start later:"
+        echo "  echo '~/.correctme/correctme-autostart.sh' >> ~/.zshrc"
     fi
     echo ""
     echo "Run 'correctme help' to get started!"
@@ -83,3 +87,4 @@ else
     echo "Binary location: $BINARY_PATH"
     echo "You can run it directly or copy it to your PATH manually."
 fi
+prom
