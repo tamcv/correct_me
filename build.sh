@@ -64,15 +64,13 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
             } > "$ZSHRC"
         fi
 
-        # Restart daemon if already running to use new binary
-        if correctme status 2>/dev/null | grep -q "Running"; then
-            correctme restart >/dev/null 2>&1 || true
-        else
-            correctme start -d >/dev/null 2>&1 || true
-        fi
-
         echo "✅ Auto-start enabled via ~/.zshrc"
-        echo "   Daemon will start automatically when you open a new terminal"
+        echo ""
+        echo "The daemon will start automatically when you open a new terminal."
+        echo "To start it now, run:"
+        echo "  correctme start -d"
+        echo ""
+        echo "Or open a new terminal and the autostart script will run automatically."
     else
         echo "Auto-start not enabled."
         echo ""
