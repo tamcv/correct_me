@@ -7,21 +7,22 @@ if ! command -v correctme >/dev/null 2>&1; then
     exit 0
 fi
 
-if pgrep -f "/usr/local/bin/correctme run" >/dev/null 2>&1; then
+# Check if daemon is already running
+if correctme status | grep -q "Running"; then
     # If config changed recently, restart to pick up new hotkey/model.
     CONFIG_FILE="$HOME/.correctme/config.json"
-    PID=$(pgrep -f "/usr/local/bin/correctme run" | head -n 1)
-    if [ -n "$PID" ] && [ -f "$CONFIG_FILE" ]; then
-        START_TIME=$(ps -p "$PID" -o lstart= 2>/dev/null)
-        if [ -n "$START_TIME" ] && find "$CONFIG_FILE" -newermt "$START_TIME" >/dev/null 2>&1; then
-            pkill -f "/usr/local/bin/correctme run" >/dev/null 2>&1 || true
-            sleep 0.2
-        else
-            exit 0
+    PID_FILE="$HOME/.correctme/correctme.pid"
+    if [ -f "$PID_FILE" ] && [ -f "$CONFIG_FILE" ]; then
+        PID=$(cat "$PID_FILE" 2>/dev/null)
+        if [ -n "$PID" ]; then
+            START_TIME=$(ps -p "$PID" -o lstart= 2>/dev/null)
+            if [ -n "$START_TIME" ] && find "$CONFIG_FILE" -newermt "$START_TIME" >/dev/null 2>&1; then
+                correctme restart >/dev/null 2>&1
+            fi
         fi
-    else
-        exit 0
     fi
+    exit 0
 fi
 
-nohup /usr/local/bin/correctme run >/tmp/correctme.log 2>/tmp/correctme.error.log &
+# Start daemon in background
+correctme start -d >/dev/null 2>&1

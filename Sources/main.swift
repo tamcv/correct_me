@@ -11,45 +11,80 @@ struct CorrectMeApp {
     
     static func main() {
         let args = CommandLine.arguments
-        
+
+        // Handle internal daemon start flag
+        if args.count > 1 && args[1] == "__daemon_start" {
+            // This is the actual daemon process
+            do {
+                try DaemonManager.writePID(getpid())
+            } catch {
+                print("❌ Failed to write PID file: \(error)")
+                exit(1)
+            }
+            DaemonManager.setupCleanupHandlers()
+            runDaemon()
+            exit(0)
+        }
+
         if args.count > 1 {
             handleCommand(args)
             return
         }
-        
-        // Run as daemon
-        runDaemon()
+
+        // Default: show help
+        printHelp()
     }
     
     static func handleCommand(_ args: [String]) {
         let command = args[1]
-        
+
         switch command {
         case "help", "--help", "-h":
             printHelp()
-            
+
         case "version", "--version", "-v":
             print("CorrectMe \(AppVersion.current)")
-            
+
         case "update":
             runUpdate()
-            
+
         case "setup":
             setupWizard()
-            
+
         case "config":
             if args.count > 2 {
                 configureOption(args)
             } else {
                 showConfig()
             }
-            
+
         case "test":
             testCorrection()
-            
-        case "run", "start":
-            runDaemon()
-            
+
+        case "start":
+            let isDaemon = args.contains("-d") || args.contains("--daemon")
+            DaemonManager.startDaemon(background: isDaemon)
+
+        case "stop":
+            _ = DaemonManager.stopDaemon()
+            exit(0)
+
+        case "status":
+            DaemonManager.checkStatus()
+            exit(0)
+
+        case "restart":
+            if DaemonManager.getDaemonPID() != nil {
+                _ = DaemonManager.stopDaemon()
+                sleep(1)
+            }
+            DaemonManager.startDaemon(background: true)
+
+        case "run":
+            // Legacy command - run in foreground
+            print("Note: 'correctme run' is deprecated. Use 'correctme start' instead.")
+            DaemonManager.startDaemon(background: false)
+
         default:
             print("Unknown command: \(command)")
             print("Use 'correctme help' for usage information.")
@@ -59,41 +94,56 @@ struct CorrectMeApp {
     
     static func printHelp() {
         print("""
-        
+
         CorrectMe - AI-powered text correction for macOS
-        
+
         USAGE:
-            correctme                     Run as background daemon
-            correctme run                 Run as background daemon
+            correctme start               Start daemon in foreground
+            correctme start -d            Start daemon in background
+            correctme start --daemon      Start daemon in background
+            correctme stop                Stop the daemon
+            correctme restart             Restart the daemon
+            correctme status              Check daemon status
             correctme setup               Interactive setup (choose provider + keys)
             correctme config              Show current configuration
+            correctme test                Test AI correction with sample text
             correctme version             Show version
             correctme update              Update to the latest release
-            correctme config provider <claude-code|codex-code|claude|gemini|codex>
-            correctme config claude-key <API_KEY>
-            correctme config gemini-key <API_KEY>
-            correctme config openai-key <API_KEY>
-            correctme config model <MODEL_NAME>
-            correctme config hotkey       Show hotkey configuration instructions
-            correctme test                Test AI correction with sample text
             correctme help                Show this help message
-        
-        SETUP:
+
+        DAEMON MANAGEMENT:
+            start                         Start daemon in foreground (interactive mode)
+            start -d, --daemon            Start daemon in background
+            stop                          Stop the running daemon
+            restart                       Restart the daemon (background mode)
+            status                        Show daemon status and info
+
+        CONFIGURATION:
+            config                        Show current configuration
+            config provider <name>        Set AI provider
+                                          (claude-code|codex-code|claude|gemini|codex)
+            config claude-key <key>       Set Claude API key
+            config gemini-key <key>       Set Gemini API key
+            config openai-key <key>       Set OpenAI API key
+            config model <name>           Set model name
+            config hotkey                 Configure hotkey
+
+        SETUP GUIDE:
             1. Grant Accessibility permissions:
                System Settings → Privacy & Security → Accessibility → Add Terminal/iTerm
-            
+
             2. Configure AI provider:
                # Option A: Use Claude Code (if you have it installed)
                correctme config provider claude-code
-               
+
                # Option B: Use Codex Code (if you have it installed)
                correctme config provider codex-code
                correctme config model gpt-5.1-codex-mini
-               
+
                # Option C: Use Claude API
                correctme config provider claude
                correctme config claude-key sk-ant-xxxxx
-               
+
                # Option D: Use Gemini API
                correctme config provider gemini
                correctme config gemini-key AIzaSyxxxxx
@@ -102,16 +152,20 @@ struct CorrectMeApp {
                correctme config provider codex
                correctme config openai-key sk-xxxxx
                correctme config model gpt-5.1-codex-mini
-            
-            3. Run the daemon:
-               correctme run
-            
+
+            3. Start the daemon:
+               correctme start -d
+
             4. Select text anywhere and press ⌘⇧E to correct it!
-        
+
         DEFAULT HOTKEY: ⌘⇧E (Cmd + Shift + E)
-        
-        CONFIG FILE: ~/.correctme/config.json
-        
+
+        FILES:
+            Config:    ~/.correctme/config.json
+            PID:       ~/.correctme/correctme.pid
+            Logs:      ~/.correctme/correctme.log
+                       ~/.correctme/correctme.error.log
+
         """)
     }
     
@@ -681,13 +735,19 @@ struct CorrectMeApp {
     }
 
     static func restartDaemonIfRunning() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", "if pgrep -f \"/usr/local/bin/correctme run\" >/dev/null 2>&1; then pkill -f \"/usr/local/bin/correctme run\" >/dev/null 2>&1 || true; nohup /usr/local/bin/correctme run >/tmp/correctme.log 2>/tmp/correctme.error.log & fi"]
-        do {
-            try process.run()
-        } catch {
-            // Best-effort restart; ignore failures.
+        // Check if daemon is running and restart if it is
+        if DaemonManager.getDaemonPID() != nil {
+            _ = DaemonManager.stopDaemon()
+            sleep(1)
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/local/bin/correctme")
+            process.arguments = ["start", "-d"]
+            do {
+                try process.run()
+            } catch {
+                // Best-effort restart; ignore failures.
+            }
         }
     }
 
@@ -812,19 +872,19 @@ struct CorrectMeApp {
         app.finishLaunching()
 
         print("""
-        
+
         ╔═══════════════════════════════════════════╗
         ║         CorrectMe is running!             ║
         ╠═══════════════════════════════════════════╣
         ║  Hotkey: \(config.hotkey.displayName.padding(toLength: 32, withPad: " ", startingAt: 0)) ║
         ║  Provider: \(config.aiProvider.rawValue.padding(toLength: 30, withPad: " ", startingAt: 0)) ║
         ╚═══════════════════════════════════════════╝
-        
+
         Select any text and press \(config.hotkey.displayName) to correct it.
         Press Ctrl+C to quit.
-        
+
         """)
-        
+
         // Check accessibility permissions
         if !AccessibilityHelper.checkAccessibilityPermissions() {
             print("⚠️  Accessibility permission required!")
@@ -832,7 +892,7 @@ struct CorrectMeApp {
             print("   Add and enable Terminal (or your terminal app)")
             print("")
         }
-        
+
         // Initialize AI provider
         do {
             aiProvider = try createAIProvider(from: config)
@@ -841,31 +901,25 @@ struct CorrectMeApp {
             print("Configure a provider first: correctme config provider <provider>")
             exit(1)
         }
-        
+
         // Set up hotkey
         hotkeyManager = HotkeyManager(config: config) {
             handleHotkey()
         }
-        
+
         guard hotkeyManager?.start() == true else {
             print("❌ Failed to start hotkey listener.")
             print("   Make sure accessibility permissions are granted.")
             exit(1)
         }
-        
+
         print("✓ Hotkey listener started")
         print("─────────────────────────\n")
 
         // Set up menubar status
         statusBar = StatusBarController()
         statusBar?.setIdle()
-        
-        // Handle Ctrl+C
-        signal(SIGINT) { _ in
-            print("\n\n👋 CorrectMe stopped.\n")
-            exit(0)
-        }
-        
+
         // Run the event loop
         RunLoop.current.run()
     }

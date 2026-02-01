@@ -16,33 +16,52 @@ Then run:
 correctme setup
 ```
 
-After setup, you can start it manually:
+After setup, start the daemon:
 
 ```bash
-correctme run
+# Start in background (recommended)
+correctme start -d
+
+# Or start in foreground for debugging
+correctme start
 ```
 
-### Auto‑start in Terminal (recommended)
+### Daemon Management
 
-If you want CorrectMe to start automatically whenever you open iTerm/Terminal,
-first install the auto‑start script:
+```bash
+# Check status (shows PID, uptime, log locations)
+correctme status
+
+# Stop daemon (graceful shutdown)
+correctme stop
+
+# Restart daemon
+correctme restart
+```
+
+The daemon management is robust and handles:
+- ✅ Automatic cleanup of stale PID files
+- ✅ Detection of PID reuse (different process using same PID)
+- ✅ Graceful shutdown with proper cleanup
+- ✅ Process validation (ensures PID is actually CorrectMe)
+
+### Auto‑start on Boot (optional)
+
+If you want CorrectMe to start automatically when you login:
+
+```bash
+# Install to system LaunchAgents
+sudo cp com.correctme.daemon.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.correctme.daemon.plist
+```
+
+Or for terminal-based auto-start:
 
 ```bash
 mkdir -p ~/.correctme
 curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/correctme-autostart.sh \
   -o ~/.correctme/correctme-autostart.sh
 chmod +x ~/.correctme/correctme-autostart.sh
-```
-
-Then you can run it once:
-
-```bash
-~/.correctme/correctme-autostart.sh
-```
-
-To enable it permanently (run once):
-
-```bash
 echo "~/.correctme/correctme-autostart.sh" >> ~/.zshrc
 ```
 
@@ -147,54 +166,70 @@ If CorrectMe is already running, the auto-start script will restart it to apply 
 correctme test
 ```
 
-### 5. Run
+### 5. Start the Daemon
 
 ```bash
-correctme run
+# Start in background
+correctme start -d
+
+# Or start in foreground for debugging
+correctme start
 ```
 
 ## Usage
 
-1. **Select text** in any application
-2. **Press ⌘⇧E** (or your custom hotkey)
-3. **Text is replaced** with the corrected version
-
-## Auto-start on Terminal Launch
-
-`build.sh` can add auto-start to your `~/.zshrc`. This starts CorrectMe when you open iTerm/Terminal.
-
-```bash
-~/.correctme/correctme-autostart.sh
-```
-
-To disable auto-start:
-
-```bash
-sed -i '' '/correctme-autostart.sh/d' ~/.zshrc
-```
+1. **Start the daemon**: `correctme start -d`
+2. **Select text** in any application
+3. **Press ⌘⇧E** (or your custom hotkey)
+4. **Text is replaced** with the corrected version
 
 ## Commands
 
+### Daemon Management
+
 | Command | Description |
 |---------|-------------|
-| `correctme` | Run as daemon |
-| `correctme run` | Run as daemon |
-| `correctme setup` | Interactive setup |
+| `correctme start` | Start daemon in foreground |
+| `correctme start -d` | Start daemon in background |
+| `correctme start --daemon` | Start daemon in background |
+| `correctme stop` | Stop the daemon |
+| `correctme restart` | Restart the daemon |
+| `correctme status` | Check daemon status |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `correctme setup` | Interactive setup wizard |
 | `correctme config` | Show current configuration |
-| `correctme version` | Show version |
-| `correctme update` | Update to latest release |
-| `correctme config provider <name>` | Set AI provider |
+| `correctme config provider <name>` | Set AI provider (claude-code, codex-code, claude, gemini, codex) |
 | `correctme config claude-key <key>` | Set Claude API key |
 | `correctme config gemini-key <key>` | Set Gemini API key |
 | `correctme config openai-key <key>` | Set OpenAI API key |
 | `correctme config model <name>` | Set model name |
-| `correctme config hotkey` | Show hotkey configuration help |
-| `correctme test` | Test AI correction |
-| `correctme help` | Show help |
+| `correctme config hotkey` | Configure hotkey |
+
+### Other
+
+| Command | Description |
+|---------|-------------|
+| `correctme test` | Test AI correction with sample text |
+| `correctme version` | Show version |
+| `correctme update` | Update to latest release |
+| `correctme help` | Show help message |
 
 ## Configuration
 
-Config file location: `~/.correctme/config.json`
+### File Locations
+
+- Config: `~/.correctme/config.json`
+- PID file: `~/.correctme/correctme.pid`
+- Logs: `~/.correctme/correctme.log`
+- Error logs: `~/.correctme/correctme.error.log`
+
+### Config File Format
+
+`~/.correctme/config.json`:
 
 ```json
 {
@@ -232,6 +267,16 @@ Edit `~/.correctme/config.json` and change the `hotkey` section:
 - ⌥⇧R: keyCode=15, modifiers=655360 (Option + Shift)
 
 ## Troubleshooting
+
+### "Daemon is already running" but it's not
+
+This can happen if the process was killed abruptly (kill -9, system crash, etc.) leaving a stale PID file. The daemon automatically detects and cleans up stale PID files when you run any command (`status`, `start`, etc.).
+
+If the issue persists, manually remove the PID file:
+```bash
+rm ~/.correctme/correctme.pid
+correctme start -d
+```
 
 ### "Failed to create event tap"
 
