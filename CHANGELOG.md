@@ -7,23 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Professional daemon management (start, stop, restart, status)
-- Automatic stale PID file cleanup
-- PID reuse detection
-- Code signing in build script and installer
-- Interactive setup wizard in installer
-- Graceful shutdown with proper cleanup
+## [0.2.1] - 2026-02-01
 
 ### Fixed
-- Terminal hanging on startup
-- macOS Gatekeeper killing unsigned binaries
-- Build script hanging during installation
+- Fixed CI/CD build failures caused by unnecessary Swift setup step in GitHub Actions workflows
+
+## [0.2.0] - 2026-02-01
+
+### Added
+- Professional daemon management commands: `start`, `stop`, `restart`, and `status`
+- Background daemon mode with `start -d/--daemon`
+- Daemon status reporting with uptime information
+- PID file management with automatic stale file cleanup
+- GitHub Actions workflows for CI/CD with automated releases
+- Interactive setup wizard in the installer
+- One-command installation via `curl | sh`
+- AI-powered changelog generator scripts
 
 ### Changed
-- Simplified auto-start strategy
-- Improved installation UX
-- Better error messages and status reporting
+- Simplified auto-start scripts to use new daemon management commands
+- Improved README with clear comparison of auto-start options
+- Build script no longer auto-starts the daemon after installation
+- Installer now handles code signing and setup automatically
+
+### Fixed
+- Program no longer hangs when running `correctme` without arguments
+- macOS Gatekeeper no longer kills the binary (automatic code signing added)
+- Build script no longer fails with "command not found" error from typo
 
 ## [0.1.0] - 2024-XX-XX
 
