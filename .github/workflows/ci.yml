@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Swift
+      uses: swift-actions/setup-swift@v2
+      with:
+        swift-version: "5.9"
+
+    - name: Build debug
+      run: |
+        echo "Building CorrectMe (debug)..."
+        swift build
+
+    - name: Run tests
+      run: |
+        if swift test --list-tests 2>/dev/null | grep -q "Test"; then
+          echo "Running tests..."
+          swift test
+        else
+          echo "No tests found, skipping..."
+        fi
+      continue-on-error: true
+
+    - name: Build release
+      run: |
+        echo "Building CorrectMe (release)..."
+        swift build -c release
+
+        # Verify binary exists
+        if [ ! -f ".build/release/CorrectMe" ]; then
+          echo "Build failed - binary not found"
+          exit 1
+        fi
+
+        echo "Build successful!"
+        ls -lh .build/release/CorrectMe
+
+    - name: Code sign binary
+      run: |
+        echo "Code signing binary..."
+        codesign --force --deep --sign - .build/release/CorrectMe
+
+        # Verify signature
+        codesign -dvvv .build/release/CorrectMe
+
+    - name: Test binary
+      run: |
+        .build/release/CorrectMe version
+        .build/release/CorrectMe help

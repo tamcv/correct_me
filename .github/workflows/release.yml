@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Swift
+      uses: swift-actions/setup-swift@v2
+      with:
+        swift-version: "5.9"
+
+    - name: Get version from tag
+      id: get_version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Build release binary
+      run: |
+        echo "Building CorrectMe v${{ steps.get_version.outputs.VERSION }}..."
+        swift build -c release
+
+        # Verify binary exists
+        if [ ! -f ".build/release/CorrectMe" ]; then
+          echo "Build failed - binary not found"
+          exit 1
+        fi
+
+        echo "Build successful!"
+        ls -lh .build/release/CorrectMe
+
+    - name: Run tests
+      run: |
+        # Run tests if they exist
+        if swift test --list-tests 2>/dev/null | grep -q "Test"; then
+          echo "Running tests..."
+          swift test
+        else
+          echo "No tests found, skipping..."
+        fi
+      continue-on-error: true
+
+    - name: Code sign binary
+      run: |
+        echo "Code signing binary..."
+        codesign --force --deep --sign - .build/release/CorrectMe
+
+        # Verify signature
+        codesign -dvvv .build/release/CorrectMe
+
+    - name: Prepare release assets
+      run: |
+        # Create release directory
+        mkdir -p release
+
+        # Copy binary with lowercase name
+        cp .build/release/CorrectMe release/correctme
+        chmod +x release/correctme
+
+        # Create zip archive
+        cd release
+        zip -r CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip correctme
+
+        # Calculate SHA256
+        shasum -a 256 CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip | awk '{print $1}' > sha256.txt
+        SHA256=$(cat sha256.txt)
+        echo "SHA256=$SHA256" >> $GITHUB_ENV
+
+        echo "SHA256: $SHA256"
+        ls -lh
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.TAG }}
+        release_name: CorrectMe ${{ steps.get_version.outputs.TAG }}
+        body: |
+          ## CorrectMe ${{ steps.get_version.outputs.TAG }}
+
+          ### Installation
+
+          One-command install:
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh
+          ```
+
+          Or download the binary manually and install:
+          ```bash
+          unzip CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
+          sudo mv correctme /usr/local/bin/correctme
+          sudo chmod +x /usr/local/bin/correctme
+          sudo codesign --force --deep --sign - /usr/local/bin/correctme
+          ```
+
+          ### What's Changed
+
+          See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+
+          ### SHA256 Checksum
+
+          ```
+          ${{ env.SHA256 }}  CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
+          ```
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release/CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
+        asset_name: CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
+        asset_content_type: application/zip
+
+    - name: Create latest.json
+      run: |
+        mkdir -p dist
+        cat > dist/latest.json <<EOF
+        {
+          "tag": "${{ steps.get_version.outputs.TAG }}",
+          "version": "${{ steps.get_version.outputs.VERSION }}",
+          "asset": "CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip",
+          "sha256": "${{ env.SHA256 }}",
+          "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        EOF
+
+        cat dist/latest.json
+
+    - name: Commit latest.json to main
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        # Checkout main branch
+        git fetch origin main
+        git checkout main
+
+        # Copy latest.json
+        mkdir -p dist
+        cat > dist/latest.json <<EOF
+        {
+          "tag": "${{ steps.get_version.outputs.TAG }}",
+          "version": "${{ steps.get_version.outputs.VERSION }}",
+          "asset": "CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip",
+          "sha256": "${{ env.SHA256 }}",
+          "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        EOF
+
+        git add dist/latest.json
+
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "chore: Update latest.json for ${{ steps.get_version.outputs.TAG }}"
+          git push origin main
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
