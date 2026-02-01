@@ -10,21 +10,24 @@ Correct any language quickly while chatting, writing docs, or reviewing PRs—ju
 curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/install.sh | sh
 ```
 
-Then run:
+The installer will:
+- Download and install the latest release
+- Code sign the binary for macOS security
+- Run the setup wizard (you'll choose your AI provider)
+- Show you the next steps
 
-```bash
-correctme setup
-```
+After installation:
 
-After setup, start the daemon:
+1. **Grant Accessibility permissions** (required):
+   - System Settings → Privacy & Security → Accessibility
+   - Add `/usr/local/bin/correctme` and enable it
 
-```bash
-# Start in background (recommended)
-correctme start -d
+2. **Start the daemon**:
+   ```bash
+   correctme start -d
+   ```
 
-# Or start in foreground for debugging
-correctme start
-```
+3. **Test it**: Select any text and press ⌘⇧E!
 
 ### Daemon Management
 
@@ -121,9 +124,8 @@ chmod +x build.sh
 
 The build script will:
 - Build release binary
-- Install to `/usr/local/bin/correctme`
+- Install to `/usr/local/bin/correctme` with code signing
 - Optionally setup auto-start via `~/.zshrc`
-- Restart daemon if already running
 
 Note: Update the repo URL in `scripts/install.sh` if you fork this project.
 

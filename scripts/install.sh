@@ -52,5 +52,44 @@ unzip -q "$ZIP_PATH" -d "$TMP_DIR"
 sudo mv "$TMP_DIR/correctme" /usr/local/bin/correctme
 sudo chmod +x /usr/local/bin/correctme
 
+# Code sign to prevent macOS Gatekeeper issues
+echo "🔐 Code signing binary..."
+sudo codesign --force --deep --sign - /usr/local/bin/correctme
+
+echo ""
 echo "✅ Installed CorrectMe $VERSION"
-echo "Run: correctme setup"
+echo ""
+
+# Clean up
+rm -rf "$TMP_DIR"
+
+# Ask if user wants to run setup now
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Setup CorrectMe"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+read -p "Run setup wizard now? [Y/n] " -r
+echo ""
+
+if [ -z "$REPLY" ] || echo "$REPLY" | grep -iq "^y"; then
+    correctme setup
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Installation Complete!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Grant Accessibility permissions:"
+    echo "     System Settings → Privacy & Security → Accessibility"
+    echo "     Add and enable: /usr/local/bin/correctme"
+    echo ""
+    echo "  2. Start the daemon:"
+    echo "     correctme start -d"
+    echo ""
+    echo "  3. Select text and press ⌘⇧E to correct it!"
+    echo ""
+else
+    echo "Setup skipped. To configure later, run:"
+    echo "  correctme setup"
+    echo ""
+fi
