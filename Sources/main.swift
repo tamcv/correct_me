@@ -33,6 +33,7 @@ struct CorrectMeApp {
 
         // Default: show help
         printHelp()
+        exit(0)
     }
     
     static func handleCommand(_ args: [String]) {
