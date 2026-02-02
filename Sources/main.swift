@@ -243,7 +243,7 @@ struct CorrectMeApp {
                 return
             }
             config.aiProvider = .claudeCode
-            promptAndSetModel(defaultModel: Config.DefaultModels.anthropic)
+            promptAndSetModel(defaultModel: Config.DefaultModels.claudeCode)
             saveConfig()
             print("✓ Provider set to: claude-code")
             

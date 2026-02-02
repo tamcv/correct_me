@@ -45,7 +45,7 @@ struct Config: Codable {
     }
 
     enum DefaultModels {
-        static let claudeCode = "haiku"
+        static let claudeCode = "claude-haiku-4-5"
         static let anthropic = "claude-haiku-4-5-20251001"
         static let gemini = "gemini-2.0-flash"
         static let openaiCodex = "gpt-5.1-codex-mini"
