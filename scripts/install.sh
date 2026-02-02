@@ -52,23 +52,25 @@ unzip -q "$ZIP_PATH" -d "$TMP_DIR"
 
 # Remove old installation if exists
 if [ -d "/Applications/CorrectMe.app" ]; then
-    echo "🗑  Removing old version..."
+    echo "🗑  Removing old CorrectMe.app..."
     rm -rf /Applications/CorrectMe.app
 fi
 
-# Install .app to Applications
-echo "📱 Installing CorrectMe.app to /Applications..."
-mv "$TMP_DIR/CorrectMe.app" /Applications/
+if [ -f "/usr/local/bin/correctme" ]; then
+    echo "🗑  Removing old CLI..."
+    sudo rm -f /usr/local/bin/correctme
+fi
 
-# Create CLI symlink
-echo "🔗 Creating CLI symlink at /usr/local/bin/correctme..."
-sudo ln -sf /Applications/CorrectMe.app/Contents/MacOS/correctme /usr/local/bin/correctme
+# Install CLI binary directly to /usr/local/bin
+echo "🔗 Installing CLI to /usr/local/bin/correctme..."
+sudo mkdir -p /usr/local/bin
+sudo mv "$TMP_DIR/correctme" /usr/local/bin/correctme
+sudo chmod +x /usr/local/bin/correctme
 
 echo ""
 echo "✅ Installed CorrectMe $VERSION"
 echo ""
 echo "Installed:"
-echo "  • App: /Applications/CorrectMe.app"
 echo "  • CLI: /usr/local/bin/correctme"
 echo ""
 
