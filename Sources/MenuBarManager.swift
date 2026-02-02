@@ -69,52 +69,49 @@ class MenuBarManager: NSObject {
     private func updateIcon(for status: AppStatus) {
         guard let button = statusItem?.button else { return }
 
-        switch status {
-        case .idle:
-            if let image = createStatusImage(systemName: "keyboard", tintColor: .labelColor) {
-                button.image = image
+        // Always use pencil.and.outline as the main icon
+        let iconName = "pencil.and.outline"
+        
+        if let image = createStatusImage(systemName: iconName) {
+            button.image = image
+            
+            // Add status indicator as text suffix
+            switch status {
+            case .idle:
                 button.title = ""
-            } else {
+            case .processing:
+                button.title = " ⏳"
+            case .success:
+                button.title = " ✓"
+            case .error:
+                button.title = " !"
+            }
+        } else {
+            // Fallback if SF Symbol not available
+            button.image = nil
+            switch status {
+            case .idle:
                 button.title = "CM"
-                button.image = nil
-            }
-        case .processing:
-            if let image = createStatusImage(systemName: "arrow.triangle.2.circlepath", tintColor: .systemBlue) {
-                button.image = image
-                button.title = ""
-            } else {
-                button.title = "⏳"
-                button.image = nil
-            }
-        case .success:
-            if let image = createStatusImage(systemName: "checkmark.circle", tintColor: .systemGreen) {
-                button.image = image
-                button.title = ""
-            } else {
-                button.title = "✓"
-                button.image = nil
-            }
-        case .error:
-            if let image = createStatusImage(systemName: "exclamationmark.triangle", tintColor: .systemOrange) {
-                button.image = image
-                button.title = ""
-            } else {
-                button.title = "⚠️"
-                button.image = nil
+            case .processing:
+                button.title = "CM ⏳"
+            case .success:
+                button.title = "CM ✓"
+            case .error:
+                button.title = "CM !"
             }
         }
     }
 
-    private func createStatusImage(systemName: String, tintColor: NSColor) -> NSImage? {
+    private func createStatusImage(systemName: String) -> NSImage? {
         // Try to use SF Symbol (macOS 11+)
         if #available(macOS 11.0, *) {
-            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-            if let image = NSImage(systemSymbolName: systemName, accessibilityDescription: nil) {
-                let tintedImage = image.withSymbolConfiguration(config)
+            let config = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+            if let image = NSImage(systemSymbolName: systemName, accessibilityDescription: "CorrectMe") {
+                let configuredImage = image.withSymbolConfiguration(config)
 
                 // Create a template image that respects the menu bar appearance
-                tintedImage?.isTemplate = true
-                return tintedImage
+                configuredImage?.isTemplate = true
+                return configuredImage
             }
         }
 
