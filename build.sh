@@ -42,6 +42,7 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
     read -p "Run setup wizard now? [Y/n] " -r
     echo ""
     if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+        # Setup wizard handles daemon restart automatically
         correctme setup
         echo ""
     else
@@ -61,22 +62,22 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
 EOF
         echo "✅ Default config created (Provider: Claude Code)"
         echo ""
-    fi
-
-    # Check if daemon is running and start/restart accordingly
-    if correctme status 2>/dev/null | grep -q "Running"; then
-        read -p "Restart CorrectMe daemon now? [Y/n] " -r
-        echo ""
-        if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
-            correctme restart
+        
+        # Only prompt to start/restart if user skipped setup wizard
+        if correctme status 2>/dev/null | grep -q "Running"; then
+            read -p "Restart CorrectMe daemon now? [Y/n] " -r
             echo ""
-        fi
-    else
-        read -p "Start CorrectMe daemon now? [Y/n] " -r
-        echo ""
-        if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
-            correctme start
+            if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+                correctme restart
+                echo ""
+            fi
+        else
+            read -p "Start CorrectMe daemon now? [Y/n] " -r
             echo ""
+            if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+                correctme start
+                echo ""
+            fi
         fi
     fi
 
