@@ -199,6 +199,76 @@ class CodexCodeProvider: AIProvider {
     }
 }
 
+// MARK: - GitHub Copilot CLI
+class CopilotProvider: AIProvider {
+    private let model: String?
+
+    init(model: String?) {
+        self.model = model
+    }
+
+    func correctText(_ text: String) async throws -> String {
+        // Find gh copilot executable path
+        guard let ghPath = findExecutable("gh") else {
+            throw AIError.commandFailed("GitHub CLI not found. Please install: brew install gh")
+        }
+
+        let prompt = """
+        No need to scan repo or read any files. Just correct the spelling and grammar of this text.
+        Return ONLY the corrected text without any explanation, markdown, or commentary.
+        Preserve the original formatting, line breaks, and language.
+        If the text is already correct, return it unchanged.
+
+        Text to correct:
+        \(text)
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ghPath)
+        var args = ["copilot"]
+        if let model {
+            args += ["--model", model]
+        }
+        args += ["-p", prompt]
+        process.arguments = args
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        try process.run()
+
+        // Add timeout mechanism
+        let timeout: TimeInterval = 20.0 // 20 seconds
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while process.isRunning && Date() < deadline {
+            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+        }
+
+        if process.isRunning {
+            process.terminate()
+            throw AIError.commandFailed("Copilot CLI timed out after \(Int(timeout)) seconds")
+        }
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if process.terminationStatus != 0 {
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let error = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            throw AIError.commandFailed(error)
+        }
+
+        if output.isEmpty {
+            throw AIError.parseError
+        }
+
+        return output
+    }
+}
+
 // MARK: - Claude API
 class ClaudeAPIProvider: AIProvider {
     private let apiKey: String
@@ -406,6 +476,9 @@ func createAIProvider(from config: Config) throws -> AIProvider {
     case .codexCode:
         let model = config.model ?? Config.DefaultModels.openaiCodex
         return CodexCodeProvider(model: model)
+    case .copilot:
+        let model = config.model ?? Config.DefaultModels.copilot
+        return CopilotProvider(model: model)
     case .claude:
         guard let apiKey = config.anthropicAPIKey, !apiKey.isEmpty else {
             throw AIError.noProviderConfigured

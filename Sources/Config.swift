@@ -16,6 +16,7 @@ struct Config: Codable {
         case claudeCode = "claude-code"
         case codex = "codex"
         case codexCode = "codex-code"
+        case copilot = "copilot"
     }
     
     struct HotkeyConfig: Codable {
@@ -49,6 +50,7 @@ struct Config: Codable {
         static let anthropic = "claude-haiku-4-5-20251001"
         static let gemini = "gemini-2.0-flash"
         static let openaiCodex = "gpt-5.1-codex-mini"
+        static let copilot = "gpt-5-mini"
     }
     
     static var configPath: URL {

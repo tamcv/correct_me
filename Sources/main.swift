@@ -215,16 +215,18 @@ struct CorrectMeApp {
         print("Checking CLI availability...")
         let claudeStatus = checkClaudeCLI()
         let codexStatus = checkCodexCLI()
+        let copilotStatus = checkCopilotCLI()
         
         print("""
         
         Setup - Choose AI provider:
         1) Claude Code (local CLI) \(cliStatusLabel(claudeStatus))
         2) Codex Code (local CLI) \(cliStatusLabel(codexStatus))
-        3) OpenAI API (key required)
-        4) Gemini (API key required)
-        5) Claude API (API key required)
-        6) Cancel
+        3) GitHub Copilot (local CLI) \(cliStatusLabel(copilotStatus))
+        4) OpenAI API (key required)
+        5) Gemini (API key required)
+        6) Claude API (API key required)
+        7) Cancel
         
         """)
         
@@ -259,6 +261,18 @@ struct CorrectMeApp {
             print("✓ Provider set to: codex-code")
             
         case 3:
+            if case .ready = copilotStatus {
+                // ok
+            } else {
+                print("⚠️  GitHub Copilot CLI not ready. Install with: gh extension install github/gh-copilot")
+                return
+            }
+            config.aiProvider = .copilot
+            promptAndSetModel(defaultModel: Config.DefaultModels.copilot)
+            saveConfig()
+            print("✓ Provider set to: copilot")
+            
+        case 4:
             config.aiProvider = .codex
             if !promptAndSetKey(label: "OpenAI API key", envVar: "OPENAI_API_KEY", setter: { config.openaiAPIKey = $0 }) {
                 return
@@ -270,7 +284,7 @@ struct CorrectMeApp {
             saveConfig()
             print("✓ Provider set to: codex")
             
-        case 4:
+        case 5:
             config.aiProvider = .gemini
             if !promptAndSetKey(label: "Gemini API key", envVar: "GEMINI_API_KEY", setter: { config.geminiAPIKey = $0 }) {
                 return
@@ -282,7 +296,7 @@ struct CorrectMeApp {
             saveConfig()
             print("✓ Provider set to: gemini")
             
-        case 5:
+        case 6:
             config.aiProvider = .claude
             if !promptAndSetKey(label: "Claude API key", envVar: "ANTHROPIC_API_KEY", setter: { config.anthropicAPIKey = $0 }) {
                 return
@@ -431,6 +445,20 @@ struct CorrectMeApp {
             return .ready
         }
         return .failed(result.stderr)
+    }
+
+    private static func checkCopilotCLI() -> CLIStatus {
+        guard commandExists("gh") else { return .notFound }
+        // Check if gh copilot extension is installed
+        let result = runProcess(
+            command: "/usr/bin/env",
+            args: ["gh", "copilot", "--version"],
+            stdin: nil
+        )
+        if result.exitCode == 0 {
+            return .ready
+        }
+        return .failed("gh copilot extension not installed")
     }
 
     private static func runProcess(command: String, args: [String], stdin: String?) -> (exitCode: Int32, stdout: String, stderr: String) {
