@@ -97,7 +97,7 @@ if [ -z "$REPLY" ] || echo "$REPLY" | grep -iq "^y"; then
     echo ""
 fi
 
-# Check if using Claude Code and suggest sub-agent optimization
+# Check if using Claude Code and offer to set up sub-agent optimization
 PROVIDER=$(grep -o '"aiProvider"[[:space:]]*:[[:space:]]*"[^"]*"' ~/.correctme/config.json 2>/dev/null | cut -d'"' -f4)
 if [ "$PROVIDER" = "claude-code" ]; then
     echo ""
@@ -105,19 +105,40 @@ if [ "$PROVIDER" = "claude-code" ]; then
     echo "  Claude Code Optimization"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "💡 Tip: For better performance with Claude Code, consider setting up"
+    echo "💡 For better performance with Claude Code, you can set up"
     echo "   a lightweight sub-agent optimized for text correction."
-    echo ""
-    echo "To set this up, run the following command in your project directory:"
-    echo ""
-    echo "  mkdir -p .claude/agents"
-    echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/.claude/agents/text-corrector.md -o .claude/agents/text-corrector.md"
     echo ""
     echo "Benefits:"
     echo "  • Faster responses (no heavy context loading)"
     echo "  • Uses efficient Haiku model"
     echo "  • Runs independently of other Claude sessions"
     echo ""
+
+    read -p "Set up Claude Code sub-agent now? [Y/n] " -r
+    echo ""
+
+    if [ -z "$REPLY" ] || echo "$REPLY" | grep -iq "^y"; then
+        AGENT_DIR="$HOME/.claude/agents"
+        AGENT_FILE="$AGENT_DIR/text-corrector.md"
+
+        echo "📥 Downloading sub-agent configuration..."
+        mkdir -p "$AGENT_DIR"
+
+        if curl -fsSL "https://raw.githubusercontent.com/$REPO/main/.claude/agents/text-corrector.md" -o "$AGENT_FILE" 2>/dev/null; then
+            echo "✅ Claude sub-agent installed at $AGENT_FILE"
+            echo ""
+        else
+            echo "⚠️  Failed to download. You can manually set it up later with:"
+            echo "  mkdir -p ~/.claude/agents"
+            echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/.claude/agents/text-corrector.md -o ~/.claude/agents/text-corrector.md"
+            echo ""
+        fi
+    else
+        echo "⏭  Skipped. You can set it up later by running:"
+        echo "  mkdir -p ~/.claude/agents"
+        echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/.claude/agents/text-corrector.md -o ~/.claude/agents/text-corrector.md"
+        echo ""
+    fi
 fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
