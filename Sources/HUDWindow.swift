@@ -32,18 +32,21 @@ class HUDWindow: NSWindow {
         hudView.setState(.loading)
         orderFrontRegardless()
         cancelAutoHide()
+        StatusManager.shared.setStatus(.processing)
     }
 
     /// Show success state and auto-hide after delay
     func showSuccess() {
         hudView.setState(.success)
         scheduleAutoHide(after: 0.8)
+        StatusManager.shared.setStatus(.success)
     }
 
     /// Show error state and auto-hide after delay
     func showError() {
         hudView.setState(.error)
         scheduleAutoHide(after: 1.5)
+        StatusManager.shared.setStatus(.error)
     }
 
     /// Hide the HUD immediately

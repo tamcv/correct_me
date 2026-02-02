@@ -6,7 +6,6 @@ struct CorrectMeApp {
     static var config = Config.load()
     static var hotkeyManager: HotkeyManager?
     static var aiProvider: AIProvider?
-    static var statusBar: StatusBarController?
     static var hud: HUDWindow?
     static var isProcessing = false
     
@@ -921,38 +920,46 @@ struct CorrectMeApp {
             print("")
         }
 
+        // Initialize menu bar manager first (before checking permissions)
+        _ = MenuBarManager.shared
+
+        // Set initial status
+        StatusManager.shared.setStatus(.idle)
+
         // Initialize AI provider
         do {
             aiProvider = try createAIProvider(from: config)
         } catch {
             print("❌ \(error.localizedDescription)")
             print("Configure a provider first: correctme config provider <provider>")
-            exit(1)
+            ErrorLog.shared.log("AI provider not configured: \(error.localizedDescription)", category: .userError)
+            // Don't exit - let menu bar work even without provider
         }
+
+        // Set up HUD window
+        hud = HUDWindow()
+
+        // Set activation policy to accessory (menu bar only, no dock icon)
+        NSApp.setActivationPolicy(.accessory)
 
         // Set up hotkey
         hotkeyManager = HotkeyManager(config: config) {
             handleHotkey()
         }
 
-        guard hotkeyManager?.start() == true else {
+        if hotkeyManager?.start() == true {
+            print("✓ Hotkey listener started")
+        } else {
             print("❌ Failed to start hotkey listener.")
             print("   Make sure accessibility permissions are granted.")
-            exit(1)
+            ErrorLog.shared.log("Failed to start hotkey listener - accessibility permissions may be missing", category: .systemError)
+            // Don't exit - let menu bar work even without hotkey
         }
 
-        print("✓ Hotkey listener started")
         print("─────────────────────────\n")
 
-        // Set up menubar status
-        statusBar = StatusBarController()
-        statusBar?.setIdle()
-
-        // Set up HUD window
-        hud = HUDWindow()
-
-        // Run the event loop
-        RunLoop.current.run()
+        // Run the AppKit event loop (required for menu bar to work)
+        NSApplication.shared.run()
     }
 
     static func runUpdate() {
@@ -993,7 +1000,6 @@ struct CorrectMeApp {
         }
 
         isProcessing = true
-        statusBar?.setBusy()
 
         // Show HUD loading state near cursor
         hud?.showLoading()
@@ -1001,9 +1007,10 @@ struct CorrectMeApp {
         // Longer delay to let the hotkey event fully complete
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             guard let selectedText = AccessibilityHelper.getSelectedText(), !selectedText.isEmpty else {
-                print("⚠️  No text selected")
+                let errorMsg = "No text selected"
+                print("⚠️  \(errorMsg)")
+                ErrorLog.shared.log(errorMsg, category: .userError)
                 isProcessing = false
-                statusBar?.setIdle()
                 hud?.showError()
                 return
             }
@@ -1019,14 +1026,14 @@ struct CorrectMeApp {
                         AccessibilityHelper.replaceSelectedText(with: correctedText)
                         print("✅ Corrected!")
                         isProcessing = false
-                        statusBar?.setIdle()
                         hud?.showSuccess()
                     }
                 } catch {
                     await MainActor.run {
-                        print("❌ Error: \(error.localizedDescription)")
+                        let errorMsg = error.localizedDescription
+                        print("❌ Error: \(errorMsg)")
+                        ErrorLog.shared.log(errorMsg, category: .aiError)
                         isProcessing = false
-                        statusBar?.setError()
                         hud?.showError()
                     }
                 }

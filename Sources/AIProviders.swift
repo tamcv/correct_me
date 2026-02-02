@@ -88,7 +88,7 @@ class ClaudeCodeProvider: AIProvider {
         try process.run()
 
         // Add timeout mechanism
-        let timeout: TimeInterval = 30.0 // 30 seconds
+        let timeout: TimeInterval = 15.0 // 15 seconds
         let deadline = Date().addingTimeInterval(timeout)
 
         while process.isRunning && Date() < deadline {
@@ -163,7 +163,20 @@ class CodexCodeProvider: AIProvider {
             inputPipe.fileHandleForWriting.write(inputData)
         }
         inputPipe.fileHandleForWriting.closeFile()
-        process.waitUntilExit()
+
+        // Add timeout mechanism
+        let timeout: TimeInterval = 15.0 // 15 seconds
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while process.isRunning && Date() < deadline {
+            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+        }
+
+        if process.isRunning {
+            process.terminate()
+            try? FileManager.default.removeItem(at: outputURL)
+            throw AIError.commandFailed("Codex CLI timed out after \(Int(timeout)) seconds")
+        }
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         _ = String(data: outputData, encoding: .utf8) ?? ""
@@ -200,6 +213,7 @@ class ClaudeAPIProvider: AIProvider {
         let url = URL(string: "https://api.anthropic.com/v1/messages")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 15.0 // 15 seconds timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
@@ -257,6 +271,7 @@ class GeminiProvider: AIProvider {
         let url = URL(string: "https://generativelanguage.googleapis.com/v1/models/\(model):generateContent?key=\(apiKey)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 15.0 // 15 seconds timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let prompt = """
@@ -313,6 +328,7 @@ class OpenAICodexProvider: AIProvider {
         let url = URL(string: "https://api.openai.com/v1/responses")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 15.0 // 15 seconds timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
