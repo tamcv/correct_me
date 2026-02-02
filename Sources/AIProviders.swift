@@ -5,6 +5,47 @@ protocol AIProvider {
 }
 
 // MARK: - Helper Functions
+
+/// Get environment variables that help prevent connection caching issues
+private func getFreshConnectionEnvironment() -> [String: String] {
+    var env = ProcessInfo.processInfo.environment
+    // Disable HTTP keep-alive and connection reuse to prevent stale connections
+    env["HTTP_PROXY"] = ""
+    env["HTTPS_PROXY"] = ""
+    env["NO_PROXY"] = "*"
+    // Force fresh DNS resolution
+    env["RES_OPTIONS"] = "rotate"
+    // Disable connection pooling for curl-based CLIs
+    env["CURL_DISABLE_KEEPALIVE"] = "1"
+    // Some CLIs use node.js - disable keep-alive
+    env["NODE_OPTIONS"] = "--dns-result-order=ipv4first"
+    return env
+}
+
+/// Safely cleanup a Process and its pipes
+private func cleanupProcess(_ process: Process, outputPipe: Pipe, errorPipe: Pipe) {
+    if process.isRunning {
+        process.terminate()
+    }
+    // Close file handles to release resources
+    try? outputPipe.fileHandleForReading.close()
+    try? errorPipe.fileHandleForReading.close()
+}
+
+/// Get a URLSession configured to avoid connection caching issues
+private func getFreshURLSession() -> URLSession {
+    let config = URLSessionConfiguration.ephemeral // Don't use any caches
+    config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+    config.urlCache = nil
+    config.httpShouldUsePipelining = false
+    config.httpMaximumConnectionsPerHost = 1
+    config.timeoutIntervalForRequest = 15.0
+    config.timeoutIntervalForResource = 30.0
+    // Force IPv4 first for better compatibility
+    config.connectionProxyDictionary = [:]
+    return URLSession(configuration: config)
+}
+
 private func findExecutable(_ name: String) -> String? {
     // Common installation paths to check
     let searchPaths = [
@@ -73,6 +114,7 @@ class ClaudeCodeProvider: AIProvider {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: claudePath)
+        process.environment = getFreshConnectionEnvironment()
         var args = ["--no-session-persistence"]
         if let model {
             args += ["--model", model]
@@ -96,17 +138,18 @@ class ClaudeCodeProvider: AIProvider {
         }
 
         if process.isRunning {
-            process.terminate()
+            cleanupProcess(process, outputPipe: outputPipe, errorPipe: errorPipe)
             throw AIError.commandFailed("Claude CLI timed out after \(Int(timeout)) seconds")
         }
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
+        // Cleanup pipes after reading
+        cleanupProcess(process, outputPipe: outputPipe, errorPipe: errorPipe)
+
         if process.terminationStatus != 0 {
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            let error = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-            throw AIError.commandFailed(error)
+            throw AIError.commandFailed("Claude CLI failed with exit code \(process.terminationStatus)")
         }
 
         return output
@@ -145,6 +188,7 @@ class CodexCodeProvider: AIProvider {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
+        process.environment = getFreshConnectionEnvironment()
         var args: [String] = []
         if let model {
             args += ["exec", "--model", model]
@@ -176,23 +220,22 @@ class CodexCodeProvider: AIProvider {
         }
 
         if process.isRunning {
-            process.terminate()
+            cleanupProcess(process, outputPipe: outputPipe, errorPipe: errorPipe)
             try? FileManager.default.removeItem(at: outputURL)
             throw AIError.commandFailed("Codex CLI timed out after \(Int(timeout)) seconds")
         }
 
-        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        _ = String(data: outputData, encoding: .utf8) ?? ""
-
-        if process.terminationStatus != 0 {
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            let error = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-            throw AIError.commandFailed(error)
-        }
-
+        // Read output before cleanup
         let fileData = (try? Data(contentsOf: outputURL)) ?? Data()
         let output = String(data: fileData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        
+        // Cleanup
+        cleanupProcess(process, outputPipe: outputPipe, errorPipe: errorPipe)
         try? FileManager.default.removeItem(at: outputURL)
+
+        if process.terminationStatus != 0 {
+            throw AIError.commandFailed("Codex CLI failed with exit code \(process.terminationStatus)")
+        }
 
         if output.isEmpty {
             throw AIError.parseError
@@ -232,6 +275,7 @@ class CopilotProvider: AIProvider {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: ghPath)
+        process.environment = getFreshConnectionEnvironment()
         var args = ["copilot"]
         if let model {
             args += ["--model", model]
@@ -255,17 +299,18 @@ class CopilotProvider: AIProvider {
         }
 
         if process.isRunning {
-            process.terminate()
+            cleanupProcess(process, outputPipe: outputPipe, errorPipe: errorPipe)
             throw AIError.commandFailed("Copilot CLI timed out after \(Int(timeout)) seconds")
         }
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
+        // Cleanup
+        cleanupProcess(process, outputPipe: outputPipe, errorPipe: errorPipe)
+
         if process.terminationStatus != 0 {
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            let error = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-            throw AIError.commandFailed(error)
+            throw AIError.commandFailed("Copilot CLI failed with exit code \(process.terminationStatus)")
         }
 
         if output.isEmpty {
@@ -291,9 +336,11 @@ class ClaudeAPIProvider: AIProvider {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 15.0 // 15 seconds timeout
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
         
         let prompt = """
         IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
@@ -318,7 +365,9 @@ class ClaudeAPIProvider: AIProvider {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let session = getFreshURLSession()
+        let (data, response) = try await session.data(for: request)
+        session.invalidateAndCancel() // Clean up session immediately
         
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
@@ -352,7 +401,9 @@ class GeminiProvider: AIProvider {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 15.0 // 15 seconds timeout
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
         
         let prompt = """
         IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
@@ -375,7 +426,9 @@ class GeminiProvider: AIProvider {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let session = getFreshURLSession()
+        let (data, response) = try await session.data(for: request)
+        session.invalidateAndCancel() // Clean up session immediately
         
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
@@ -412,8 +465,10 @@ class OpenAICodexProvider: AIProvider {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 15.0 // 15 seconds timeout
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
 
         let prompt = """
         IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
@@ -435,7 +490,9 @@ class OpenAICodexProvider: AIProvider {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let session = getFreshURLSession()
+        let (data, response) = try await session.data(for: request)
+        session.invalidateAndCancel() // Clean up session immediately
         
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
