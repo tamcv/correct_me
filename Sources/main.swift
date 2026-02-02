@@ -247,6 +247,7 @@ struct CorrectMeApp {
             promptAndSetModel(defaultModel: Config.DefaultModels.claudeCode)
             saveConfig()
             print("✓ Provider set to: claude-code")
+            promptRestartDaemon()
             
         case 2:
             if case .ready = codexStatus {
@@ -259,6 +260,7 @@ struct CorrectMeApp {
             promptAndSetModel(defaultModel: Config.DefaultModels.openaiCodex)
             saveConfig()
             print("✓ Provider set to: codex-code")
+            promptRestartDaemon()
             
         case 3:
             if case .ready = copilotStatus {
@@ -271,6 +273,7 @@ struct CorrectMeApp {
             promptAndSetModel(defaultModel: Config.DefaultModels.copilot)
             saveConfig()
             print("✓ Provider set to: copilot")
+            promptRestartDaemon()
             
         case 4:
             config.aiProvider = .codex
@@ -283,6 +286,7 @@ struct CorrectMeApp {
             )
             saveConfig()
             print("✓ Provider set to: codex")
+            promptRestartDaemon()
             
         case 5:
             config.aiProvider = .gemini
@@ -295,6 +299,7 @@ struct CorrectMeApp {
             )
             saveConfig()
             print("✓ Provider set to: gemini")
+            promptRestartDaemon()
             
         case 6:
             config.aiProvider = .claude
@@ -307,9 +312,33 @@ struct CorrectMeApp {
             )
             saveConfig()
             print("✓ Provider set to: claude")
+            promptRestartDaemon()
             
         default:
             print("Setup canceled.")
+        }
+    }
+    
+    static func promptRestartDaemon() {
+        // Check if daemon is currently running
+        let isRunning = DaemonManager.getDaemonPID() != nil
+        
+        if !isRunning {
+            print("\n💡 Daemon is not running. Start it with: correctme start")
+            return
+        }
+        
+        print("\n🔄 Restart CorrectMe daemon to apply changes? [Y/n]: ", terminator: "")
+        let input = (readLine() ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        
+        // Default is yes (empty input or 'y')
+        if input.isEmpty || input == "y" || input == "yes" {
+            print("Restarting daemon...")
+            _ = DaemonManager.stopDaemon()
+            sleep(1)
+            DaemonManager.startDaemon(background: true)
+        } else {
+            print("Skipped restart. Run 'correctme restart' manually when ready.")
         }
     }
     
