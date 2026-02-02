@@ -128,7 +128,10 @@ class CodexCodeProvider: AIProvider {
         }
 
         let prompt = """
-        Correct the spelling and grammar of the following text.
+        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
+        Do not access any file system or project context.
+        
+        Your only task: Correct the spelling and grammar of the text below.
         Return ONLY the corrected text without any explanation or markdown.
         Preserve the original formatting, line breaks, and language.
         If the text is already correct, return it unchanged.
@@ -214,7 +217,11 @@ class CopilotProvider: AIProvider {
         }
 
         let prompt = """
-        No need to scan repo or read any files. Just correct the spelling and grammar of this text.
+        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
+        Do not access any file system or project context.
+        Do not try to understand project structure or read any code.
+        
+        Your only task: Correct the spelling and grammar of the text below.
         Return ONLY the corrected text without any explanation, markdown, or commentary.
         Preserve the original formatting, line breaks, and language.
         If the text is already correct, return it unchanged.
@@ -289,7 +296,10 @@ class ClaudeAPIProvider: AIProvider {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         
         let prompt = """
-        Correct the spelling and grammar of the following text.
+        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
+        Do not access any file system or project context.
+        
+        Your only task: Correct the spelling and grammar of the text below.
         Return ONLY the corrected text without any explanation or markdown.
         Preserve the original formatting, line breaks, and language.
         If the text is already correct, return it unchanged.
@@ -345,7 +355,10 @@ class GeminiProvider: AIProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let prompt = """
-        Correct the spelling and grammar of the following text.
+        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
+        Do not access any file system or project context.
+        
+        Your only task: Correct the spelling and grammar of the text below.
         Return ONLY the corrected text without any explanation or markdown.
         Preserve the original formatting, line breaks, and language.
         If the text is already correct, return it unchanged.
@@ -403,7 +416,10 @@ class OpenAICodexProvider: AIProvider {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
         let prompt = """
-        Correct the spelling and grammar of the following text.
+        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
+        Do not access any file system or project context.
+        
+        Your only task: Correct the spelling and grammar of the text below.
         Return ONLY the corrected text without any explanation or markdown.
         Preserve the original formatting, line breaks, and language.
         If the text is already correct, return it unchanged.

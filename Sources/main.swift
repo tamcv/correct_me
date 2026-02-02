@@ -415,50 +415,17 @@ struct CorrectMeApp {
 
     private static func checkClaudeCLI() -> CLIStatus {
         guard commandExists("claude") else { return .notFound }
-        // Test Claude CLI with a simple prompt using --no-session-persistence
-        let prompt = "Respond with OK only."
-        let result = runProcess(
-            command: "/usr/bin/env",
-            args: ["claude", "--no-session-persistence", "-p", prompt],
-            stdin: nil
-        )
-        if result.exitCode == 0, !result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return .ready
-        }
-        return .failed(result.stderr)
+        return .ready
     }
 
     private static func checkCodexCLI() -> CLIStatus {
         guard commandExists("codex") else { return .notFound }
-        let tempDir = FileManager.default.temporaryDirectory
-        let outputURL = tempDir.appendingPathComponent("correctme_codex_check_\(UUID().uuidString).txt")
-        let prompt = "Respond with OK only."
-        let result = runProcess(
-            command: "/usr/bin/env",
-            args: ["codex", "exec", "--output-last-message", outputURL.path, "-"],
-            stdin: prompt
-        )
-        let fileData = (try? Data(contentsOf: outputURL)) ?? Data()
-        let output = String(data: fileData, encoding: .utf8) ?? ""
-        try? FileManager.default.removeItem(at: outputURL)
-        if result.exitCode == 0, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return .ready
-        }
-        return .failed(result.stderr)
+        return .ready
     }
 
     private static func checkCopilotCLI() -> CLIStatus {
         guard commandExists("gh") else { return .notFound }
-        // Check if gh copilot extension is installed
-        let result = runProcess(
-            command: "/usr/bin/env",
-            args: ["gh", "copilot", "--version"],
-            stdin: nil
-        )
-        if result.exitCode == 0 {
-            return .ready
-        }
-        return .failed("gh copilot extension not installed")
+        return .ready
     }
 
     private static func runProcess(command: String, args: [String], stdin: String?) -> (exitCode: Int32, stdout: String, stderr: String) {
