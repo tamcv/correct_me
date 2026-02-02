@@ -402,16 +402,9 @@ struct CorrectMeApp {
 
     private static func checkClaudeCLI() -> CLIStatus {
         guard commandExists("claude") else { return .notFound }
-        let prompt = "Respond with OK only."
-        let result = runProcess(
-            command: "/usr/bin/env",
-            args: ["claude", "-p", prompt],
-            stdin: nil
-        )
-        if result.exitCode == 0, !result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return .ready
-        }
-        return .failed(result.stderr)
+        // Note: Claude CLI doesn't work well in non-interactive/daemon mode
+        // So we just check if it exists, but mark it as not recommended
+        return .failed("Claude CLI found but not recommended for daemon use (use Gemini/Claude API instead)")
     }
 
     private static func checkCodexCLI() -> CLIStatus {

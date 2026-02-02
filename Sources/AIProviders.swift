@@ -8,36 +8,48 @@ protocol AIProvider {
 class ClaudeCodeProvider: AIProvider {
     func correctText(_ text: String) async throws -> String {
         let prompt = """
-        Correct the spelling and grammar of the following text. 
+        Correct the spelling and grammar of the following text.
         Return ONLY the corrected text without any explanation or markdown.
         Preserve the original formatting, line breaks, and language.
         If the text is already correct, return it unchanged.
-        
+
         Text to correct:
         \(text)
         """
-        
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["claude", "-p", prompt]
-        
+        process.arguments = ["claude", "--dangerously-skip-permissions", "-p", prompt]
+
         let outputPipe = Pipe()
         let errorPipe = Pipe()
         process.standardOutput = outputPipe
         process.standardError = errorPipe
-        
+
         try process.run()
-        process.waitUntilExit()
-        
+
+        // Add timeout mechanism
+        let timeout: TimeInterval = 30.0 // 30 seconds
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while process.isRunning && Date() < deadline {
+            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+        }
+
+        if process.isRunning {
+            process.terminate()
+            throw AIError.commandFailed("Claude CLI timed out after \(Int(timeout)) seconds")
+        }
+
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
+
         if process.terminationStatus != 0 {
             let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let error = String(data: errorData, encoding: .utf8) ?? "Unknown error"
             throw AIError.commandFailed(error)
         }
-        
+
         return output
     }
 }
@@ -178,7 +190,7 @@ class GeminiProvider: AIProvider {
     }
     
     func correctText(_ text: String) async throws -> String {
-        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
+        let url = URL(string: "https://generativelanguage.googleapis.com/v1/models/\(model):generateContent?key=\(apiKey)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

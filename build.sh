@@ -44,14 +44,40 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
     if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
         correctme setup
         echo ""
+    else
+        # Create default config with claude-code if setup is skipped
+        echo "📝 Creating default config with Claude Code provider..."
+        mkdir -p ~/.correctme
+        cat > ~/.correctme/config.json << 'EOF'
+{
+  "aiProvider": "claude-code",
+  "hotkey": {
+    "keyCode": 14,
+    "modifiers": 1179648,
+    "displayName": "⌘⇧E"
+  },
+  "model": "claude-sonnet-4-5-20250929"
+}
+EOF
+        echo "✅ Default config created (Provider: Claude Code)"
+        echo ""
     fi
 
-    # Ask if they want to start the daemon
-    read -p "Start CorrectMe daemon now? [Y/n] " -r
-    echo ""
-    if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
-        correctme start
+    # Check if daemon is running and start/restart accordingly
+    if correctme status 2>/dev/null | grep -q "Running"; then
+        read -p "Restart CorrectMe daemon now? [Y/n] " -r
         echo ""
+        if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+            correctme restart
+            echo ""
+        fi
+    else
+        read -p "Start CorrectMe daemon now? [Y/n] " -r
+        echo ""
+        if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+            correctme start
+            echo ""
+        fi
     fi
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

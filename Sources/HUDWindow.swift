@@ -10,7 +10,7 @@ class HUDWindow: NSWindow {
         hudView = HUDView()
 
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 120, height: 80),
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 70),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -56,18 +56,28 @@ class HUDWindow: NSWindow {
         let mouseLocation = NSEvent.mouseLocation
         let screenFrame = NSScreen.main?.frame ?? .zero
 
-        // Position below and to the right of cursor
+        // Try to position below cursor first
         var hudOrigin = CGPoint(
-            x: mouseLocation.x + 20,
-            y: mouseLocation.y - frame.height - 20
+            x: mouseLocation.x + 8,
+            y: mouseLocation.y - frame.height - 8
         )
 
-        // Ensure HUD stays on screen
-        if hudOrigin.x + frame.width > screenFrame.maxX {
-            hudOrigin.x = mouseLocation.x - frame.width - 20
+        // If HUD would go below screen bottom, position it above cursor instead
+        if hudOrigin.y < screenFrame.minY + 10 {
+            hudOrigin.y = mouseLocation.y + 8
         }
-        if hudOrigin.y < screenFrame.minY {
-            hudOrigin.y = mouseLocation.y + 20
+
+        // Ensure HUD stays on screen horizontally
+        if hudOrigin.x + frame.width > screenFrame.maxX - 10 {
+            hudOrigin.x = mouseLocation.x - frame.width - 8
+        }
+        if hudOrigin.x < screenFrame.minX + 10 {
+            hudOrigin.x = screenFrame.minX + 10
+        }
+
+        // Ensure HUD stays on screen vertically
+        if hudOrigin.y + frame.height > screenFrame.maxY - 10 {
+            hudOrigin.y = screenFrame.maxY - frame.height - 10
         }
 
         setFrameOrigin(hudOrigin)
@@ -114,7 +124,7 @@ private class HUDView: NSView {
 
     private func setupViews() {
         wantsLayer = true
-        layer?.cornerRadius = 12
+        layer?.cornerRadius = 10
         layer?.backgroundColor = NSColor.black.withAlphaComponent(0.85).cgColor
 
         // Spinner
@@ -130,7 +140,7 @@ private class HUDView: NSView {
         iconLabel.isEditable = false
         iconLabel.isSelectable = false
         iconLabel.alignment = .center
-        iconLabel.font = .systemFont(ofSize: 32)
+        iconLabel.font = .systemFont(ofSize: 28)
         iconLabel.textColor = .white
         iconLabel.translatesAutoresizingMaskIntoConstraints = false
         iconLabel.isHidden = true
@@ -142,23 +152,25 @@ private class HUDView: NSView {
         textLabel.isEditable = false
         textLabel.isSelectable = false
         textLabel.alignment = .center
-        textLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        textLabel.font = .systemFont(ofSize: 10, weight: .medium)
         textLabel.textColor = .white.withAlphaComponent(0.9)
         textLabel.translatesAutoresizingMaskIntoConstraints = false
+        textLabel.maximumNumberOfLines = 2
+        textLabel.lineBreakMode = .byWordWrapping
         addSubview(textLabel)
 
         // Layout
         NSLayoutConstraint.activate([
             spinner.centerXAnchor.constraint(equalTo: centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -8),
+            spinner.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -6),
 
             iconLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            iconLabel.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -8),
+            iconLabel.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -6),
 
             textLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            textLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
-            textLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 8),
-            textLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8)
+            textLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+            textLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 6),
+            textLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6)
         ])
     }
 
@@ -170,7 +182,7 @@ private class HUDView: NSView {
             spinner.isHidden = false
             spinner.startAnimation(nil)
             iconLabel.isHidden = true
-            textLabel.stringValue = "Correcting..."
+            textLabel.stringValue = "Correcting...\nStay in this app!"
 
         case .success:
             spinner.stopAnimation(nil)
