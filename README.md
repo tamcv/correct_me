@@ -91,6 +91,22 @@ The LaunchAgent plist is stored at `~/Library/LaunchAgents/com.correctme.daemon.
   - Google Gemini API key, or
   - OpenAI API key
 
+### Claude Code Optimization (Recommended)
+
+If you're using the Claude Code provider, you can significantly improve performance by configuring a lightweight sub-agent specifically for text correction:
+
+1. **During Installation**: The build and install scripts will automatically offer to set this up for you.
+
+2. **Manual Setup**: Create the sub-agent configuration file at `.claude/agents/text-corrector.md` (included in this repo).
+
+This optimization:
+- Uses `--no-session-persistence` to avoid loading heavy context from other Claude sessions
+- Configures a specialized sub-agent optimized for quick text corrections
+- Uses the fast Haiku model by default
+- Runs independently without codebase context loading
+
+The sub-agent is automatically available when working in this project directory.
+
 ## Installation (from source)
 
 ```bash

@@ -97,6 +97,29 @@ if [ -z "$REPLY" ] || echo "$REPLY" | grep -iq "^y"; then
     echo ""
 fi
 
+# Check if using Claude Code and suggest sub-agent optimization
+PROVIDER=$(grep -o '"aiProvider"[[:space:]]*:[[:space:]]*"[^"]*"' ~/.correctme/config.json 2>/dev/null | cut -d'"' -f4)
+if [ "$PROVIDER" = "claude-code" ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Claude Code Optimization"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "💡 Tip: For better performance with Claude Code, consider setting up"
+    echo "   a lightweight sub-agent optimized for text correction."
+    echo ""
+    echo "To set this up, run the following command in your project directory:"
+    echo ""
+    echo "  mkdir -p .claude/agents"
+    echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/.claude/agents/text-corrector.md -o .claude/agents/text-corrector.md"
+    echo ""
+    echo "Benefits:"
+    echo "  • Faster responses (no heavy context loading)"
+    echo "  • Uses efficient Haiku model"
+    echo "  • Runs independently of other Claude sessions"
+    echo ""
+fi
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Installation Complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -6,6 +6,12 @@ protocol AIProvider {
 
 // MARK: - Claude Code (uses local claude command)
 class ClaudeCodeProvider: AIProvider {
+    private let model: String?
+
+    init(model: String?) {
+        self.model = model
+    }
+
     func correctText(_ text: String) async throws -> String {
         let prompt = """
         Correct the spelling and grammar of the following text.
@@ -19,7 +25,12 @@ class ClaudeCodeProvider: AIProvider {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["claude", "--dangerously-skip-permissions", "-p", prompt]
+        var args = ["claude", "--no-session-persistence"]
+        if let model {
+            args += ["--model", model]
+        }
+        args += ["-p", prompt]
+        process.arguments = args
 
         let outputPipe = Pipe()
         let errorPipe = Pipe()
@@ -321,7 +332,8 @@ enum AIError: Error, LocalizedError {
 func createAIProvider(from config: Config) throws -> AIProvider {
     switch config.aiProvider {
     case .claudeCode:
-        return ClaudeCodeProvider()
+        let model = config.model ?? Config.DefaultModels.claudeCode
+        return ClaudeCodeProvider(model: model)
     case .codexCode:
         let model = config.model ?? Config.DefaultModels.openaiCodex
         return CodexCodeProvider(model: model)

@@ -80,6 +80,73 @@ EOF
         fi
     fi
 
+    # Check if using Claude Code and offer to set up optimized sub-agent
+    PROVIDER=$(grep -o '"aiProvider"[[:space:]]*:[[:space:]]*"[^"]*"' ~/.correctme/config.json 2>/dev/null | cut -d'"' -f4)
+    if [ "$PROVIDER" = "claude-code" ]; then
+        AGENT_FILE=".claude/agents/text-corrector.md"
+        if [ ! -f "$AGENT_FILE" ]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  Claude Code Optimization"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "ℹ️  For better performance with Claude Code, you can set up"
+            echo "   a lightweight sub-agent optimized for text correction."
+            echo ""
+            echo "Benefits:"
+            echo "  • Faster responses (no heavy context loading)"
+            echo "  • Uses efficient Haiku model"
+            echo "  • Runs independently of other Claude sessions"
+            echo ""
+            read -p "Set up Claude Code sub-agent? [Y/n] " -r
+            echo ""
+            if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+                mkdir -p .claude/agents
+                cat > "$AGENT_FILE" << 'AGENT_EOF'
+---
+name: text-corrector
+description: Lightweight text correction agent optimized for grammar and spelling fixes
+model: haiku
+tools: []
+---
+
+You are a specialized text correction agent optimized for quick, accurate spelling and grammar corrections.
+
+## Your Role
+
+Correct spelling, grammar, punctuation, and clarity issues in text while:
+- Preserving the original meaning and tone
+- Maintaining the original language (English, Vietnamese, etc.)
+- Keeping all formatting and line breaks intact
+- Being fast and efficient
+
+## Response Format
+
+Return ONLY the corrected text without:
+- Explanations or commentary
+- Markdown formatting (unless it was in the original)
+- Additional suggestions or recommendations
+
+## Optimization
+
+You are configured to:
+- Use minimal context (no codebase exploration needed)
+- Run independently of other Claude sessions
+- Focus solely on text correction tasks
+- Provide fast responses with the Haiku model
+AGENT_EOF
+                echo "✅ Claude sub-agent created at $AGENT_FILE"
+                echo ""
+                echo "The sub-agent is now available for this project."
+                echo "CorrectMe will use it automatically with --no-session-persistence."
+                echo ""
+            else
+                echo "⏭  Skipped. You can create it later by copying .claude/agents/text-corrector.md"
+                echo ""
+            fi
+        fi
+    fi
+
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "✅ Setup Complete!"
