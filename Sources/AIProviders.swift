@@ -4,6 +4,49 @@ protocol AIProvider {
     func correctText(_ text: String) async throws -> String
 }
 
+// MARK: - Helper Functions
+private func findExecutable(_ name: String) -> String? {
+    // Common installation paths to check
+    let searchPaths = [
+        "/usr/local/bin/\(name)",
+        "/opt/homebrew/bin/\(name)",
+        "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin/\(name)",
+        "/usr/bin/\(name)",
+    ]
+
+    for path in searchPaths {
+        if FileManager.default.isExecutableFile(atPath: path) {
+            return path
+        }
+    }
+
+    // Fallback: try using 'which' command
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+    process.arguments = [name]
+
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = Pipe()
+
+    do {
+        try process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus == 0 {
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !path.isEmpty {
+                return path
+            }
+        }
+    } catch {
+        return nil
+    }
+
+    return nil
+}
+
 // MARK: - Claude Code (uses local claude command)
 class ClaudeCodeProvider: AIProvider {
     private let model: String?
@@ -13,6 +56,11 @@ class ClaudeCodeProvider: AIProvider {
     }
 
     func correctText(_ text: String) async throws -> String {
+        // Find claude executable path
+        guard let claudePath = findExecutable("claude") else {
+            throw AIError.commandFailed("Claude CLI not found. Please ensure Claude Code is installed and accessible.")
+        }
+
         let prompt = """
         Correct the spelling and grammar of the following text.
         Return ONLY the corrected text without any explanation or markdown.
@@ -24,8 +72,8 @@ class ClaudeCodeProvider: AIProvider {
         """
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        var args = ["claude", "--no-session-persistence"]
+        process.executableURL = URL(fileURLWithPath: claudePath)
+        var args = ["--no-session-persistence"]
         if let model {
             args += ["--model", model]
         }
@@ -74,6 +122,11 @@ class CodexCodeProvider: AIProvider {
     }
 
     func correctText(_ text: String) async throws -> String {
+        // Find codex executable path
+        guard let codexPath = findExecutable("codex") else {
+            throw AIError.commandFailed("Codex CLI not found. Please ensure Codex is installed and accessible.")
+        }
+
         let prompt = """
         Correct the spelling and grammar of the following text.
         Return ONLY the corrected text without any explanation or markdown.
@@ -88,8 +141,8 @@ class CodexCodeProvider: AIProvider {
         let outputURL = tempDir.appendingPathComponent("correctme_codex_output_\(UUID().uuidString).txt")
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        var args = ["codex"]
+        process.executableURL = URL(fileURLWithPath: codexPath)
+        var args: [String] = []
         if let model {
             args += ["exec", "--model", model]
         } else {
