@@ -7,12 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-02
+
 ### Added
+- **Claude Code Optimization** - Significantly improved performance for Claude Code provider
+  - Optional lightweight sub-agent configuration for text correction
+  - Automatic setup prompt during installation
+  - Project-specific agent at `.claude/agents/text-corrector.md`
+  - Uses fast Haiku model by default (`claude-haiku-4-5`)
 - **Cursor HUD** - Small floating window appears near mouse cursor showing real-time correction status
   - Loading spinner when processing
   - Success checkmark when done
   - Error indicator on failure
   - Auto-dismisses after completion
+- Proper macOS .app bundle with Info.plist
+- LSUIElement set to true (runs as background agent, no dock icon)
+- Auto-start via LaunchAgent is now automatic when running `correctme start`
+- New `enable` command to manually enable auto-start at login
+- New `disable` command to manually disable auto-start at login
+- `scripts/build-app.sh` - Script to build the .app bundle
 
 ### Changed
 - **BREAKING**: Simplified command structure for better user experience
@@ -24,17 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CLI access via symlink at `/usr/local/bin/correctme`
   - Appears as "CorrectMe" in System Settings → Accessibility (much easier to add)
   - LaunchAgent now uses .app path for better system integration
+- Claude Code CLI now uses `--no-session-persistence` to avoid loading heavy context
+- Removed `--dangerously-skip-permissions` flag for better security
+- Claude Code provider now supports configurable model parameter
+- Fixed Claude CLI status check to properly verify availability
 - Simplified installer flow: asks to run setup and start daemon
 - Updated all documentation to reflect simplified commands and .app bundle installation
 - Logs now stored in `/tmp/correctme.log` and `/tmp/correctme.error.log`
-
-### Added
-- Proper macOS .app bundle with Info.plist
-- LSUIElement set to true (runs as background agent, no dock icon)
-- Auto-start via LaunchAgent is now automatic when running `correctme start`
-- New `enable` command to manually enable auto-start at login
-- New `disable` command to manually disable auto-start at login
-- `scripts/build-app.sh` - Script to build the .app bundle
 
 ## [0.2.1] - 2026-02-01
 
