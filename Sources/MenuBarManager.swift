@@ -16,11 +16,11 @@ class MenuBarManager: NSObject {
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        guard let button = statusItem?.button else {
+        guard statusItem?.button != nil else {
             print("❌ Failed to create status bar button")
             return
         }
-        
+
         print("[DEBUG] Status bar button created successfully")
         updateIcon(for: .idle)
 
@@ -255,6 +255,40 @@ class MenuBarManager: NSObject {
     }
 
     @objc private func restartDaemon() {
+        // Get the path to the correctme executable
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["bash", "-c", "which correctme"]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let correctmePath = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !correctmePath.isEmpty {
+                // Found correctme, execute restart command
+                let restartProcess = Process()
+                restartProcess.executableURL = URL(fileURLWithPath: correctmePath)
+                restartProcess.arguments = ["restart"]
+
+                try restartProcess.run()
+
+                // The daemon will exit, so no need to show success message
+            } else {
+                // Fallback: show alert if correctme not found
+                showRestartInstructions()
+            }
+        } catch {
+            // On error, show instructions
+            showRestartInstructions()
+        }
+    }
+
+    private func showRestartInstructions() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Restart Daemon"
