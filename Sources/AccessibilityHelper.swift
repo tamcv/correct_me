@@ -100,13 +100,33 @@ class AccessibilityHelper {
     }
     
     /// Replace selected text by pasting from clipboard
-    static func replaceSelectedText(with newText: String) {
+    /// - Parameters:
+    ///   - newText: The text to paste
+    ///   - targetApp: Optional - the app to paste into (will activate if not frontmost)
+    /// - Returns: true if paste was successful, false if user needs to paste manually
+    @discardableResult
+    static func replaceSelectedText(with newText: String, targetApp: NSRunningApplication? = nil) -> Bool {
         let pasteboard = NSPasteboard.general
         let oldContents = pasteboard.string(forType: .string)
         
         // Set new text to clipboard
         pasteboard.clearContents()
         pasteboard.setString(newText, forType: .string)
+        
+        // If target app is specified and not frontmost, try to activate it
+        if let target = targetApp {
+            let currentApp = NSWorkspace.shared.frontmostApplication
+            if currentApp?.processIdentifier != target.processIdentifier {
+                // Try to activate target app
+                let activated = target.activate(options: [])
+                if !activated || target.isTerminated {
+                    // App couldn't be activated (maybe closed) - leave text in clipboard
+                    return false
+                }
+                // Wait for app to come to front
+                Thread.sleep(forTimeInterval: 0.15)
+            }
+        }
         
         // Small delay to ensure clipboard is ready
         Thread.sleep(forTimeInterval: 0.05)
@@ -116,13 +136,13 @@ class AccessibilityHelper {
         source?.localEventsSuppressionInterval = 0.0
         
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true) else {
-            return
+            return false
         }
         keyDown.flags = .maskCommand
         keyDown.post(tap: .cgAnnotatedSessionEventTap)
         
         guard let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {
-            return
+            return false
         }
         keyUp.flags = .maskCommand
         keyUp.post(tap: .cgAnnotatedSessionEventTap)
@@ -134,6 +154,8 @@ class AccessibilityHelper {
                 pasteboard.setString(old, forType: .string)
             }
         }
+        
+        return true
     }
     
     /// Check if app has accessibility permissions

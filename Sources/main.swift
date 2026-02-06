@@ -1035,6 +1035,9 @@ struct CorrectMeApp {
         // Cache selection bounds before any async operations
         hud?.cacheSelectionBounds()
         
+        // Remember the source app so we can paste back to it even if user switches apps
+        let sourceApp = NSWorkspace.shared.frontmostApplication
+        
         // Show HUD loading state near selection (or cursor as fallback)
         hud?.showLoading()
 
@@ -1057,10 +1060,17 @@ struct CorrectMeApp {
                     let correctedText = try await aiProvider!.correctText(selectedText)
 
                     await MainActor.run {
-                        AccessibilityHelper.replaceSelectedText(with: correctedText)
-                        print("✅ Corrected!")
+                        let pasteSuccess = AccessibilityHelper.replaceSelectedText(with: correctedText, targetApp: sourceApp)
+                        if pasteSuccess {
+                            print("✅ Corrected!")
+                            hud?.showSuccess()
+                        } else {
+                            // App was closed or couldn't be activated - text is in clipboard
+                            print("⚠️ Source app unavailable - corrected text copied to clipboard")
+                            ErrorLog.shared.log("Text copied to clipboard (source app unavailable)", category: .userError)
+                            hud?.showSuccess() // Still show success since text is ready to paste
+                        }
                         isProcessing = false
-                        hud?.showSuccess()
                     }
                 } catch {
                     await MainActor.run {
