@@ -26,9 +26,17 @@ class HUDWindow: NSWindow {
         self.hasShadow = true
     }
 
-    /// Show the HUD near the mouse cursor with a loading state
+    /// Store cached selection bounds
+    private var cachedSelectionBounds: NSRect?
+    
+    /// Cache the current selection bounds (call this before showing loading)
+    func cacheSelectionBounds() {
+        cachedSelectionBounds = AccessibilityHelper.getSelectedTextBounds()
+    }
+
+    /// Show the HUD near the selected text (or mouse cursor as fallback) with a loading state
     func showLoading() {
-        positionNearMouse()
+        positionNearSelection()
         hudView.setState(.loading)
         orderFrontRegardless()
         cancelAutoHide()
@@ -53,6 +61,49 @@ class HUDWindow: NSWindow {
     func hide() {
         cancelAutoHide()
         orderOut(nil)
+    }
+
+    private func positionNearSelection() {
+        // Use cached bounds if available, otherwise try to get them now
+        let selectionBounds = cachedSelectionBounds ?? AccessibilityHelper.getSelectedTextBounds()
+        cachedSelectionBounds = nil // Clear cache after use
+        
+        if let bounds = selectionBounds {
+            positionNearBounds(bounds)
+        } else {
+            // Fallback to mouse cursor position
+            positionNearMouse()
+        }
+    }
+    
+    private func positionNearBounds(_ bounds: NSRect) {
+        let screenFrame = NSScreen.main?.frame ?? .zero
+        
+        // Position below the selection
+        var hudOrigin = CGPoint(
+            x: bounds.origin.x,
+            y: bounds.origin.y - frame.height - 8
+        )
+        
+        // If HUD would go below screen bottom, position it above selection instead
+        if hudOrigin.y < screenFrame.minY + 10 {
+            hudOrigin.y = bounds.origin.y + bounds.height + 8
+        }
+        
+        // Ensure HUD stays on screen horizontally
+        if hudOrigin.x + frame.width > screenFrame.maxX - 10 {
+            hudOrigin.x = screenFrame.maxX - frame.width - 10
+        }
+        if hudOrigin.x < screenFrame.minX + 10 {
+            hudOrigin.x = screenFrame.minX + 10
+        }
+        
+        // Ensure HUD stays on screen vertically
+        if hudOrigin.y + frame.height > screenFrame.maxY - 10 {
+            hudOrigin.y = screenFrame.maxY - frame.height - 10
+        }
+        
+        setFrameOrigin(hudOrigin)
     }
 
     private func positionNearMouse() {

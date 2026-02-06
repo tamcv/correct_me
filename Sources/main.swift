@@ -1032,7 +1032,10 @@ struct CorrectMeApp {
 
         isProcessing = true
 
-        // Show HUD loading state near cursor
+        // Cache selection bounds before any async operations
+        hud?.cacheSelectionBounds()
+        
+        // Show HUD loading state near selection (or cursor as fallback)
         hud?.showLoading()
 
         // Longer delay to let the hotkey event fully complete

@@ -141,4 +141,66 @@ class AccessibilityHelper {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         return AXIsProcessTrustedWithOptions(options as CFDictionary)
     }
+    
+    /// Get the screen position of the selected text
+    /// Returns the bounds (position and size) of the selected text, or nil if not available
+    static func getSelectedTextBounds() -> NSRect? {
+        guard let focusedApp = NSWorkspace.shared.frontmostApplication else {
+            return nil
+        }
+        
+        let appElement = AXUIElementCreateApplication(focusedApp.processIdentifier)
+        
+        var focusedElement: CFTypeRef?
+        let focusedResult = AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedElement
+        )
+        
+        guard focusedResult == .success, focusedElement != nil else {
+            return nil
+        }
+        
+        let element = focusedElement as! AXUIElement
+        
+        // Try to get selected text range first
+        var selectedRangeValue: CFTypeRef?
+        let rangeResult = AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &selectedRangeValue
+        )
+        
+        guard rangeResult == .success, selectedRangeValue != nil else {
+            return nil
+        }
+        
+        // Get bounds for the selected text range
+        var boundsValue: CFTypeRef?
+        let boundsResult = AXUIElementCopyParameterizedAttributeValue(
+            element,
+            kAXBoundsForRangeParameterizedAttribute as CFString,
+            selectedRangeValue!,
+            &boundsValue
+        )
+        
+        guard boundsResult == .success, boundsValue != nil else {
+            return nil
+        }
+        
+        // Convert AXValue to CGRect
+        var bounds = CGRect.zero
+        if AXValueGetValue(boundsValue as! AXValue, .cgRect, &bounds) {
+            // Convert from screen coordinates (origin at top-left) to Cocoa coordinates (origin at bottom-left)
+            if let screen = NSScreen.main {
+                let screenHeight = screen.frame.height
+                let convertedY = screenHeight - bounds.origin.y - bounds.height
+                return NSRect(x: bounds.origin.x, y: convertedY, width: bounds.width, height: bounds.height)
+            }
+            return NSRect(origin: CGPoint(x: bounds.origin.x, y: bounds.origin.y), size: bounds.size)
+        }
+        
+        return nil
+    }
 }
