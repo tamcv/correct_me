@@ -9,16 +9,10 @@ protocol AIProvider {
 /// Get environment variables that help prevent connection caching issues
 private func getFreshConnectionEnvironment() -> [String: String] {
     var env = ProcessInfo.processInfo.environment
-    // Disable HTTP keep-alive and connection reuse to prevent stale connections
-    env["HTTP_PROXY"] = ""
-    env["HTTPS_PROXY"] = ""
-    env["NO_PROXY"] = "*"
-    // Force fresh DNS resolution
-    env["RES_OPTIONS"] = "rotate"
     // Disable connection pooling for curl-based CLIs
     env["CURL_DISABLE_KEEPALIVE"] = "1"
-    // Some CLIs use node.js - disable keep-alive
-    env["NODE_OPTIONS"] = "--dns-result-order=ipv4first"
+    // Force fresh DNS resolution
+    env["RES_OPTIONS"] = "rotate"
     return env
 }
 
