@@ -217,7 +217,14 @@ struct CorrectMeApp {
         let codexStatus = checkCodexCLI()
         let copilotStatus = checkCopilotCLI()
         
+        // Show current configuration
+        let currentProvider = config.aiProvider.rawValue
+        let currentModel = config.model ?? "default"
         print("""
+        
+        Current configuration:
+          Provider: \(currentProvider)
+          Model: \(currentModel)
         
         Setup - Choose AI provider:
         1) Claude Code (local CLI) \(cliStatusLabel(claudeStatus))
