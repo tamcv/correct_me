@@ -123,8 +123,8 @@ class ClaudeCodeProvider: AIProvider {
 
         try process.run()
 
-        // Add timeout mechanism
-        let timeout: TimeInterval = 15.0 // 15 seconds
+        // Add timeout mechanism - Claude CLI needs more time to start up
+        let timeout: TimeInterval = 45.0 // 45 seconds
         let deadline = Date().addingTimeInterval(timeout)
 
         while process.isRunning && Date() < deadline {
@@ -205,8 +205,8 @@ class CodexCodeProvider: AIProvider {
         }
         inputPipe.fileHandleForWriting.closeFile()
 
-        // Add timeout mechanism
-        let timeout: TimeInterval = 15.0 // 15 seconds
+        // Add timeout mechanism - CLI tools need time to start up
+        let timeout: TimeInterval = 45.0 // 45 seconds
         let deadline = Date().addingTimeInterval(timeout)
 
         while process.isRunning && Date() < deadline {
@@ -284,8 +284,8 @@ class CopilotProvider: AIProvider {
 
         try process.run()
 
-        // Add timeout mechanism
-        let timeout: TimeInterval = 20.0 // 20 seconds
+        // Add timeout mechanism - CLI tools need time to start up
+        let timeout: TimeInterval = 45.0 // 45 seconds
         let deadline = Date().addingTimeInterval(timeout)
 
         while process.isRunning && Date() < deadline {
