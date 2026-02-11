@@ -1,6 +1,15 @@
 import AppKit
 import Foundation
 
+// MARK: - Logging Helpers
+
+/// Print with automatic flush to ensure immediate log writing
+func logPrint(_ items: Any..., separator: String = " ", terminator: String = "\n") {
+    let message = items.map { "\($0)" }.joined(separator: separator)
+    print(message, terminator: terminator)
+    fflush(stdout)
+}
+
 @main
 struct CorrectMeApp {
     static var config = Config.load()
@@ -929,7 +938,7 @@ struct CorrectMeApp {
         app.setActivationPolicy(.accessory)
         app.finishLaunching()
 
-        print("""
+        logPrint("""
 
         ╔═══════════════════════════════════════════╗
         ║         CorrectMe is running!             ║
@@ -945,10 +954,10 @@ struct CorrectMeApp {
 
         // Check accessibility permissions
         if !AccessibilityHelper.checkAccessibilityPermissions() {
-            print("⚠️  Accessibility permission required!")
-            print("   Go to: System Settings → Privacy & Security → Accessibility")
-            print("   Add and enable Terminal (or your terminal app)")
-            print("")
+            logPrint("⚠️  Accessibility permission required!")
+            logPrint("   Go to: System Settings → Privacy & Security → Accessibility")
+            logPrint("   Add and enable Terminal (or your terminal app)")
+            logPrint("")
         }
 
         // Initialize menu bar manager first (before checking permissions)
@@ -961,8 +970,8 @@ struct CorrectMeApp {
         do {
             aiProvider = try createAIProvider(from: config)
         } catch {
-            print("❌ \(error.localizedDescription)")
-            print("Configure a provider first: correctme config provider <provider>")
+            logPrint("❌ \(error.localizedDescription)")
+            logPrint("Configure a provider first: correctme config provider <provider>")
             ErrorLog.shared.log("AI provider not configured: \(error.localizedDescription)", category: .userError)
             // Don't exit - let menu bar work even without provider
         }
@@ -979,15 +988,15 @@ struct CorrectMeApp {
         }
 
         if hotkeyManager?.start() == true {
-            print("✓ Hotkey listener started")
+            logPrint("✓ Hotkey listener started")
         } else {
-            print("❌ Failed to start hotkey listener.")
-            print("   Make sure accessibility permissions are granted.")
+            logPrint("❌ Failed to start hotkey listener.")
+            logPrint("   Make sure accessibility permissions are granted.")
             ErrorLog.shared.log("Failed to start hotkey listener - accessibility permissions may be missing", category: .systemError)
             // Don't exit - let menu bar work even without hotkey
         }
 
-        print("─────────────────────────\n")
+        logPrint("─────────────────────────\n")
 
         // Run the AppKit event loop (required for menu bar to work)
         NSApplication.shared.run()
@@ -1026,7 +1035,7 @@ struct CorrectMeApp {
     
     static func handleHotkey() {
         guard !isProcessing else {
-            print("⏳ Already processing...")
+            logPrint("⏳ Already processing...")
             return
         }
 
@@ -1034,10 +1043,10 @@ struct CorrectMeApp {
 
         // Cache selection bounds before any async operations
         hud?.cacheSelectionBounds()
-        
+
         // Remember the source app so we can paste back to it even if user switches apps
         let sourceApp = NSWorkspace.shared.frontmostApplication
-        
+
         // Show HUD loading state near selection (or cursor as fallback)
         hud?.showLoading()
 
@@ -1045,7 +1054,7 @@ struct CorrectMeApp {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             guard let selectedText = AccessibilityHelper.getSelectedText(), !selectedText.isEmpty else {
                 let errorMsg = "No text selected"
-                print("⚠️  \(errorMsg)")
+                logPrint("⚠️  \(errorMsg)")
                 ErrorLog.shared.log(errorMsg, category: .userError)
                 isProcessing = false
                 hud?.showError()
@@ -1053,7 +1062,7 @@ struct CorrectMeApp {
             }
 
             let preview = selectedText.prefix(50)
-            print("📝 Correcting: \"\(preview)\(selectedText.count > 50 ? "..." : "")\"")
+            logPrint("📝 Correcting: \"\(preview)\(selectedText.count > 50 ? "..." : "")\"")
 
             Task {
                 do {
@@ -1062,11 +1071,11 @@ struct CorrectMeApp {
                     await MainActor.run {
                         let pasteSuccess = AccessibilityHelper.replaceSelectedText(with: correctedText, targetApp: sourceApp)
                         if pasteSuccess {
-                            print("✅ Corrected!")
+                            logPrint("✅ Corrected!")
                             hud?.showSuccess()
                         } else {
                             // App was closed or couldn't be activated - text is in clipboard
-                            print("⚠️ Source app unavailable - corrected text copied to clipboard")
+                            logPrint("⚠️ Source app unavailable - corrected text copied to clipboard")
                             ErrorLog.shared.log("Text copied to clipboard (source app unavailable)", category: .userError)
                             hud?.showSuccess() // Still show success since text is ready to paste
                         }
@@ -1075,7 +1084,7 @@ struct CorrectMeApp {
                 } catch {
                     await MainActor.run {
                         let errorMsg = error.localizedDescription
-                        print("❌ Error: \(errorMsg)")
+                        logPrint("❌ Error: \(errorMsg)")
                         ErrorLog.shared.log(errorMsg, category: .aiError)
                         isProcessing = false
                         hud?.showError()

@@ -167,6 +167,7 @@ enum DaemonManager {
             CorrectMe Status:
             ─────────────────
             Status:    Running ✓
+            Version:   \(AppVersion.fullVersion)
             PID:       \(pid)
             """
 
@@ -262,15 +263,23 @@ enum DaemonManager {
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = ["__daemon_start"]
 
-        // Redirect stdout/stderr to log files
-        let outFile = FileHandle(forWritingAtPath: logFilePath.path) ?? {
-            FileManager.default.createFile(atPath: logFilePath.path, contents: nil)
-            return FileHandle(forWritingAtPath: logFilePath.path)!
+        // Redirect stdout/stderr to log files (append mode)
+        let outFile: FileHandle = {
+            if !FileManager.default.fileExists(atPath: logFilePath.path) {
+                FileManager.default.createFile(atPath: logFilePath.path, contents: nil)
+            }
+            let handle = FileHandle(forWritingAtPath: logFilePath.path)!
+            handle.seekToEndOfFile()  // Append mode
+            return handle
         }()
 
-        let errFile = FileHandle(forWritingAtPath: errorLogFilePath.path) ?? {
-            FileManager.default.createFile(atPath: errorLogFilePath.path, contents: nil)
-            return FileHandle(forWritingAtPath: errorLogFilePath.path)!
+        let errFile: FileHandle = {
+            if !FileManager.default.fileExists(atPath: errorLogFilePath.path) {
+                FileManager.default.createFile(atPath: errorLogFilePath.path, contents: nil)
+            }
+            let handle = FileHandle(forWritingAtPath: errorLogFilePath.path)!
+            handle.seekToEndOfFile()  // Append mode
+            return handle
         }()
 
         process.standardOutput = outFile
@@ -309,12 +318,14 @@ enum DaemonManager {
         // Handle termination signals
         signal(SIGTERM) { _ in
             print("\n👋 Daemon received SIGTERM, shutting down...")
+            fflush(stdout)
             DaemonManager.removePIDFile()
             exit(0)
         }
 
         signal(SIGINT) { _ in
             print("\n👋 Daemon received SIGINT, shutting down...")
+            fflush(stdout)
             DaemonManager.removePIDFile()
             exit(0)
         }
