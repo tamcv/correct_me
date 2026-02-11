@@ -1116,7 +1116,10 @@ struct CorrectMeApp {
             }
         }
 
-        // Create plist content (use .app path for better Accessibility integration)
+        // Create plist content
+        // Use __daemon_start directly so launchd manages the process lifecycle.
+        // This avoids the KeepAlive restart loop caused by the two-process model.
+        let logDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".correctme")
         let plistContent = """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1128,20 +1131,23 @@ struct CorrectMeApp {
             <key>ProgramArguments</key>
             <array>
                 <string>/Applications/CorrectMe.app/Contents/MacOS/correctme</string>
-                <string>start</string>
+                <string>__daemon_start</string>
             </array>
 
             <key>RunAtLoad</key>
             <true/>
 
             <key>KeepAlive</key>
-            <true/>
+            <dict>
+                <key>SuccessfulExit</key>
+                <false/>
+            </dict>
 
             <key>StandardOutPath</key>
-            <string>/tmp/correctme.log</string>
+            <string>\(logDir.path)/correctme.log</string>
 
             <key>StandardErrorPath</key>
-            <string>/tmp/correctme.error.log</string>
+            <string>\(logDir.path)/correctme.error.log</string>
         </dict>
         </plist>
         """
