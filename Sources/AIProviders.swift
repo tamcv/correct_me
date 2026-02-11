@@ -96,15 +96,7 @@ class ClaudeCodeProvider: AIProvider {
             throw AIError.commandFailed("Claude CLI not found. Please ensure Claude Code is installed and accessible.")
         }
 
-        let prompt = """
-        Correct the spelling and grammar of the following text.
-        Return ONLY the corrected text without any explanation or markdown.
-        Preserve the original formatting, line breaks, and language.
-        If the text is already correct, return it unchanged.
-
-        Text to correct:
-        \(text)
-        """
+        let prompt = buildCorrectionPrompt(text: text)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: claudePath)
@@ -164,18 +156,10 @@ class CodexCodeProvider: AIProvider {
             throw AIError.commandFailed("Codex CLI not found. Please ensure Codex is installed and accessible.")
         }
 
-        let prompt = """
-        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
-        Do not access any file system or project context.
-        
-        Your only task: Correct the spelling and grammar of the text below.
-        Return ONLY the corrected text without any explanation or markdown.
-        Preserve the original formatting, line breaks, and language.
-        If the text is already correct, return it unchanged.
-
-        Text to correct:
-        \(text)
-        """
+        let prompt = buildCorrectionPrompt(
+            text: text,
+            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
+        )
 
         let tempDir = FileManager.default.temporaryDirectory
         let outputURL = tempDir.appendingPathComponent("correctme_codex_output_\(UUID().uuidString).txt")
@@ -253,19 +237,10 @@ class CopilotProvider: AIProvider {
             throw AIError.commandFailed("GitHub CLI not found. Please install: brew install gh")
         }
 
-        let prompt = """
-        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
-        Do not access any file system or project context.
-        Do not try to understand project structure or read any code.
-        
-        Your only task: Correct the spelling and grammar of the text below.
-        Return ONLY the corrected text without any explanation, markdown, or commentary.
-        Preserve the original formatting, line breaks, and language.
-        If the text is already correct, return it unchanged.
-
-        Text to correct:
-        \(text)
-        """
+        let prompt = buildCorrectionPrompt(
+            text: text,
+            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\nDo not try to understand project structure or read any code.\n\n"
+        )
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: ghPath)
@@ -336,19 +311,11 @@ class ClaudeAPIProvider: AIProvider {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
         
-        let prompt = """
-        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
-        Do not access any file system or project context.
-        
-        Your only task: Correct the spelling and grammar of the text below.
-        Return ONLY the corrected text without any explanation or markdown.
-        Preserve the original formatting, line breaks, and language.
-        If the text is already correct, return it unchanged.
-        
-        Text to correct:
-        \(text)
-        """
-        
+        let prompt = buildCorrectionPrompt(
+            text: text,
+            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
+        )
+
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 4096,
@@ -399,19 +366,11 @@ class GeminiProvider: AIProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
         
-        let prompt = """
-        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
-        Do not access any file system or project context.
-        
-        Your only task: Correct the spelling and grammar of the text below.
-        Return ONLY the corrected text without any explanation or markdown.
-        Preserve the original formatting, line breaks, and language.
-        If the text is already correct, return it unchanged.
-        
-        Text to correct:
-        \(text)
-        """
-        
+        let prompt = buildCorrectionPrompt(
+            text: text,
+            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
+        )
+
         let body: [String: Any] = [
             "contents": [
                 ["parts": [["text": prompt]]]
@@ -464,18 +423,10 @@ class OpenAICodexProvider: AIProvider {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
 
-        let prompt = """
-        IMPORTANT: Do not scan, read, or index any files in the repository or workspace.
-        Do not access any file system or project context.
-        
-        Your only task: Correct the spelling and grammar of the text below.
-        Return ONLY the corrected text without any explanation or markdown.
-        Preserve the original formatting, line breaks, and language.
-        If the text is already correct, return it unchanged.
-
-        Text to correct:
-        \(text)
-        """
+        let prompt = buildCorrectionPrompt(
+            text: text,
+            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
+        )
 
         let body: [String: Any] = [
             "model": model,
@@ -565,6 +516,23 @@ func createAIProvider(from config: Config) throws -> AIProvider {
         let model = config.model ?? Config.DefaultModels.openaiCodex
         return OpenAICodexProvider(apiKey: apiKey, model: model)
     }
+}
+
+/// Build correction prompt, appending user's writing style requirements if set.
+/// Reads config fresh each call so changes in Preferences take effect immediately.
+func buildCorrectionPrompt(text: String, context: String = "") -> String {
+    let writingStyle = Config.load().writingStyle ?? ""
+    let styleInstruction = writingStyle.isEmpty ? "" : "\nAdditional writing requirements: \(writingStyle)"
+
+    return """
+    \(context)Correct the spelling and grammar of the following text.
+    Return ONLY the corrected text without any explanation or markdown.
+    Preserve the original formatting, line breaks, and language.
+    If the text is already correct, return it unchanged.\(styleInstruction)
+
+    Text to correct:
+    \(text)
+    """
 }
 
 private func parseErrorMessage(from data: Data) -> String {

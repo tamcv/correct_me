@@ -300,12 +300,7 @@ class MenuBarManager: NSObject {
 
     @objc private func openPreferences() {
         NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Preferences"
-        alert.informativeText = "Run 'correctme setup' from terminal to configure CorrectMe."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        WritingStyleWindowController.shared.showWindow()
     }
 
     @objc private func quitApp() {
@@ -322,8 +317,199 @@ extension MenuBarManager: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         print("[DEBUG] Menu will open - menu has \(menu.items.count) items")
     }
-    
+
     func menuDidClose(_ menu: NSMenu) {
         print("[DEBUG] Menu did close")
+    }
+}
+
+// MARK: - Writing Style Preferences Window
+
+class WritingStyleWindowController: NSObject, NSWindowDelegate {
+    static let shared = WritingStyleWindowController()
+
+    private var window: NSPanel?
+    private var textView: NSTextView!
+
+    private let presets: [(label: String, value: String)] = [
+        ("More formal",       "Write in a formal, professional tone."),
+        ("More casual",       "Write in a casual, friendly tone."),
+        ("More concise",      "Make it shorter and more concise."),
+        ("More polite",       "Use polite and respectful language."),
+        ("Simpler language",  "Use simple, easy-to-understand words."),
+        ("Funnier",           "Add a light, humorous touch."),
+    ]
+
+    func showWindow() {
+        if let existing = window, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 380),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Writing Style"
+        panel.delegate = self
+        panel.isReleasedWhenClosed = false
+        panel.level = .floating
+
+        let contentView = NSView(frame: panel.contentView!.bounds)
+        contentView.autoresizingMask = [.width, .height]
+        panel.contentView = contentView
+
+        buildUI(in: contentView)
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        self.window = panel
+
+        // Load saved value
+        let saved = Config.load().writingStyle ?? ""
+        textView.string = saved
+    }
+
+    private func buildUI(in parent: NSView) {
+        let padding: CGFloat = 20
+        let width = parent.bounds.width
+
+        // Description label
+        let descLabel = NSTextField(labelWithString: "Customize how CorrectMe rewrites your text (applied to every correction):")
+        descLabel.frame = NSRect(x: padding, y: parent.bounds.height - 56, width: width - padding * 2, height: 36)
+        descLabel.autoresizingMask = [.width, .maxYMargin]
+        descLabel.lineBreakMode = .byWordWrapping
+        descLabel.maximumNumberOfLines = 2
+        descLabel.font = .systemFont(ofSize: 12)
+        descLabel.textColor = .secondaryLabelColor
+        parent.addSubview(descLabel)
+
+        // Scrollable text view
+        let scrollY: CGFloat = 140
+        let scrollH: CGFloat = parent.bounds.height - 56 - padding - scrollY
+        let scrollView = NSScrollView(frame: NSRect(x: padding, y: scrollY, width: width - padding * 2, height: scrollH))
+        scrollView.autoresizingMask = [.width, .height]
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
+
+        let textStorage = NSTextStorage()
+        let layoutManager = NSLayoutManager()
+        textStorage.addLayoutManager(layoutManager)
+        let textContainer = NSTextContainer(size: NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude))
+        textContainer.widthTracksTextView = true
+        layoutManager.addTextContainer(textContainer)
+
+        let tv = NSTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize), textContainer: textContainer)
+        tv.autoresizingMask = [.width]
+        tv.isEditable = true
+        tv.isRichText = false
+        tv.font = .systemFont(ofSize: 13)
+        tv.allowsUndo = true
+        tv.textContainerInset = NSSize(width: 4, height: 6)
+        scrollView.documentView = tv
+        parent.addSubview(scrollView)
+        self.textView = tv
+
+        // Placeholder hint (shown when empty via overlay label)
+        let placeholderLabel = NSTextField(labelWithString: "e.g. \"Write in a formal tone. Use bullet points when listing.\"")
+        placeholderLabel.frame = NSRect(x: padding + 8, y: scrollY + scrollH - 26, width: width - padding * 2 - 16, height: 20)
+        placeholderLabel.autoresizingMask = [.width, .maxYMargin]
+        placeholderLabel.font = .systemFont(ofSize: 13)
+        placeholderLabel.textColor = .placeholderTextColor
+        placeholderLabel.isEditable = false
+        placeholderLabel.isBezeled = false
+        placeholderLabel.drawsBackground = false
+        placeholderLabel.tag = 999
+        parent.addSubview(placeholderLabel)
+
+        // Preset label
+        let presetsLabel = NSTextField(labelWithString: "Quick presets:")
+        presetsLabel.frame = NSRect(x: padding, y: scrollY - 28, width: 100, height: 18)
+        presetsLabel.autoresizingMask = [.maxYMargin]
+        presetsLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        presetsLabel.textColor = .secondaryLabelColor
+        parent.addSubview(presetsLabel)
+
+        // Preset buttons (wrapped into 2 rows)
+        var bx: CGFloat = padding
+        let by: CGFloat = scrollY - 110
+        let bh: CGFloat = 24
+        let gap: CGFloat = 6
+        for (i, preset) in presets.enumerated() {
+            let btn = NSButton(title: preset.label, target: self, action: #selector(applyPreset(_:)))
+            btn.bezelStyle = .rounded
+            btn.font = .systemFont(ofSize: 11)
+            btn.tag = i
+            let bw = preset.label.size(withAttributes: [.font: btn.font!]).width + 24
+            if bx + bw > width - padding {
+                bx = padding
+            }
+            let row: CGFloat = i < 3 ? 1 : 0
+            btn.frame = NSRect(x: bx, y: by + row * (bh + gap), width: bw, height: bh)
+            btn.autoresizingMask = [.maxYMargin]
+            parent.addSubview(btn)
+            bx += bw + gap
+        }
+
+        // Save button
+        let saveBtn = NSButton(title: "Save", target: self, action: #selector(save))
+        saveBtn.bezelStyle = .rounded
+        saveBtn.keyEquivalent = "\r"
+        saveBtn.frame = NSRect(x: width - padding - 80, y: 14, width: 80, height: 28)
+        saveBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        parent.addSubview(saveBtn)
+
+        // Clear button
+        let clearBtn = NSButton(title: "Clear", target: self, action: #selector(clearStyle))
+        clearBtn.bezelStyle = .rounded
+        clearBtn.frame = NSRect(x: width - padding - 170, y: 14, width: 80, height: 28)
+        clearBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        parent.addSubview(clearBtn)
+
+        // Cancel button
+        let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancel))
+        cancelBtn.bezelStyle = .rounded
+        cancelBtn.keyEquivalent = "\u{1b}"
+        cancelBtn.frame = NSRect(x: width - padding - 260, y: 14, width: 80, height: 28)
+        cancelBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        parent.addSubview(cancelBtn)
+    }
+
+    @objc private func applyPreset(_ sender: NSButton) {
+        let preset = presets[sender.tag]
+        let current = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if current.isEmpty {
+            textView.string = preset.value
+        } else if !current.hasSuffix(preset.value) {
+            textView.string = current + " " + preset.value
+        }
+        updatePlaceholderVisibility()
+    }
+
+    @objc private func save() {
+        var config = Config.load()
+        let text = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.writingStyle = text.isEmpty ? nil : text
+        try? config.save()
+        window?.close()
+    }
+
+    @objc private func clearStyle() {
+        textView.string = ""
+        updatePlaceholderVisibility()
+    }
+
+    @objc private func cancel() {
+        window?.close()
+    }
+
+    private func updatePlaceholderVisibility() {
+        let isEmpty = textView.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        window?.contentView?.viewWithTag(999)?.isHidden = !isEmpty
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        updatePlaceholderVisibility()
     }
 }
