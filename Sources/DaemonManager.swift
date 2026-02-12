@@ -16,6 +16,27 @@ enum DaemonManager {
         return home.appendingPathComponent(".correctme/correctme.error.log")
     }
 
+    static var launchAgentPlistPath: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home.appendingPathComponent("Library/LaunchAgents/com.correctme.daemon.plist")
+    }
+
+    static var isLaunchAgentInstalled: Bool {
+        FileManager.default.fileExists(atPath: launchAgentPlistPath.path)
+    }
+
+    @discardableResult
+    static func runLaunchctl(_ args: [String]) -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = args
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try? process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
+    }
+
     // MARK: - PID Management
 
     static func writePID(_ pid: Int32) throws {
@@ -307,6 +328,61 @@ enum DaemonManager {
             print("❌ Failed to start daemon: \(error)")
             exit(1)
         }
+    }
+
+    // MARK: - launchd-based Lifecycle (used when LaunchAgent plist is installed)
+
+    static func startViaLaunchAgent() -> Never {
+        if let existingPID = getDaemonPID() {
+            print("❌ Daemon is already running (PID: \(existingPID))")
+            print("   Use 'correctme stop' to stop it first, or 'correctme restart' to restart.")
+            exit(1)
+        }
+
+        print("Starting daemon via launchd...")
+        let result = runLaunchctl(["start", "com.correctme.daemon"])
+        usleep(400_000) // Wait for daemon to write PID file
+
+        if let pid = readPID() {
+            print("✓ Daemon started (PID: \(pid))")
+        } else if result == 0 {
+            print("✓ Daemon started")
+        } else {
+            print("❌ Failed to start daemon via launchd")
+        }
+        print("  Log: \(logFilePath.path)")
+        exit(result == 0 ? 0 : 1)
+    }
+
+    @discardableResult
+    static func stopViaLaunchAgent() -> Bool {
+        print("Stopping daemon...")
+        runLaunchctl(["stop", "com.correctme.daemon"])
+        usleep(700_000) // Give process time to terminate
+        // Clean up stale PID file if process is gone
+        if let pid = readPID(), !isProcessRunning(pid) {
+            removePIDFile()
+        }
+        print("✓ Daemon stopped")
+        return true
+    }
+
+    static func restartViaLaunchAgent() -> Never {
+        print("Restarting daemon...")
+        runLaunchctl(["stop", "com.correctme.daemon"])
+        sleep(1)
+        let result = runLaunchctl(["start", "com.correctme.daemon"])
+        usleep(400_000) // Wait for daemon to write PID file
+
+        if let pid = readPID() {
+            print("✓ Daemon restarted (PID: \(pid))")
+        } else if result == 0 {
+            print("✓ Daemon restarted")
+        } else {
+            print("❌ Failed to restart daemon")
+        }
+        print("  Log: \(logFilePath.path)")
+        exit(result == 0 ? 0 : 1)
     }
 
     static func setupCleanupHandlers() {

@@ -17,6 +17,21 @@ read -p "Install CorrectMe.app to /Applications? [Y/n] " -r
 echo ""
 
 if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
+    # Stop running daemon before replacing binary
+    echo "🛑 Stopping running daemon..."
+    # Read PID file before stopping (daemon deletes it on exit)
+    DAEMON_PID=""
+    if [ -f "$HOME/.correctme/correctme.pid" ]; then
+        DAEMON_PID=$(head -1 "$HOME/.correctme/correctme.pid" 2>/dev/null || true)
+    fi
+    # Try launchctl stop (for launchd-managed daemons)
+    launchctl stop com.correctme.daemon 2>/dev/null || true
+    # Also kill by PID (for manually-started daemons not managed by launchd)
+    if [ -n "$DAEMON_PID" ] && kill -0 "$DAEMON_PID" 2>/dev/null; then
+        kill "$DAEMON_PID" 2>/dev/null || true
+    fi
+    sleep 1
+
     # Remove old app if exists
     if [ -d "/Applications/CorrectMe.app" ]; then
         echo "🗑  Removing old version..."

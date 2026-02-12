@@ -72,22 +72,28 @@ struct CorrectMeApp {
             testCorrection()
 
         case "start":
-            // Auto-enable LaunchAgent if not already enabled
-            let launchAgentsDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/LaunchAgents")
-            let targetPlist = launchAgentsDir.appendingPathComponent("com.correctme.daemon.plist")
-
-            if !FileManager.default.fileExists(atPath: targetPlist.path) {
+            if !DaemonManager.isLaunchAgentInstalled {
+                // Create and load the LaunchAgent plist first
                 print("🔧 Auto-start is not enabled. Enabling it now...")
                 enableAutoStart()
                 print("")
+                // enableAutoStart loaded the plist; daemon is starting via RunAtLoad
+                usleep(500_000)
+                if let pid = DaemonManager.readPID() {
+                    print("✓ Daemon started (PID: \(pid))")
+                }
+                exit(0)
+            } else {
+                // Plist already installed - use launchctl to start
+                DaemonManager.startViaLaunchAgent()
             }
 
-            // Always start in background mode
-            DaemonManager.startDaemon(background: true)
-
         case "stop":
-            _ = DaemonManager.stopDaemon()
+            if DaemonManager.isLaunchAgentInstalled {
+                DaemonManager.stopViaLaunchAgent()
+            } else {
+                _ = DaemonManager.stopDaemon()
+            }
             exit(0)
 
         case "status":
@@ -95,11 +101,15 @@ struct CorrectMeApp {
             exit(0)
 
         case "restart":
-            if DaemonManager.getDaemonPID() != nil {
-                _ = DaemonManager.stopDaemon()
-                sleep(1)
+            if DaemonManager.isLaunchAgentInstalled {
+                DaemonManager.restartViaLaunchAgent()
+            } else {
+                if DaemonManager.getDaemonPID() != nil {
+                    _ = DaemonManager.stopDaemon()
+                    sleep(1)
+                }
+                DaemonManager.startDaemon(background: true)
             }
-            DaemonManager.startDaemon(background: true)
 
         case "run":
             // Legacy command - run in foreground
@@ -338,21 +348,28 @@ struct CorrectMeApp {
     static func promptRestartDaemon() {
         // Check if daemon is currently running
         let isRunning = DaemonManager.getDaemonPID() != nil
-        
+
         if !isRunning {
             print("\n💡 Daemon is not running. Start it with: correctme start")
             return
         }
-        
+
         print("\n🔄 Restart CorrectMe daemon to apply changes? [Y/n]: ", terminator: "")
         let input = (readLine() ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        
+
         // Default is yes (empty input or 'y')
         if input.isEmpty || input == "y" || input == "yes" {
             print("Restarting daemon...")
-            _ = DaemonManager.stopDaemon()
-            sleep(1)
-            DaemonManager.startDaemon(background: true)
+            if DaemonManager.isLaunchAgentInstalled {
+                DaemonManager.runLaunchctl(["stop", "com.correctme.daemon"])
+                sleep(1)
+                DaemonManager.runLaunchctl(["start", "com.correctme.daemon"])
+                print("✓ Daemon restarted")
+            } else {
+                _ = DaemonManager.stopDaemon()
+                sleep(1)
+                DaemonManager.startDaemon(background: true)
+            }
         } else {
             print("Skipped restart. Run 'correctme restart' manually when ready.")
         }
@@ -802,19 +819,37 @@ struct CorrectMeApp {
     }
 
     static func restartDaemonIfRunning() {
-        // Check if daemon is running and restart if it is
-        if DaemonManager.getDaemonPID() != nil {
+        guard DaemonManager.getDaemonPID() != nil else { return }
+
+        if DaemonManager.isLaunchAgentInstalled {
+            DaemonManager.runLaunchctl(["stop", "com.correctme.daemon"])
+            sleep(1)
+            DaemonManager.runLaunchctl(["start", "com.correctme.daemon"])
+        } else {
             _ = DaemonManager.stopDaemon()
             sleep(1)
-
+            // Spawn __daemon_start directly (same as startInBackground)
+            guard let execPath = ProcessInfo.processInfo.arguments.first else { return }
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/local/bin/correctme")
-            process.arguments = ["start", "-d"]
-            do {
-                try process.run()
-            } catch {
-                // Best-effort restart; ignore failures.
+            process.executableURL = URL(fileURLWithPath: execPath)
+            process.arguments = ["__daemon_start"]
+            let logPath = DaemonManager.logFilePath
+            let errPath = DaemonManager.errorLogFilePath
+            if !FileManager.default.fileExists(atPath: logPath.path) {
+                FileManager.default.createFile(atPath: logPath.path, contents: nil)
             }
+            if !FileManager.default.fileExists(atPath: errPath.path) {
+                FileManager.default.createFile(atPath: errPath.path, contents: nil)
+            }
+            if let out = FileHandle(forWritingAtPath: logPath.path) {
+                out.seekToEndOfFile()
+                process.standardOutput = out
+            }
+            if let err = FileHandle(forWritingAtPath: errPath.path) {
+                err.seekToEndOfFile()
+                process.standardError = err
+            }
+            try? process.run()
         }
     }
 
@@ -936,7 +971,6 @@ struct CorrectMeApp {
         // Ensure AppKit is initialized for status bar UI.
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
-        app.finishLaunching()
 
         logPrint("""
 
@@ -978,9 +1012,6 @@ struct CorrectMeApp {
 
         // Set up HUD window
         hud = HUDWindow()
-
-        // Set activation policy to accessory (menu bar only, no dock icon)
-        NSApp.setActivationPolicy(.accessory)
 
         // Set up hotkey
         hotkeyManager = HotkeyManager(config: config) {

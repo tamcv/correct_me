@@ -100,6 +100,7 @@ class ClaudeCodeProvider: AIProvider {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: claudePath)
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
         process.environment = getFreshConnectionEnvironment()
         var args = ["--no-session-persistence"]
         if let model {
@@ -166,6 +167,7 @@ class CodexCodeProvider: AIProvider {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
         process.environment = getFreshConnectionEnvironment()
         var args: [String] = []
         if let model {
@@ -244,6 +246,7 @@ class CopilotProvider: AIProvider {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: ghPath)
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
         process.environment = getFreshConnectionEnvironment()
         var args = ["copilot"]
         if let model {
@@ -522,17 +525,29 @@ func createAIProvider(from config: Config) throws -> AIProvider {
 /// Reads config fresh each call so changes in Preferences take effect immediately.
 func buildCorrectionPrompt(text: String, context: String = "") -> String {
     let writingStyle = Config.load().writingStyle ?? ""
-    let styleInstruction = writingStyle.isEmpty ? "" : "\nAdditional writing requirements: \(writingStyle)"
 
-    return """
-    \(context)Correct the spelling and grammar of the following text.
-    Return ONLY the corrected text without any explanation or markdown.
-    Preserve the original formatting, line breaks, and language.
-    If the text is already correct, return it unchanged.\(styleInstruction)
+    if writingStyle.isEmpty {
+        return """
+        \(context)Correct the spelling and grammar of the following text.
+        Return ONLY the corrected text without any explanation or markdown.
+        Preserve the original formatting, line breaks, and language.
+        If the text is already correct, return it unchanged.
 
-    Text to correct:
-    \(text)
-    """
+        Text to correct:
+        \(text)
+        """
+    } else {
+        return """
+        \(context)Rewrite and improve the following text.
+        Apply these writing style requirements: \(writingStyle)
+        Also fix any spelling and grammar errors.
+        Return ONLY the rewritten text without any explanation or markdown.
+        Preserve the original language (e.g. English stays English, Vietnamese stays Vietnamese).
+
+        Text to rewrite:
+        \(text)
+        """
+    }
 }
 
 private func parseErrorMessage(from data: Data) -> String {
