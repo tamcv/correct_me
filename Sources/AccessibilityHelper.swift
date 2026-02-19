@@ -103,11 +103,16 @@ class AccessibilityHelper {
     /// - Parameters:
     ///   - newText: The text to paste
     ///   - targetApp: Optional - the app to paste into (will activate if not frontmost)
+    ///   - originalClipboard: Clipboard content to restore after paste (should be captured before
+    ///     any Cmd+C fallback that may have replaced it). Defaults to whatever is in clipboard now.
     /// - Returns: true if paste was successful, false if user needs to paste manually
     @discardableResult
-    static func replaceSelectedText(with newText: String, targetApp: NSRunningApplication? = nil) -> Bool {
+    static func replaceSelectedText(with newText: String, targetApp: NSRunningApplication? = nil, originalClipboard: String? = nil) -> Bool {
         let pasteboard = NSPasteboard.general
         let oldContents = pasteboard.string(forType: .string)
+        // Use caller-supplied original if available (captures state before Cmd+C fallback),
+        // otherwise fall back to whatever is currently in the clipboard.
+        let contentToRestore = originalClipboard ?? oldContents
         
         // Set new text to clipboard
         pasteboard.clearContents()
@@ -147,11 +152,12 @@ class AccessibilityHelper {
         keyUp.flags = .maskCommand
         keyUp.post(tap: .cgAnnotatedSessionEventTap)
         
-        // Wait then restore clipboard
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            if let old = oldContents {
+        // Wait for the paste to be processed by the target app, then restore the clipboard.
+        // 1.0s gives slow apps enough time to complete the paste before we swap out the content.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if let content = contentToRestore {
                 pasteboard.clearContents()
-                pasteboard.setString(old, forType: .string)
+                pasteboard.setString(content, forType: .string)
             }
         }
         

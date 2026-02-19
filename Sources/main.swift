@@ -1083,6 +1083,11 @@ struct CorrectMeApp {
 
         // Longer delay to let the hotkey event fully complete
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            // Capture clipboard content BEFORE getSelectedText(), which may overwrite it
+            // via the Cmd+C fallback. This lets us restore the user's original clipboard
+            // after the corrected text is pasted.
+            let clipboardBeforeCorrection = NSPasteboard.general.string(forType: .string)
+
             guard let selectedText = AccessibilityHelper.getSelectedText(), !selectedText.isEmpty else {
                 let errorMsg = "No text selected"
                 logPrint("⚠️  \(errorMsg)")
@@ -1100,7 +1105,7 @@ struct CorrectMeApp {
                     let correctedText = try await aiProvider!.correctText(selectedText)
 
                     await MainActor.run {
-                        let pasteSuccess = AccessibilityHelper.replaceSelectedText(with: correctedText, targetApp: sourceApp)
+                        let pasteSuccess = AccessibilityHelper.replaceSelectedText(with: correctedText, targetApp: sourceApp, originalClipboard: clipboardBeforeCorrection)
                         if pasteSuccess {
                             logPrint("✅ Corrected!")
                             hud?.showSuccess()
