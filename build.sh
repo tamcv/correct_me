@@ -57,9 +57,23 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
     # database entry, forcing the user to re-grant permissions every time.
     # Syncing in-place preserves the bundle path so macOS keeps the TCC entry.
     if [ -d "/Applications/CorrectMe.app" ]; then
+        # Detect if the existing app has a cert-based designated requirement.
+        # Ad-hoc signing produces a unique binary hash each build; the first
+        # rebuild after switching to a persistent cert changes the DR, so TCC
+        # treats it as a new app and requires a one-time re-grant.
+        _OLD_HAS_CERT=$(codesign -d --display --requirements - \
+            /Applications/CorrectMe.app 2>&1 | grep -c "certificate root" || true)
+
         echo "🔄 Updating CorrectMe.app in-place (preserving Accessibility permissions)..."
         rsync -a --delete "${APP_DIR}/" "/Applications/CorrectMe.app/"
         _WAS_INSTALLED="update"
+
+        # Determine if the DR just changed (ad-hoc → cert, first time only).
+        _NEW_HAS_CERT=$(codesign -d --display --requirements - \
+            /Applications/CorrectMe.app 2>&1 | grep -c "certificate root" || true)
+        if [ "$_OLD_HAS_CERT" = "0" ] && [ "$_NEW_HAS_CERT" != "0" ]; then
+            _DR_CHANGED=true
+        fi
     else
         echo "📦 Installing CorrectMe.app to /Applications..."
         cp -R "$APP_DIR" /Applications/
@@ -196,7 +210,25 @@ AGENT_EOF
     echo "  • Select any text and press ⌘⇧E to correct it"
     echo "  • Run 'correctme help' for more commands"
     echo ""
-    if [ "$_WAS_INSTALLED" = "update" ]; then
+    if [ "$_WAS_INSTALLED" = "update" ] && [ "${_DR_CHANGED:-false}" = "true" ]; then
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  ⚠️  One-time Accessibility re-grant needed"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "The app's code signature changed from ad-hoc to the persistent"
+        echo "'CorrectMe Dev' certificate. macOS sees it as a new app and"
+        echo "requires Accessibility permission to be re-granted once."
+        echo ""
+        echo "Do this now (takes ~10 seconds):"
+        echo "  1. Open: System Settings → Privacy & Security → Accessibility"
+        echo "  2. Find CorrectMe — toggle it OFF then ON (or remove & re-add)"
+        echo "  3. Restart the daemon: correctme restart"
+        echo ""
+        echo "After this, all future rebuilds will preserve the permission."
+        echo ""
+        # Open System Settings directly to the Accessibility pane
+        open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
+    elif [ "$_WAS_INSTALLED" = "update" ]; then
         echo "♻️  Updated in-place — Accessibility permissions are preserved."
     else
         echo "Accessibility permissions (first-time setup):"
