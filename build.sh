@@ -2,6 +2,25 @@
 
 set -e
 
+# One-time reminder: run setup-dev-cert.sh to preserve Accessibility permissions.
+CERT_NAME="CorrectMe Dev"
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$CERT_NAME\""; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  💡 One-time setup available"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "  Run ./scripts/setup-dev-cert.sh once to create a persistent"
+    echo "  signing certificate. After that, Accessibility permissions"
+    echo "  will survive every rebuild — no more manual re-granting."
+    echo ""
+    read -p "  Set up now? [Y/n] " -r CERT_REPLY
+    echo ""
+    if [[ -z $CERT_REPLY || $CERT_REPLY =~ ^[Yy]$ ]]; then
+        ./scripts/setup-dev-cert.sh
+        echo ""
+    fi
+fi
+
 # Build the .app bundle
 ./scripts/build-app.sh release
 
@@ -32,15 +51,20 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
     fi
     sleep 1
 
-    # Remove old app if exists
+    # Install / update the app bundle.
+    # IMPORTANT: use rsync to sync contents INTO the existing bundle rather than
+    # deleting and replacing it. Deleting the bundle removes the TCC (Accessibility)
+    # database entry, forcing the user to re-grant permissions every time.
+    # Syncing in-place preserves the bundle path so macOS keeps the TCC entry.
     if [ -d "/Applications/CorrectMe.app" ]; then
-        echo "🗑  Removing old version..."
-        rm -rf /Applications/CorrectMe.app
+        echo "🔄 Updating CorrectMe.app in-place (preserving Accessibility permissions)..."
+        rsync -a --delete "${APP_DIR}/" "/Applications/CorrectMe.app/"
+        _WAS_INSTALLED="update"
+    else
+        echo "📦 Installing CorrectMe.app to /Applications..."
+        cp -R "$APP_DIR" /Applications/
+        _WAS_INSTALLED="new"
     fi
-
-    # Copy .app bundle to /Applications
-    echo "📦 Installing CorrectMe.app to /Applications..."
-    cp -R "$APP_DIR" /Applications/
 
     # Create symlink for CLI access
     echo "🔗 Creating CLI symlink at /usr/local/bin/correctme..."
@@ -172,10 +196,14 @@ AGENT_EOF
     echo "  • Select any text and press ⌘⇧E to correct it"
     echo "  • Run 'correctme help' for more commands"
     echo ""
-    echo "Accessibility permissions:"
-    echo "  • Go to: System Settings → Privacy & Security → Accessibility"
-    echo "  • Add 'CorrectMe' from the Applications folder"
-    echo "  • This allows CorrectMe to read selected text and type corrections"
+    if [ "$_WAS_INSTALLED" = "update" ]; then
+        echo "♻️  Updated in-place — Accessibility permissions are preserved."
+    else
+        echo "Accessibility permissions (first-time setup):"
+        echo "  • Go to: System Settings → Privacy & Security → Accessibility"
+        echo "  • Add 'CorrectMe' from the Applications folder"
+        echo "  • This allows CorrectMe to read selected text and type corrections"
+    fi
     echo ""
     echo "Useful commands:"
     echo "  correctme status     - Check daemon status"
