@@ -67,18 +67,32 @@ openssl req -x509 \
     -nodes \
     -config "$TMP_DIR/cert.conf" 2>/dev/null
 
-# Export as PKCS12 (try OpenSSL 3.x --legacy flag first, then 1.x without)
+# Use a random ephemeral password — macOS security import rejects truly-empty
+# passwords from OpenSSL's "pass:" even though both sides claim empty string.
+P12_PASS=$(openssl rand -hex 16)
+
+# Export as PKCS12.
+# Use SHA-1 MAC + legacy PBE ciphers for macOS security import compatibility.
+# Try OpenSSL 3.x flags first (-legacy), fall back to 1.x flags (-macalg sha1).
 openssl pkcs12 -export \
     -out    "$TMP_DIR/cert.p12" \
     -inkey  "$TMP_DIR/key.pem" \
     -in     "$TMP_DIR/cert.pem" \
-    -passout pass: \
+    -passout "pass:$P12_PASS" \
     -legacy 2>/dev/null || \
 openssl pkcs12 -export \
     -out    "$TMP_DIR/cert.p12" \
     -inkey  "$TMP_DIR/key.pem" \
     -in     "$TMP_DIR/cert.pem" \
-    -passout pass: 2>/dev/null
+    -passout "pass:$P12_PASS" \
+    -macalg sha1 \
+    -keypbe PBE-SHA1-3DES \
+    -certpbe PBE-SHA1-3DES 2>/dev/null
+
+if [ ! -f "$TMP_DIR/cert.p12" ]; then
+    echo "❌ Failed to create PKCS12 certificate bundle."
+    exit 1
+fi
 
 # --- Import to login keychain ------------------------------------------------
 
@@ -86,7 +100,7 @@ echo "📥 Importing to login keychain..."
 
 if ! security import "$TMP_DIR/cert.p12" \
     -k "$KEYCHAIN" \
-    -P "" \
+    -P "$P12_PASS" \
     -T /usr/bin/codesign \
     -f pkcs12 2>/dev/null; then
     echo "❌ Failed to import certificate into keychain."
