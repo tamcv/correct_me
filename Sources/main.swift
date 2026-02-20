@@ -152,6 +152,10 @@ struct CorrectMeApp {
         case "uninstall":
             uninstallCorrectMe()
 
+        case "doctor":
+            runDoctor()
+            exit(0)
+
         default:
             print("Unknown command: \(command)")
             print("Use 'correctme help' for usage information.")
@@ -159,6 +163,107 @@ struct CorrectMeApp {
         }
     }
     
+    static func runDoctor() {
+        print("""
+
+        CorrectMe Doctor — Checking dependencies
+        ─────────────────────────────────────────
+        """)
+
+        var allGood = true
+
+        // ── 1. Config file
+        let cfgExists = FileManager.default.fileExists(atPath: Config.configPath.path)
+        printCheck(cfgExists, "Config file found at \(Config.configPath.path)")
+        if !cfgExists {
+            print("    → Run 'correctme setup' to create a configuration")
+            allGood = false
+        }
+
+        // ── 2. AI provider / API key
+        let cfg = config
+        let provider = cfg.aiProvider
+
+        switch provider {
+        case .claudeCode:
+            let found = findExecutable("claude") != nil
+            printCheck(found, "Claude CLI (claude) found in PATH")
+            if !found {
+                print("    → Install Claude Code: https://claude.ai/code")
+                allGood = false
+            }
+        case .codexCode:
+            let found = findExecutable("codex") != nil
+            printCheck(found, "Codex CLI (codex) found in PATH")
+            if !found {
+                print("    → Install Codex and ensure it is in your PATH")
+                allGood = false
+            }
+        case .copilot:
+            let ghFound = findExecutable("gh") != nil
+            printCheck(ghFound, "GitHub CLI (gh) found in PATH")
+            if !ghFound {
+                print("    → Install with: brew install gh")
+                print("    → Then: gh extension install github/gh-copilot")
+                allGood = false
+            }
+        case .claude:
+            let hasKey = !(cfg.anthropicAPIKey ?? "").isEmpty
+            printCheck(hasKey, "Anthropic API key configured")
+            if !hasKey {
+                print("    → Run: correctme config claude-key <YOUR_KEY>")
+                allGood = false
+            }
+        case .gemini:
+            let hasKey = !(cfg.geminiAPIKey ?? "").isEmpty
+            printCheck(hasKey, "Gemini API key configured")
+            if !hasKey {
+                print("    → Run: correctme config gemini-key <YOUR_KEY>")
+                allGood = false
+            }
+        case .codex:
+            let hasKey = !(cfg.openaiAPIKey ?? "").isEmpty
+            printCheck(hasKey, "OpenAI API key configured")
+            if !hasKey {
+                print("    → Run: correctme config openai-key <YOUR_KEY>")
+                allGood = false
+            }
+        }
+
+        // ── 3. Hotkey
+        let hotkey = cfg.hotkey.displayName
+        printCheck(true, "Hotkey configured: \(hotkey)")
+
+        // ── 4. Accessibility permissions
+        let options: [String: Any] = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
+        let hasAccessibility = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        printCheck(hasAccessibility, "Accessibility permissions granted")
+        if !hasAccessibility {
+            print("    → System Settings → Privacy & Security → Accessibility")
+            print("    → Add and enable your terminal app")
+            allGood = false
+        }
+
+        // ── 5. Daemon status
+        let daemonRunning = DaemonManager.getDaemonPID() != nil
+        printCheck(daemonRunning, "Daemon is running")
+        if !daemonRunning {
+            print("    → Start with: correctme start")
+        }
+
+        print("")
+        if allGood {
+            print("✅ All checks passed — CorrectMe is ready!")
+        } else {
+            print("⚠️  Some checks failed. Fix the issues above and try again.")
+        }
+        print("")
+    }
+
+    private static func printCheck(_ ok: Bool, _ message: String) {
+        print("  \(ok ? "✓" : "✗") \(message)")
+    }
+
     static func printHelp() {
         print("""
 
@@ -176,6 +281,7 @@ struct CorrectMeApp {
             correctme test                Test AI correction with sample text
             correctme version             Show version
             correctme update              Update to the latest release
+            correctme doctor              Check dependencies and configuration
             correctme uninstall           Uninstall CorrectMe
             correctme help                Show this help message
 

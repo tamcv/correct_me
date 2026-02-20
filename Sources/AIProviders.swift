@@ -40,7 +40,7 @@ private func getFreshURLSession() -> URLSession {
     return URLSession(configuration: config)
 }
 
-private func findExecutable(_ name: String) -> String? {
+func findExecutable(_ name: String) -> String? {
     // Common installation paths to check
     let searchPaths = [
         "/usr/local/bin/\(name)",

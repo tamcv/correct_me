@@ -94,7 +94,7 @@ swift test
 
 ### DevEx
 - [x] Add `--verbose` flag for debug logging to stderr
-- [ ] `correctme doctor` command — checks all dependencies (API key, accessibility perms, hotkey)
+- [x] `correctme doctor` command — checks all dependencies (API key, accessibility perms, hotkey)
 
 ---
 
