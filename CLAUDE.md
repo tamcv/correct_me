@@ -87,10 +87,10 @@ swift test
 - [x] Support Vietnamese language correction (add to prompt builder)
 
 ### Quality
-- [ ] Add tests for `AccessibilityHelper` text get/replace flow
-- [ ] Add tests for `AIProviders` prompt building with different styles
-- [ ] Add tests for `ErrorLog` thread safety
-- [ ] Add tests for `Config` load/save round-trip
+- [x] Add tests for `AccessibilityHelper` text get/replace flow
+- [x] Add tests for `AIProviders` prompt building with different styles
+- [x] Add tests for `ErrorLog` thread safety
+- [x] Add tests for `Config` load/save round-trip
 
 ### DevEx
 - [ ] Add `--verbose` flag for debug logging to stderr
