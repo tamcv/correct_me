@@ -50,6 +50,13 @@ class MenuBarManager: NSObject {
             name: .errorLogUpdated,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleHistoryUpdated),
+            name: .correctionHistoryUpdated,
+            object: nil
+        )
     }
 
     @objc private func handleStatusChanged(_ notification: Notification) {
@@ -61,6 +68,12 @@ class MenuBarManager: NSObject {
     }
 
     @objc private func handleErrorLogUpdated() {
+        DispatchQueue.main.async {
+            self.updateMenu()
+        }
+    }
+
+    @objc private func handleHistoryUpdated() {
         DispatchQueue.main.async {
             self.updateMenu()
         }
@@ -148,6 +161,45 @@ class MenuBarManager: NSObject {
         }
 
         menu.addItem(NSMenuItem.separator())
+
+        // Correction history
+        let history = CorrectionHistory.shared.getEntries()
+        if !history.isEmpty {
+            let histHeaderItem = NSMenuItem(title: "📜 History (\(history.count))", action: nil, keyEquivalent: "")
+            histHeaderItem.isEnabled = false
+            menu.addItem(histHeaderItem)
+
+            for (index, entry) in history.prefix(10).enumerated() {
+                let origSnippet = String(entry.originalText.prefix(30))
+                    .replacingOccurrences(of: "\n", with: " ")
+                let corrSnippet = String(entry.correctedText.prefix(30))
+                    .replacingOccurrences(of: "\n", with: " ")
+                let ellipsis = entry.originalText.count > 30 ? "…" : ""
+                let title = "  \(origSnippet)\(ellipsis) → \(corrSnippet)"
+                let item = NSMenuItem(
+                    title: title,
+                    action: #selector(showHistoryDetail(_:)),
+                    keyEquivalent: ""
+                )
+                item.tag = index
+                item.target = self
+                menu.addItem(item)
+
+                let timeItem = NSMenuItem(title: "    \(entry.timeAgo)", action: nil, keyEquivalent: "")
+                timeItem.isEnabled = false
+                menu.addItem(timeItem)
+            }
+
+            let clearHistItem = NSMenuItem(
+                title: "  Clear History",
+                action: #selector(clearHistory),
+                keyEquivalent: ""
+            )
+            clearHistItem.target = self
+            menu.addItem(clearHistItem)
+
+            menu.addItem(NSMenuItem.separator())
+        }
 
         // Recent errors
         let errors = ErrorLog.shared.getErrors()
@@ -252,6 +304,39 @@ class MenuBarManager: NSObject {
 
     @objc private func clearErrors() {
         ErrorLog.shared.clearErrors()
+    }
+
+    @objc private func showHistoryDetail(_ sender: NSMenuItem) {
+        let entries = CorrectionHistory.shared.getEntries()
+        guard sender.tag < entries.count else { return }
+
+        let entry = entries[sender.tag]
+
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Correction — \(entry.timeAgo)"
+        alert.informativeText = """
+        Original:
+        \(entry.originalText)
+
+        Corrected:
+        \(entry.correctedText)
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Copy Corrected")
+
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(entry.correctedText, forType: .string)
+        }
+    }
+
+    @objc private func clearHistory() {
+        CorrectionHistory.shared.clear()
     }
 
     @objc private func restartDaemon() {

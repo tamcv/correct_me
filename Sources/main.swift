@@ -1110,6 +1110,10 @@ struct CorrectMeApp {
                         hud?.hide()
 
                         diffPreview.onAccept = {
+                            CorrectionHistory.shared.record(
+                                original: selectedText,
+                                corrected: correctedText
+                            )
                             let pasteSuccess = AccessibilityHelper.replaceSelectedText(
                                 with: correctedText,
                                 targetApp: sourceApp,
