@@ -76,20 +76,30 @@ class HUDWindow: NSWindow {
         }
     }
     
+    /// Find the screen that best contains the given point (falls back to main screen)
+    private func screen(containing point: CGPoint) -> NSScreen {
+        return NSScreen.screens.first(where: { $0.frame.contains(point) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+            ?? NSScreen()
+    }
+
     private func positionNearBounds(_ bounds: NSRect) {
-        let screenFrame = NSScreen.main?.frame ?? .zero
-        
+        // Find the screen containing the selection midpoint
+        let selectionMid = CGPoint(x: bounds.midX, y: bounds.midY)
+        let screenFrame = screen(containing: selectionMid).frame
+
         // Position below the selection
         var hudOrigin = CGPoint(
             x: bounds.origin.x,
             y: bounds.origin.y - frame.height - 8
         )
-        
+
         // If HUD would go below screen bottom, position it above selection instead
         if hudOrigin.y < screenFrame.minY + 10 {
             hudOrigin.y = bounds.origin.y + bounds.height + 8
         }
-        
+
         // Ensure HUD stays on screen horizontally
         if hudOrigin.x + frame.width > screenFrame.maxX - 10 {
             hudOrigin.x = screenFrame.maxX - frame.width - 10
@@ -97,18 +107,19 @@ class HUDWindow: NSWindow {
         if hudOrigin.x < screenFrame.minX + 10 {
             hudOrigin.x = screenFrame.minX + 10
         }
-        
+
         // Ensure HUD stays on screen vertically
         if hudOrigin.y + frame.height > screenFrame.maxY - 10 {
             hudOrigin.y = screenFrame.maxY - frame.height - 10
         }
-        
+
         setFrameOrigin(hudOrigin)
     }
 
     private func positionNearMouse() {
         let mouseLocation = NSEvent.mouseLocation
-        let screenFrame = NSScreen.main?.frame ?? .zero
+        // Find the screen that actually contains the cursor
+        let screenFrame = screen(containing: mouseLocation).frame
 
         // Try to position below cursor first
         var hudOrigin = CGPoint(
