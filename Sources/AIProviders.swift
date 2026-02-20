@@ -540,26 +540,37 @@ func createAIProvider(from config: Config) throws -> AIProvider {
 
 /// Build correction prompt, appending user's writing style requirements if set.
 /// Reads config fresh each call so changes in Preferences take effect immediately.
+///
+/// Language handling: the prompt explicitly instructs the model to detect the
+/// language of the input and correct it in that language. Vietnamese (tiếng Việt)
+/// is called out explicitly because tone marks and diacritics are commonly
+/// mishandled by generic spell-checkers.
 func buildCorrectionPrompt(text: String, context: String = "") -> String {
     let writingStyle = Config.load().writingStyle ?? ""
 
     if writingStyle.isEmpty {
         return """
-        \(context)Correct the spelling and grammar of the following text.
-        Return ONLY the corrected text without any explanation or markdown.
-        Preserve the original formatting, line breaks, and language.
-        If the text is already correct, return it unchanged.
+        \(context)Detect the language of the following text and correct its spelling and grammar in that same language.
+        Rules:
+        - Return ONLY the corrected text — no explanations, no markdown, no quotes.
+        - Preserve the original language exactly (e.g. English stays English, Vietnamese/tiếng Việt stays Vietnamese, etc.).
+        - For Vietnamese text: fix tone marks (dấu), diacritics, and common lỗi chính tả while keeping the meaning intact.
+        - Preserve the original formatting and line breaks.
+        - If the text is already correct, return it unchanged.
 
         Text to correct:
         \(text)
         """
     } else {
         return """
-        \(context)Rewrite and improve the following text.
+        \(context)Detect the language of the following text and rewrite/improve it in that same language.
         Apply these writing style requirements: \(writingStyle)
         Also fix any spelling and grammar errors.
-        Return ONLY the rewritten text without any explanation or markdown.
-        Preserve the original language (e.g. English stays English, Vietnamese stays Vietnamese).
+        Rules:
+        - Return ONLY the rewritten text — no explanations, no markdown, no quotes.
+        - Preserve the original language exactly (e.g. English stays English, Vietnamese/tiếng Việt stays Vietnamese, etc.).
+        - For Vietnamese text: ensure tone marks (dấu) and diacritics are correct.
+        - Preserve the original formatting and line breaks.
 
         Text to rewrite:
         \(text)

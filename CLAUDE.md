@@ -84,7 +84,7 @@ swift test
 - [ ] Per-app writing style — different style config for different apps (e.g. Slack vs Xcode)
 - [x] Keyboard shortcut to undo last correction (restore original text)
 - [x] Status bar shows provider name and model currently in use
-- [ ] Support Vietnamese language correction (add to prompt builder)
+- [x] Support Vietnamese language correction (add to prompt builder)
 
 ### Quality
 - [ ] Add tests for `AccessibilityHelper` text get/replace flow
