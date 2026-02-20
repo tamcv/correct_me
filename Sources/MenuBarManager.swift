@@ -145,6 +145,17 @@ class MenuBarManager: NSObject {
         headerItem.isEnabled = false
         menu.addItem(headerItem)
 
+        // Provider and model info
+        let cfg = Config.load()
+        let modelName = cfg.model ?? "(default)"
+        let providerItem = NSMenuItem(
+            title: "Provider: \(cfg.aiProvider.rawValue) · \(modelName)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        providerItem.isEnabled = false
+        menu.addItem(providerItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // Status
