@@ -492,12 +492,29 @@ enum AIError: Error, LocalizedError {
 func createAIProvider(from config: Config) throws -> AIProvider {
     switch config.aiProvider {
     case .claudeCode:
+        guard findExecutable("claude") != nil else {
+            throw AIError.commandFailed(
+                "Claude CLI not found. Install Claude Code from https://claude.ai/code, " +
+                "then make sure the 'claude' command is accessible in your PATH."
+            )
+        }
         let model = config.model ?? Config.DefaultModels.claudeCode
         return ClaudeCodeProvider(model: model)
     case .codexCode:
+        guard findExecutable("codex") != nil else {
+            throw AIError.commandFailed(
+                "Codex CLI not found. Install Codex and make sure the 'codex' command is accessible in your PATH."
+            )
+        }
         let model = config.model ?? Config.DefaultModels.openaiCodex
         return CodexCodeProvider(model: model)
     case .copilot:
+        guard findExecutable("gh") != nil else {
+            throw AIError.commandFailed(
+                "GitHub CLI not found. Install with: brew install gh, " +
+                "then run: gh extension install github/gh-copilot"
+            )
+        }
         let model = config.model ?? Config.DefaultModels.copilot
         return CopilotProvider(model: model)
     case .claude:

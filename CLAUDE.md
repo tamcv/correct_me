@@ -76,7 +76,7 @@ swift test
 ### Bugs
 - [x] Clipboard fallback (Cmd+C) sometimes pastes old clipboard content — add delay or restore clipboard after correction
 - [x] HUD window occasionally appears on wrong screen in multi-monitor setup
-- [ ] Daemon sometimes doesn't detect when AI provider CLI is missing — show clearer error
+- [x] Daemon sometimes doesn't detect when AI provider CLI is missing — show clearer error
 
 ### Features
 - [ ] Show diff/preview of correction before applying (accept/reject with keyboard shortcut)
