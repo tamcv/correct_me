@@ -16,6 +16,7 @@ struct CorrectMeApp {
     static var hotkeyManager: HotkeyManager?
     static var aiProvider: AIProvider?
     static var hud: HUDWindow?
+    static var diffPreview = DiffPreviewWindow.shared
     static var isProcessing = false
     
     static func main() {
@@ -1105,17 +1106,40 @@ struct CorrectMeApp {
                     let correctedText = try await aiProvider!.correctText(selectedText)
 
                     await MainActor.run {
-                        let pasteSuccess = AccessibilityHelper.replaceSelectedText(with: correctedText, targetApp: sourceApp, originalClipboard: clipboardBeforeCorrection)
-                        if pasteSuccess {
-                            logPrint("✅ Corrected!")
-                            hud?.showSuccess()
-                        } else {
-                            // App was closed or couldn't be activated - text is in clipboard
-                            logPrint("⚠️ Source app unavailable - corrected text copied to clipboard")
-                            ErrorLog.shared.log("Text copied to clipboard (source app unavailable)", category: .userError)
-                            hud?.showSuccess() // Still show success since text is ready to paste
+                        // Hide loading HUD before showing the diff preview panel
+                        hud?.hide()
+
+                        diffPreview.onAccept = {
+                            let pasteSuccess = AccessibilityHelper.replaceSelectedText(
+                                with: correctedText,
+                                targetApp: sourceApp,
+                                originalClipboard: clipboardBeforeCorrection
+                            )
+                            if pasteSuccess {
+                                logPrint("✅ Corrected!")
+                                hud?.showSuccess()
+                            } else {
+                                // App was closed or couldn't be activated - text is in clipboard
+                                logPrint("⚠️ Source app unavailable - corrected text copied to clipboard")
+                                ErrorLog.shared.log("Text copied to clipboard (source app unavailable)", category: .userError)
+                                hud?.showSuccess()
+                            }
+                            isProcessing = false
                         }
-                        isProcessing = false
+
+                        diffPreview.onReject = {
+                            logPrint("↩ Correction discarded by user")
+                            // Restore clipboard to what it was before the correction flow
+                            if let original = clipboardBeforeCorrection {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(original, forType: .string)
+                            } else {
+                                NSPasteboard.general.clearContents()
+                            }
+                            isProcessing = false
+                        }
+
+                        diffPreview.show(original: selectedText, corrected: correctedText)
                     }
                 } catch {
                     await MainActor.run {

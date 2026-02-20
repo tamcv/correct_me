@@ -79,7 +79,7 @@ swift test
 - [x] Daemon sometimes doesn't detect when AI provider CLI is missing — show clearer error
 
 ### Features
-- [ ] Show diff/preview of correction before applying (accept/reject with keyboard shortcut)
+- [x] Show diff/preview of correction before applying (accept/reject with keyboard shortcut)
 - [ ] Correction history — last 10 corrections accessible from menu bar
 - [ ] Per-app writing style — different style config for different apps (e.g. Slack vs Xcode)
 - [ ] Keyboard shortcut to undo last correction (restore original text)
