@@ -18,6 +18,11 @@ struct CorrectMeApp {
     static var hud: HUDWindow?
     static var diffPreview = DiffPreviewWindow.shared
     static var isProcessing = false
+    /// Original text of the most recently accepted correction (for undo)
+    static var lastOriginalText: String?
+    /// The app that received the most recently accepted correction
+    static var lastCorrectionSourceApp: NSRunningApplication?
+    static var undoHotkeyManager: HotkeyManager?
     
     static func main() {
         let args = CommandLine.arguments
@@ -1014,7 +1019,7 @@ struct CorrectMeApp {
         // Set up HUD window
         hud = HUDWindow()
 
-        // Set up hotkey
+        // Set up correction hotkey
         hotkeyManager = HotkeyManager(config: config) {
             handleHotkey()
         }
@@ -1026,6 +1031,22 @@ struct CorrectMeApp {
             logPrint("   Make sure accessibility permissions are granted.")
             ErrorLog.shared.log("Failed to start hotkey listener - accessibility permissions may be missing", category: .systemError)
             // Don't exit - let menu bar work even without hotkey
+        }
+
+        // Set up undo hotkey (⌘⌥Z — Cmd+Option+Z)
+        let undoKeyCode: UInt16 = 6 // Z
+        let undoModifiers = CGEventFlags.maskCommand.rawValue | CGEventFlags.maskAlternate.rawValue
+        let undoConfig = Config(
+            aiProvider: config.aiProvider,
+            anthropicAPIKey: nil, geminiAPIKey: nil, openaiAPIKey: nil,
+            hotkey: Config.HotkeyConfig(keyCode: undoKeyCode, modifiers: undoModifiers, displayName: "⌘⌥Z"),
+            customPrompt: nil, model: nil, writingStyle: nil
+        )
+        undoHotkeyManager = HotkeyManager(config: undoConfig) {
+            handleUndoHotkey()
+        }
+        if undoHotkeyManager?.start() == true {
+            logPrint("✓ Undo hotkey listener started (⌘⌥Z)")
         }
 
         logPrint("─────────────────────────\n")
@@ -1065,6 +1086,42 @@ struct CorrectMeApp {
         }
     }
     
+    /// Handle the undo hotkey (⌘⌥Z): restore the last correction's original text.
+    /// Places the original text in the clipboard and shows a HUD so the user can ⌘V to paste.
+    static func handleUndoHotkey() {
+        guard let original = lastOriginalText else {
+            logPrint("↩ Nothing to undo")
+            hud?.showError()
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(original, forType: .string)
+
+        // Try to activate the source app and paste
+        if let app = lastCorrectionSourceApp, !app.isTerminated {
+            app.activate(options: [])
+            Thread.sleep(forTimeInterval: 0.1)
+            let source = CGEventSource(stateID: .combinedSessionState)
+            source?.localEventsSuppressionInterval = 0.0
+            if let down = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true) {
+                down.flags = .maskCommand
+                down.post(tap: .cgAnnotatedSessionEventTap)
+            }
+            if let up = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) {
+                up.flags = .maskCommand
+                up.post(tap: .cgAnnotatedSessionEventTap)
+            }
+            logPrint("↩ Undone — original text pasted back")
+        } else {
+            logPrint("↩ Original text copied to clipboard — press ⌘V to paste")
+        }
+
+        hud?.showSuccess()
+        // Clear after use so a double-undo does nothing
+        lastOriginalText = nil
+        lastCorrectionSourceApp = nil
+    }
+
     static func handleHotkey() {
         guard !isProcessing else {
             logPrint("⏳ Already processing...")
@@ -1114,6 +1171,9 @@ struct CorrectMeApp {
                                 original: selectedText,
                                 corrected: correctedText
                             )
+                            // Store for undo
+                            lastOriginalText = selectedText
+                            lastCorrectionSourceApp = sourceApp
                             let pasteSuccess = AccessibilityHelper.replaceSelectedText(
                                 with: correctedText,
                                 targetApp: sourceApp,
