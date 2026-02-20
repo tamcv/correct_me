@@ -279,10 +279,12 @@ enum DaemonManager {
             exit(1)
         }
 
-        // Spawn new process with special flag
+        // Spawn new process with special flag; propagate --verbose if set
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = ["__daemon_start"]
+        var daemonArgs = ["__daemon_start"]
+        if isVerboseLogging { daemonArgs.append("--verbose") }
+        process.arguments = daemonArgs
 
         // Redirect stdout/stderr to log files (append mode)
         let outFile: FileHandle = {

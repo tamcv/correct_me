@@ -93,7 +93,7 @@ swift test
 - [x] Add tests for `Config` load/save round-trip
 
 ### DevEx
-- [ ] Add `--verbose` flag for debug logging to stderr
+- [x] Add `--verbose` flag for debug logging to stderr
 - [ ] `correctme doctor` command — checks all dependencies (API key, accessibility perms, hotkey)
 
 ---

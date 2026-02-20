@@ -3,11 +3,23 @@ import Foundation
 
 // MARK: - Logging Helpers
 
+/// Global verbose logging flag — set by `--verbose` CLI flag.
+var isVerboseLogging = false
+
 /// Print with automatic flush to ensure immediate log writing
 func logPrint(_ items: Any..., separator: String = " ", terminator: String = "\n") {
     let message = items.map { "\($0)" }.joined(separator: separator)
     print(message, terminator: terminator)
     fflush(stdout)
+}
+
+/// Write debug-only messages to stderr (only when --verbose is active).
+func debugLog(_ items: Any..., separator: String = " ") {
+    guard isVerboseLogging else { return }
+    let message = items.map { "\($0)" }.joined(separator: separator)
+    let stderr = FileHandle.standardError
+    let line = "[DEBUG] \(message)\n"
+    stderr.write(Data(line.utf8))
 }
 
 @main
@@ -26,6 +38,12 @@ struct CorrectMeApp {
     
     static func main() {
         let args = CommandLine.arguments
+
+        // Detect --verbose flag (may appear anywhere in args)
+        if args.contains("--verbose") {
+            isVerboseLogging = true
+            debugLog("Verbose logging enabled")
+        }
 
         // Handle internal daemon start flag
         if args.count > 1 && args[1] == "__daemon_start" {
@@ -120,6 +138,7 @@ struct CorrectMeApp {
         case "run":
             // Legacy command - run in foreground
             print("Note: 'correctme run' is deprecated. Use 'correctme start' instead.")
+            if args.contains("--verbose") { isVerboseLogging = true }
             DaemonManager.startDaemon(background: false)
 
         case "enable":
@@ -1129,12 +1148,14 @@ struct CorrectMeApp {
         }
 
         isProcessing = true
+        debugLog("handleHotkey() triggered")
 
         // Cache selection bounds before any async operations
         hud?.cacheSelectionBounds()
 
         // Remember the source app so we can paste back to it even if user switches apps
         let sourceApp = NSWorkspace.shared.frontmostApplication
+        debugLog("Source app: \(sourceApp?.localizedName ?? "nil")")
 
         // Show HUD loading state near selection (or cursor as fallback)
         hud?.showLoading()
