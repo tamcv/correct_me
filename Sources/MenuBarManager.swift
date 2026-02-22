@@ -527,20 +527,18 @@ class WritingStyleWindowController: NSObject, NSWindowDelegate {
         presetsLabel.textColor = .secondaryLabelColor
         parent.addSubview(presetsLabel)
 
-        // Preset buttons (wrapped into 2 rows)
+        // Preset buttons (2 explicit rows of 3, clear of action buttons at y=14-42)
         var bx: CGFloat = padding
-        let by: CGFloat = scrollY - 110
+        let by: CGFloat = 52   // 10px above action buttons top edge (14+28+10)
         let bh: CGFloat = 24
         let gap: CGFloat = 6
         for (i, preset) in presets.enumerated() {
+            if i == 3 { bx = padding }  // Reset x for second row
             let btn = NSButton(title: preset.label, target: self, action: #selector(applyPreset(_:)))
             btn.bezelStyle = .rounded
             btn.font = .systemFont(ofSize: 11)
             btn.tag = i
             let bw = preset.label.size(withAttributes: [.font: btn.font!]).width + 24
-            if bx + bw > width - padding {
-                bx = padding
-            }
             let row: CGFloat = i < 3 ? 1 : 0
             btn.frame = NSRect(x: bx, y: by + row * (bh + gap), width: bw, height: bh)
             btn.autoresizingMask = [.maxYMargin]
