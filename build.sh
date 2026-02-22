@@ -27,6 +27,9 @@ fi
 APP_DIR=".build/CorrectMe.app"
 BINARY_PATH="${APP_DIR}/Contents/MacOS/correctme"
 
+# Restore terminal state in case codesign/swift left it in raw mode
+stty sane 2>/dev/null || true
+
 # Ask user if they want to install (default: yes)
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Installation Options"
@@ -92,6 +95,7 @@ if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
     echo ""
 
     # Ask if they want to configure now
+    stty sane 2>/dev/null || true
     read -p "Run setup wizard now? [Y/n] " -r
     echo ""
     if [[ -z $REPLY || $REPLY =~ ^[Yy]$ ]]; then
