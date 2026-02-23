@@ -1,9 +1,10 @@
 ---
 id: TASK-009
 title: Remove sudo symlink from build.sh — dev-only build flow
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-23 10:46'
+updated_date: '2026-02-23 10:47'
 labels:
   - devex
 dependencies: []
