@@ -1103,6 +1103,27 @@ struct CorrectMeApp {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
 
+        // Show onboarding wizard on first launch (no config file present)
+        if !FileManager.default.fileExists(atPath: Config.configPath.path) {
+            debugLog("No config file found — launching onboarding wizard")
+            // Temporarily show as regular app so the window is visible
+            app.setActivationPolicy(.regular)
+            OnboardingWindowController.shared.show { [self] in
+                // Reload config after onboarding saves it
+                config = Config.load()
+                // Switch back to accessory (menu bar only)
+                app.setActivationPolicy(.accessory)
+                startDaemonServices()
+            }
+            app.run()
+            return
+        }
+
+        startDaemonServices()
+        app.run()
+    }
+
+    static func startDaemonServices() {
         logPrint("""
 
         ╔═══════════════════════════════════════════╗
@@ -1175,9 +1196,6 @@ struct CorrectMeApp {
         }
 
         logPrint("─────────────────────────\n")
-
-        // Run the AppKit event loop (required for menu bar to work)
-        NSApplication.shared.run()
     }
 
     static func runUpdate() {
