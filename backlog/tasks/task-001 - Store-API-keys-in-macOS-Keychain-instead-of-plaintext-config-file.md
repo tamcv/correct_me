@@ -1,10 +1,10 @@
 ---
 id: TASK-001
 title: Store API keys in macOS Keychain instead of plaintext config file
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-23 09:01'
-updated_date: '2026-02-23 09:04'
+updated_date: '2026-02-23 09:08'
 labels: []
 dependencies: []
 priority: high
