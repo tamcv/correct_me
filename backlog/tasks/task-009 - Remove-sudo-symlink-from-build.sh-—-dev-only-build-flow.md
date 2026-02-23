@@ -1,10 +1,10 @@
 ---
 id: TASK-009
 title: Remove sudo symlink from build.sh — dev-only build flow
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-23 10:46'
-updated_date: '2026-02-23 10:47'
+updated_date: '2026-02-23 10:48'
 labels:
   - devex
 dependencies: []
@@ -25,7 +25,13 @@ Changes needed:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 build.sh runs without requiring sudo or admin password
-- [ ] #2 App can still be built and run by developers via swift run or .build/ binary
-- [ ] #3 No changes to end-user installation path (handled by TASK-006)
+- [x] #1 build.sh runs without requiring sudo or admin password
+- [x] #2 App can still be built and run by developers via swift run or .build/ binary
+- [x] #3 No changes to end-user installation path (handled by TASK-006)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Simplified `build.sh` to be a dev-only build script. Removed the entire install-to-Applications flow including `sudo ln -sf` symlink creation, setup wizard prompt, daemon restart, and Claude sub-agent setup. Script now only builds the .app bundle and prints instructions to run it directly. No sudo required.
+<!-- SECTION:FINAL_SUMMARY:END -->
