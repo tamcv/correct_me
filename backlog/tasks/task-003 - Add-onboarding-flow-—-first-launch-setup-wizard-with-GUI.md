@@ -1,9 +1,10 @@
 ---
 id: TASK-003
 title: Add onboarding flow — first-launch setup wizard with GUI
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-23 09:02'
+updated_date: '2026-02-23 10:27'
 labels: []
 dependencies: []
 priority: high
@@ -29,8 +30,14 @@ File: Sources/OnboardingWindowController.swift (new)
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Onboarding window appears on first launch when no config exists
-- [ ] #2 API key can be entered and tested without using the terminal
-- [ ] #3 Accessibility permission step opens System Settings directly
-- [ ] #4 Hotkey can be set via key capture UI (no manual keyCode entry)
+- [x] #1 Onboarding window appears on first launch when no config exists
+- [x] #2 API key can be entered and tested without using the terminal
+- [x] #3 Accessibility permission step opens System Settings directly
+- [x] #4 Hotkey can be set via key capture UI (no manual keyCode entry)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented in commit 6d8a6e5. Added GUI onboarding wizard (OnboardingWindowController) that appears on first launch when no config exists. Includes provider selection, API key entry with test button, accessibility permission step, and interactive hotkey capture.
+<!-- SECTION:FINAL_SUMMARY:END -->
