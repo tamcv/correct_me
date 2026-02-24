@@ -1,10 +1,10 @@
 ---
 id: TASK-002
 title: Per-app writing style — different style config per app
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-23 09:02'
-updated_date: '2026-02-24 15:31'
+updated_date: '2026-02-24 15:37'
 labels: []
 dependencies: []
 priority: medium
@@ -33,3 +33,16 @@ Changes needed:
 - [ ] #3 UI allows adding/removing per-app styles from Writing Style window
 - [ ] #4 Falls back to global style when no per-app override exists
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented per-app writing styles allowing different correction styles per application.
+
+**Changes:**
+- `Config.swift`: Added `perAppStyles: [String: String]?` field (bundle ID → writing style)
+- `AIProviders.swift`: Added `currentCorrectionBundleId` global, modified `buildCorrectionPrompt()` to resolve per-app style with fallback to global
+- `main.swift`: Set `currentCorrectionBundleId` from frontmost app in `handleHotkey()`
+- `PreferencesWindowController.swift`: Added per-app styles UI section to Writing Style tab with Add App/Remove functionality, scrollable list, running apps picker
+- `CLAUDE.md`: Marked roadmap item done
+<!-- SECTION:FINAL_SUMMARY:END -->
