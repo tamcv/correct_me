@@ -1,9 +1,10 @@
 ---
 id: TASK-004
 title: Build full Preferences window with tabs
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-23 09:02'
+updated_date: '2026-02-24 07:29'
 labels: []
 dependencies: []
 priority: high
