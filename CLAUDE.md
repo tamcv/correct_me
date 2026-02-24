@@ -20,6 +20,7 @@ Sources/
 ├── AccessibilityHelper.swift # Get/replace selected text via Accessibility API + CGEvent
 ├── HUDWindow.swift         # Floating status window (spinner → ✓ / ✗) near selected text
 ├── MenuBarManager.swift    # NSStatusItem, dropdown menu, WritingStyleWindowController
+├── PreferencesWindowController.swift # Full Preferences window (General, Provider, Hotkey, Style, Advanced tabs)
 ├── DaemonManager.swift     # PID file, launchctl, SIGTERM handler, status/uptime
 └── ErrorLog.swift          # Thread-safe in-memory error log + AppStatus/StatusManager
 ```

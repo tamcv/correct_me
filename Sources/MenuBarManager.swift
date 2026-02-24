@@ -396,7 +396,7 @@ class MenuBarManager: NSObject {
 
     @objc private func openPreferences() {
         NSApp.activate(ignoringOtherApps: true)
-        WritingStyleWindowController.shared.showWindow()
+        PreferencesWindowController.shared.showWindow()
     }
 
     @objc private func quitApp() {
