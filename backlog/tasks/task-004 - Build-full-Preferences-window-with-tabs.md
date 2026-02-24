@@ -1,10 +1,10 @@
 ---
 id: TASK-004
 title: Build full Preferences window with tabs
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-23 09:02'
-updated_date: '2026-02-24 07:29'
+updated_date: '2026-02-24 07:33'
 labels: []
 dependencies: []
 priority: high
@@ -27,8 +27,14 @@ Files: Sources/PreferencesWindowController.swift (new), Sources/MenuBarManager.s
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All settings accessible without terminal
-- [ ] #2 API key field is masked and has a Test button
-- [ ] #3 Hotkey tab allows recording a new shortcut by pressing keys
-- [ ] #4 Writing Style tab replaces the current standalone window
+- [x] #1 All settings accessible without terminal
+- [x] #2 API key field is masked and has a Test button
+- [x] #3 Hotkey tab allows recording a new shortcut by pressing keys
+- [x] #4 Writing Style tab replaces the current standalone window
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Created `Sources/PreferencesWindowController.swift` with 5-tab NSTabView preferences window:\n\n- **General**: auto-start toggle, current hotkey display, version/provider info\n- **Provider**: dropdown for all 6 providers, masked API key field with Test Connection button, model field\n- **Hotkey**: large display of current hotkey, preset buttons, Record Custom Hotkey, Reset to Default\n- **Writing Style**: moved existing WritingStyleWindowController content (text view, presets, clear)\n- **Advanced**: config file path + Show in Finder, Export/Import config, Reset All Settings\n\nUpdated `MenuBarManager.openPreferences()` to open new Preferences window instead of standalone Writing Style window. Added `Notification.Name.configChanged` for config reload signaling."
+<!-- SECTION:FINAL_SUMMARY:END -->
