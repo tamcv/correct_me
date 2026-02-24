@@ -1,9 +1,10 @@
 ---
 id: TASK-002
 title: Per-app writing style — different style config per app
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-23 09:02'
+updated_date: '2026-02-24 15:31'
 labels: []
 dependencies: []
 priority: medium
