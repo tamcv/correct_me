@@ -3,3 +3,4 @@ dist/
 !dist/latest.json
 *.bak
 .vscode/settings.json
+plan.md
