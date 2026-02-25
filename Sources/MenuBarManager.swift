@@ -400,7 +400,14 @@ class MenuBarManager: NSObject {
     }
 
     @objc private func quitApp() {
-        NSApplication.shared.terminate(nil)
+        // Clean up PID file and exit with code 0.
+        // With KeepAlive.SuccessfulExit=false in the LaunchAgent plist,
+        // launchd will NOT restart the daemon on a successful (0) exit.
+        // We call exit(0) directly instead of NSApplication.terminate() to
+        // guarantee the exit code — terminate() may go through paths that
+        // produce a non-zero exit, which would trigger a launchd restart.
+        DaemonManager.removePIDFile()
+        exit(0)
     }
 
     deinit {

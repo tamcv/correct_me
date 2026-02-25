@@ -64,7 +64,29 @@ struct CorrectMeApp {
             return
         }
 
-        // Default: show help
+        // No arguments — launched from Finder (double-click) or bare CLI invocation.
+        // If launched via LaunchServices (Finder), start the daemon directly.
+        // If launched from a terminal, show help as before.
+        if ProcessInfo.processInfo.environment["__CFBundleIdentifier"] != nil
+            || ProcessInfo.processInfo.environment["TERM"] == nil {
+            // Launched from Finder / LaunchServices — start daemon
+            if let existingPID = DaemonManager.getDaemonPID() {
+                // Already running — just bring menu bar to front and exit
+                debugLog("Daemon already running (PID: \(existingPID)), exiting duplicate launch")
+                exit(0)
+            }
+            do {
+                try DaemonManager.writePID(getpid())
+            } catch {
+                print("❌ Failed to write PID file: \(error)")
+                exit(1)
+            }
+            DaemonManager.setupCleanupHandlers()
+            runDaemon()
+            exit(0)
+        }
+
+        // Launched from terminal with no args — show help
         printHelp()
         exit(0)
     }
