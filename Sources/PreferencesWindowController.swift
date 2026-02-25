@@ -27,11 +27,15 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var styleTextView: NSTextView!
     private var stylePlaceholder: NSTextField!
 
+    // Per-app styles
+    private var perAppStylesContainer: NSView!
+    private var perAppEntries: [(bundleId: String, style: String)] = []
+
     // General tab
     private var autoStartCheckbox: NSButton!
 
     private let W: CGFloat = 520
-    private let H: CGFloat = 440
+    private let H: CGFloat = 540
     private let pad: CGFloat = 20
 
     private override init() { super.init() }
@@ -452,18 +456,24 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         item.label = "Writing Style"
         let view = NSView()
 
-        let y0: CGFloat = 300
+        let y0: CGFloat = 340
+
+        // ── Global Style ──
+        let globalLabel = NSTextField(labelWithString: "Global Style")
+        globalLabel.frame = NSRect(x: pad, y: y0, width: 120, height: 18)
+        globalLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        view.addSubview(globalLabel)
 
         let desc = NSTextField(wrappingLabelWithString:
-            "Customize how CorrectMe rewrites your text (applied to every correction):")
-        desc.frame = NSRect(x: pad, y: y0, width: W - pad * 2, height: 36)
-        desc.font = .systemFont(ofSize: 12)
+            "Applied to every correction unless overridden by a per-app style:")
+        desc.frame = NSRect(x: pad, y: y0 - 22, width: W - pad * 2, height: 20)
+        desc.font = .systemFont(ofSize: 11)
         desc.textColor = .secondaryLabelColor
         view.addSubview(desc)
 
         // Scrollable text view
-        let scrollH: CGFloat = 140
-        let scrollY: CGFloat = y0 - scrollH - 10
+        let scrollH: CGFloat = 80
+        let scrollY: CGFloat = y0 - scrollH - 28
         let scrollView = NSScrollView(frame: NSRect(x: pad, y: scrollY, width: W - pad * 2, height: scrollH))
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
@@ -501,9 +511,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         stylePlaceholder.isHidden = !saved.isEmpty
 
         // Preset buttons (2 rows of 3)
-        let presetY = scrollY - 34
+        let presetY = scrollY - 30
         var bx: CGFloat = pad
-        let bh: CGFloat = 24
+        let bh: CGFloat = 22
         let gapX: CGFloat = 6
 
         for (i, preset) in stylePresets.enumerated() {
@@ -522,11 +532,178 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         // Clear style button
         let clearBtn = NSButton(title: "Clear", target: self, action: #selector(clearStyle))
         clearBtn.bezelStyle = .rounded
-        clearBtn.frame = NSRect(x: W - pad - 80, y: presetY - 34, width: 80, height: 24)
+        clearBtn.frame = NSRect(x: W - pad - 60, y: presetY - 30, width: 60, height: 22)
         view.addSubview(clearBtn)
+
+        // ── Per-App Styles ──
+        let perAppY = presetY - 64
+
+        let sep = NSBox()
+        sep.boxType = .separator
+        sep.frame = NSRect(x: pad, y: perAppY + 20, width: W - pad * 2, height: 1)
+        view.addSubview(sep)
+
+        let perAppLabel = NSTextField(labelWithString: "Per-App Styles")
+        perAppLabel.frame = NSRect(x: pad, y: perAppY - 4, width: 120, height: 18)
+        perAppLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        view.addSubview(perAppLabel)
+
+        let perAppDesc = NSTextField(wrappingLabelWithString: "Override the global style for specific apps:")
+        perAppDesc.frame = NSRect(x: pad + 120, y: perAppY - 4, width: W - pad * 2 - 120, height: 18)
+        perAppDesc.font = .systemFont(ofSize: 11)
+        perAppDesc.textColor = .secondaryLabelColor
+        view.addSubview(perAppDesc)
+
+        // Container for per-app entries (scrollable)
+        let containerH: CGFloat = 80
+        let containerY: CGFloat = perAppY - containerH - 10
+        let containerScroll = NSScrollView(frame: NSRect(x: pad, y: containerY, width: W - pad * 2, height: containerH))
+        containerScroll.hasVerticalScroller = true
+        containerScroll.borderType = .bezelBorder
+        containerScroll.drawsBackground = true
+
+        let clipView = containerScroll.contentView
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: containerScroll.contentSize.width, height: containerH))
+        containerScroll.documentView = containerView
+        _ = clipView // suppress unused warning
+        view.addSubview(containerScroll)
+        perAppStylesContainer = containerView
+
+        // Load per-app entries
+        perAppEntries = (config.perAppStyles ?? [:]).map { (bundleId: $0.key, style: $0.value) }
+            .sorted { $0.bundleId < $1.bundleId }
+        rebuildPerAppList()
+
+        // Add / Remove buttons
+        let addBtn = NSButton(title: "Add App…", target: self, action: #selector(addPerAppStyle))
+        addBtn.bezelStyle = .rounded
+        addBtn.font = .systemFont(ofSize: 11)
+        addBtn.frame = NSRect(x: pad, y: containerY - 28, width: 90, height: 22)
+        view.addSubview(addBtn)
+
+        let removeBtn = NSButton(title: "Remove", target: self, action: #selector(removePerAppStyle))
+        removeBtn.bezelStyle = .rounded
+        removeBtn.font = .systemFont(ofSize: 11)
+        removeBtn.frame = NSRect(x: pad + 96, y: containerY - 28, width: 70, height: 22)
+        view.addSubview(removeBtn)
 
         item.view = view
         return item
+    }
+
+    // MARK: - Per-App Styles Helpers
+
+    private func rebuildPerAppList() {
+        guard let container = perAppStylesContainer else { return }
+        container.subviews.forEach { $0.removeFromSuperview() }
+
+        let rowH: CGFloat = 24
+        let totalH = max(CGFloat(perAppEntries.count) * rowH, container.superview?.frame.height ?? 80)
+        container.frame = NSRect(x: 0, y: 0, width: container.frame.width, height: totalH)
+
+        for (i, entry) in perAppEntries.enumerated() {
+            let y = totalH - CGFloat(i + 1) * rowH
+
+            let appLabel = NSTextField(labelWithString: entry.bundleId)
+            appLabel.frame = NSRect(x: 4, y: y, width: 180, height: rowH)
+            appLabel.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+            appLabel.lineBreakMode = .byTruncatingMiddle
+            container.addSubview(appLabel)
+
+            let styleLabel = NSTextField(labelWithString: entry.style)
+            styleLabel.frame = NSRect(x: 188, y: y, width: container.frame.width - 192, height: rowH)
+            styleLabel.font = .systemFont(ofSize: 11)
+            styleLabel.textColor = .secondaryLabelColor
+            styleLabel.lineBreakMode = .byTruncatingTail
+            container.addSubview(styleLabel)
+        }
+
+        if perAppEntries.isEmpty {
+            let placeholder = NSTextField(labelWithString: "No per-app styles configured")
+            placeholder.frame = NSRect(x: 4, y: (totalH - 20) / 2, width: container.frame.width - 8, height: 20)
+            placeholder.font = .systemFont(ofSize: 11)
+            placeholder.textColor = .tertiaryLabelColor
+            placeholder.alignment = .center
+            container.addSubview(placeholder)
+        }
+    }
+
+    @objc private func addPerAppStyle() {
+        let alert = NSAlert()
+        alert.messageText = "Add Per-App Style"
+        alert.informativeText = "Select a running app or enter a bundle ID, then set the writing style for that app."
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
+
+        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 100))
+
+        // App picker (running apps)
+        let appPopUp = NSPopUpButton(frame: NSRect(x: 0, y: 72, width: 340, height: 26), pullsDown: false)
+        let runningApps = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != nil }
+            .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
+
+        appPopUp.addItem(withTitle: "Choose from running apps…")
+        for app in runningApps {
+            let name = app.localizedName ?? app.bundleIdentifier ?? "Unknown"
+            let bundleId = app.bundleIdentifier ?? ""
+            appPopUp.addItem(withTitle: "\(name)  (\(bundleId))")
+            appPopUp.lastItem?.representedObject = bundleId
+        }
+        accessory.addSubview(appPopUp)
+
+        // Style field
+        let styleField = NSTextField(frame: NSRect(x: 0, y: 6, width: 340, height: 60))
+        styleField.placeholderString = "Writing style for this app (e.g. \"casual tone\")"
+        styleField.font = .systemFont(ofSize: 12)
+        accessory.addSubview(styleField)
+
+        alert.accessoryView = accessory
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let bundleId: String
+        if appPopUp.indexOfSelectedItem > 0,
+           let selected = appPopUp.selectedItem?.representedObject as? String {
+            bundleId = selected
+        } else {
+            return
+        }
+
+        let style = styleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !style.isEmpty else { return }
+
+        // Replace existing or add new
+        if let idx = perAppEntries.firstIndex(where: { $0.bundleId == bundleId }) {
+            perAppEntries[idx].style = style
+        } else {
+            perAppEntries.append((bundleId: bundleId, style: style))
+        }
+
+        rebuildPerAppList()
+    }
+
+    @objc private func removePerAppStyle() {
+        guard !perAppEntries.isEmpty else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "Remove Per-App Style"
+        alert.informativeText = "Select an app to remove its custom style:"
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+
+        let popUp = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 300, height: 26), pullsDown: false)
+        for entry in perAppEntries {
+            popUp.addItem(withTitle: entry.bundleId)
+        }
+        alert.accessoryView = popUp
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let idx = popUp.indexOfSelectedItem
+        guard idx >= 0, idx < perAppEntries.count else { return }
+        perAppEntries.remove(at: idx)
+        rebuildPerAppList()
     }
 
     @objc private func stylePresetTapped(_ sender: NSButton) {
@@ -694,6 +871,17 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         // Collect from Writing Style tab
         let style = styleTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         config.writingStyle = style.isEmpty ? nil : style
+
+        // Collect per-app styles
+        if perAppEntries.isEmpty {
+            config.perAppStyles = nil
+        } else {
+            var dict: [String: String] = [:]
+            for entry in perAppEntries {
+                dict[entry.bundleId] = entry.style
+            }
+            config.perAppStyles = dict
+        }
 
         // Save
         do {

@@ -1281,6 +1281,9 @@ struct CorrectMeApp {
         let sourceApp = NSWorkspace.shared.frontmostApplication
         debugLog("Source app: \(sourceApp?.localizedName ?? "nil")")
 
+        // Set bundle ID for per-app writing style resolution
+        currentCorrectionBundleId = sourceApp?.bundleIdentifier
+
         // Show HUD loading state near selection (or cursor as fallback)
         hud?.showLoading()
 

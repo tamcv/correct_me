@@ -4,6 +4,10 @@ protocol AIProvider {
     func correctText(_ text: String) async throws -> String
 }
 
+/// Bundle ID of the frontmost app when the hotkey was triggered.
+/// Set by handleHotkey() before calling correctText(), read by buildCorrectionPrompt().
+var currentCorrectionBundleId: String?
+
 // MARK: - Helper Functions
 
 /// Get environment variables that help prevent connection caching issues
@@ -546,7 +550,18 @@ func createAIProvider(from config: Config) throws -> AIProvider {
 /// is called out explicitly because tone marks and diacritics are commonly
 /// mishandled by generic spell-checkers.
 func buildCorrectionPrompt(text: String, context: String = "") -> String {
-    let writingStyle = Config.load().writingStyle ?? ""
+    let config = Config.load()
+    let bundleId = currentCorrectionBundleId
+
+    // Per-app style takes priority, fall back to global style
+    let writingStyle: String
+    if let bundleId = bundleId,
+       let appStyle = config.perAppStyles?[bundleId],
+       !appStyle.isEmpty {
+        writingStyle = appStyle
+    } else {
+        writingStyle = config.writingStyle ?? ""
+    }
 
     if writingStyle.isEmpty {
         return """

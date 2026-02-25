@@ -19,6 +19,7 @@ struct Config: Codable {
     var customPrompt: String?
     var model: String?
     var writingStyle: String?
+    var perAppStyles: [String: String]?
 
     enum AIProvider: String, Codable {
         case claude = "claude"
@@ -52,7 +53,8 @@ struct Config: Codable {
             hotkey: .default,
             customPrompt: nil,
             model: nil,
-            writingStyle: nil
+            writingStyle: nil,
+            perAppStyles: nil
         )
     }
 

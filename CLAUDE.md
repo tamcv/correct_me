@@ -82,7 +82,7 @@ swift test
 ### Features
 - [x] Show diff/preview of correction before applying (accept/reject with keyboard shortcut)
 - [x] Correction history — last 10 corrections accessible from menu bar
-- [ ] Per-app writing style — different style config for different apps (e.g. Slack vs Xcode)
+- [x] Per-app writing style — different style config for different apps (e.g. Slack vs Xcode)
 - [x] Keyboard shortcut to undo last correction (restore original text)
 - [x] Status bar shows provider name and model currently in use
 - [x] Support Vietnamese language correction (add to prompt builder)
