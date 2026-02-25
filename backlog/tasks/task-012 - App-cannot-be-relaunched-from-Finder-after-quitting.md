@@ -1,9 +1,10 @@
 ---
 id: TASK-012
 title: App cannot be relaunched from Finder after quitting
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-25 08:09'
+updated_date: '2026-02-25 08:21'
 labels:
   - bug
   - ux
@@ -71,9 +72,29 @@ In `DaemonManager.swift`, the SIGTERM handler calls `exit(0)`. Since plist has `
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Double-clicking CorrectMe.app in /Applications starts the daemon correctly
-- [ ] #2 Clicking Quit CorrectMe in menu bar actually quits and does NOT auto-restart
-- [ ] #3 Running `correctme start` from terminal still works as before
-- [ ] #4 App auto-starts at login if auto-start is enabled in Preferences
-- [ ] #5 If app is already running and user double-clicks .app again it does not launch a second instance
+- [x] #1 Double-clicking CorrectMe.app in /Applications starts the daemon correctly
+- [x] #2 Clicking Quit CorrectMe in menu bar actually quits and does NOT auto-restart
+- [x] #3 Running `correctme start` from terminal still works as before
+- [x] #4 App auto-starts at login if auto-start is enabled in Preferences
+- [x] #5 If app is already running and user double-clicks .app again it does not launch a second instance
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed app launch and quit behavior so users can manage CorrectMe without the terminal.
+
+**Changes:**
+
+**Sources/main.swift** — Finder launch support:
+- When launched with no CLI arguments, detect if running from Finder (no TERM env var) vs terminal
+- From Finder: start daemon directly (same as `__daemon_start`), with duplicate instance check
+- From terminal: show help as before
+- If daemon is already running, silently exit instead of launching a second instance
+
+**Sources/MenuBarManager.swift** — Quit behavior fix:
+- Changed `quitApp()` to call `exit(0)` directly instead of `NSApplication.terminate()`
+- Cleans up PID file before exit
+- `exit(0)` = successful exit → launchd's `KeepAlive.SuccessfulExit=false` will NOT restart
+- This guarantees the app stays quit when the user clicks Quit
+<!-- SECTION:FINAL_SUMMARY:END -->
