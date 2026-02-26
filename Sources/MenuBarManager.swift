@@ -271,6 +271,14 @@ class MenuBarManager: NSObject {
         prefsItem.target = self
         menu.addItem(prefsItem)
 
+        let feedbackItem = NSMenuItem(
+            title: "Send Feedback…",
+            action: #selector(openFeedback),
+            keyEquivalent: ""
+        )
+        feedbackItem.target = self
+        menu.addItem(feedbackItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(
@@ -401,6 +409,11 @@ class MenuBarManager: NSObject {
     @objc private func openPreferences() {
         NSApp.activate(ignoringOtherApps: true)
         PreferencesWindowController.shared.showWindow()
+    }
+
+    @objc private func openFeedback() {
+        NSApp.activate(ignoringOtherApps: true)
+        FeedbackWindowController.shared.showWindow()
     }
 
     @objc private func quitApp() {
