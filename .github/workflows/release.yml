@@ -26,29 +26,12 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-    - name: Build release app bundle
+    - name: Update version in Info.plist
       run: |
-        echo "Building CorrectMe v${{ steps.get_version.outputs.VERSION }}..."
-
-        # Update version in Info.plist
         sed -i '' "s/0.2.1/${{ steps.get_version.outputs.VERSION }}/g" Resources/Info.plist
-
-        # Build .app bundle
-        chmod +x scripts/build-app.sh
-        ./scripts/build-app.sh release
-
-        # Verify app bundle exists
-        if [ ! -d ".build/CorrectMe.app" ]; then
-          echo "Build failed - app bundle not found"
-          exit 1
-        fi
-
-        echo "Build successful!"
-        ls -lh .build/CorrectMe.app/Contents/MacOS/correctme
 
     - name: Run tests
       run: |
-        # Run tests if they exist
         if swift test --list-tests 2>/dev/null | grep -q "Test"; then
           echo "Running tests..."
           swift test
@@ -57,29 +40,69 @@ jobs:
         fi
       continue-on-error: true
 
-    - name: Prepare release assets
+    - name: Import signing certificate
+      if: ${{ secrets.DEVELOPER_ID_CERT_BASE64 != '' }}
+      env:
+        CERT_BASE64: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
+        CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
       run: |
-        # Create release directory
-        mkdir -p release
+        # Create temporary keychain
+        KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
+        KEYCHAIN_PASSWORD="$(openssl rand -hex 20)"
 
-        # Copy .app bundle
-        cp -R .build/CorrectMe.app release/
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-        # Create symlink for CLI access (will be in the zip)
-        mkdir -p release/cli
-        ln -s ../CorrectMe.app/Contents/MacOS/correctme release/cli/correctme
+        # Import certificate
+        CERT_PATH="$RUNNER_TEMP/cert.p12"
+        echo "$CERT_BASE64" | base64 --decode > "$CERT_PATH"
+        security import "$CERT_PATH" \
+          -k "$KEYCHAIN_PATH" \
+          -P "$CERT_PASSWORD" \
+          -T /usr/bin/codesign \
+          -T /usr/bin/productsign
 
-        # Create zip archive with both .app and CLI symlink
-        cd release
-        zip -r CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip CorrectMe.app cli
+        security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 
-        # Calculate SHA256
-        shasum -a 256 CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip | awk '{print $1}' > sha256.txt
-        SHA256=$(cat sha256.txt)
+        echo "✅ Certificate imported"
+
+    - name: Build release DMG
+      env:
+        DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        echo "Building CorrectMe v${{ steps.get_version.outputs.VERSION }}..."
+        chmod +x scripts/build-release.sh
+        ./scripts/build-release.sh
+
+    - name: Determine release asset
+      id: asset
+      run: |
+        VERSION="${{ steps.get_version.outputs.VERSION }}"
+        TAG="${{ steps.get_version.outputs.TAG }}"
+        DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
+
+        if [ -f "$DMG_PATH" ]; then
+          ASSET_PATH="$DMG_PATH"
+          ASSET_NAME="CorrectMe-${TAG}-macos.dmg"
+          ASSET_TYPE="application/x-apple-diskimage"
+          FORMAT="dmg"
+        else
+          echo "❌ DMG not found at $DMG_PATH"
+          exit 1
+        fi
+
+        SHA256=$(cat .build/release-dmg/sha256.txt)
+
+        echo "ASSET_PATH=$ASSET_PATH" >> $GITHUB_OUTPUT
+        echo "ASSET_NAME=$ASSET_NAME" >> $GITHUB_OUTPUT
+        echo "ASSET_TYPE=$ASSET_TYPE" >> $GITHUB_OUTPUT
+        echo "FORMAT=$FORMAT" >> $GITHUB_OUTPUT
         echo "SHA256=$SHA256" >> $GITHUB_ENV
-
-        echo "SHA256: $SHA256"
-        ls -lh
 
     - name: Create Release
       id: create_release
@@ -99,35 +122,21 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh
           ```
 
-          **Option 2: Download and install manually**
-          ```bash
-          # Download and extract
-          unzip CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
-
-          # Install .app to Applications
-          mv CorrectMe.app /Applications/
-
-          # Create CLI symlink
-          sudo ln -sf /Applications/CorrectMe.app/Contents/MacOS/correctme /usr/local/bin/correctme
-
-          # Run setup
-          correctme setup
-          correctme start
-          ```
+          **Option 2: Download DMG and install manually**
+          1. Download `${{ steps.asset.outputs.ASSET_NAME }}` below
+          2. Open the DMG
+          3. Drag **CorrectMe.app** into the **Applications** folder
+          4. Launch CorrectMe from Applications
+          5. Grant Accessibility permission when prompted
 
           ### What's Changed
 
           See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
 
-          ### Package Contents
-
-          - `CorrectMe.app` - macOS application bundle (install to /Applications)
-          - `cli/correctme` - Symlink for CLI access
-
           ### SHA256 Checksum
 
           ```
-          ${{ env.SHA256 }}  CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
+          ${{ env.SHA256 }}  ${{ steps.asset.outputs.ASSET_NAME }}
           ```
         draft: false
         prerelease: false
@@ -138,41 +147,30 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release/CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
-        asset_name: CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip
-        asset_content_type: application/zip
-
-    - name: Create latest.json
-      run: |
-        mkdir -p dist
-        cat > dist/latest.json <<EOF
-        {
-          "tag": "${{ steps.get_version.outputs.TAG }}",
-          "version": "${{ steps.get_version.outputs.VERSION }}",
-          "asset": "CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip",
-          "sha256": "${{ env.SHA256 }}",
-          "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        }
-        EOF
-
-        cat dist/latest.json
+        asset_path: ${{ steps.asset.outputs.ASSET_PATH }}
+        asset_name: ${{ steps.asset.outputs.ASSET_NAME }}
+        asset_content_type: ${{ steps.asset.outputs.ASSET_TYPE }}
 
     - name: Commit latest.json to main
       run: |
+        VERSION="${{ steps.get_version.outputs.VERSION }}"
+        TAG="${{ steps.get_version.outputs.TAG }}"
+        FORMAT="${{ steps.asset.outputs.FORMAT }}"
+        ASSET_NAME="${{ steps.asset.outputs.ASSET_NAME }}"
+
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
-        # Checkout main branch
         git fetch origin main
         git checkout main
 
-        # Copy latest.json
         mkdir -p dist
         cat > dist/latest.json <<EOF
         {
-          "tag": "${{ steps.get_version.outputs.TAG }}",
-          "version": "${{ steps.get_version.outputs.VERSION }}",
-          "asset": "CorrectMe-${{ steps.get_version.outputs.TAG }}-macos.zip",
+          "tag": "$TAG",
+          "version": "$VERSION",
+          "asset": "$ASSET_NAME",
+          "format": "$FORMAT",
           "sha256": "${{ env.SHA256 }}",
           "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         }
@@ -183,8 +181,16 @@ jobs:
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
-          git commit -m "chore: Update latest.json for ${{ steps.get_version.outputs.TAG }}"
+          git commit -m "chore: Update latest.json for $TAG"
           git push origin main
         fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Cleanup keychain
+      if: always()
+      run: |
+        KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
+        if [ -f "$KEYCHAIN_PATH" ]; then
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+        fi
