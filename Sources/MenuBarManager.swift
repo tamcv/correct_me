@@ -348,6 +348,10 @@ class MenuBarManager: NSObject {
 
     @objc private func clearHistory() {
         CorrectionHistory.shared.clear()
+        // NSMenu auto-closes on any item action; re-open so the user sees the updated empty state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            self.statusItem?.button?.performClick(nil)
+        }
     }
 
     @objc private func restartDaemon() {
