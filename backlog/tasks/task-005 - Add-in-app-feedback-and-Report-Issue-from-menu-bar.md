@@ -1,9 +1,10 @@
 ---
 id: TASK-005
 title: Add in-app feedback and Report Issue from menu bar
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-23 09:02'
+updated_date: '2026-02-26 00:38'
 labels: []
 dependencies: []
 priority: medium
