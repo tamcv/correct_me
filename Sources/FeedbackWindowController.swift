@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
 
-/// Feedback window: category picker, description, debug info, open GitHub issue.
+/// Feedback window: category picker, description, debug info.
+/// Sends feedback via Telegram Bot API. Falls back to mailto: if unconfigured.
 class FeedbackWindowController: NSObject, NSWindowDelegate {
     static let shared = FeedbackWindowController()
 
@@ -10,18 +11,14 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
     private var categoryPopUp: NSPopUpButton!
     private var descriptionTextView: NSTextView!
     private var debugInfoTextView: NSTextView!
+    private var sendButton: NSButton!
+    private var statusLabel: NSTextField!
 
     private let W: CGFloat = 480
     private let H: CGFloat = 440
     private let pad: CGFloat = 20
 
-    private static let repoURL = "https://github.com/tamcv/correct_me"
-
-    private let categories: [(label: String, ghLabel: String)] = [
-        ("Bug Report", "bug"),
-        ("Feature Request", "enhancement"),
-        ("Other", ""),
-    ]
+    private let categories = ["Bug Report", "Feature Request", "Other"]
 
     private override init() { super.init() }
 
@@ -69,7 +66,7 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
 
         categoryPopUp = NSPopUpButton(frame: NSRect(x: 90, y: y - 2, width: 200, height: 26), pullsDown: false)
         for cat in categories {
-            categoryPopUp.addItem(withTitle: cat.label)
+            categoryPopUp.addItem(withTitle: cat)
         }
         root.addSubview(categoryPopUp)
 
@@ -149,11 +146,19 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
         copyBtn.frame = NSRect(x: pad + 90, y: btnY, width: 130, height: 28)
         root.addSubview(copyBtn)
 
-        let openBtn = NSButton(title: "Open GitHub Issue", target: self, action: #selector(openGitHubIssue))
-        openBtn.bezelStyle = .rounded
-        openBtn.keyEquivalent = "\r"
-        openBtn.frame = NSRect(x: W - pad - 160, y: btnY, width: 160, height: 28)
-        root.addSubview(openBtn)
+        sendButton = NSButton(title: "Send Feedback", target: self, action: #selector(sendFeedback))
+        sendButton.bezelStyle = .rounded
+        sendButton.keyEquivalent = "\r"
+        sendButton.frame = NSRect(x: W - pad - 140, y: btnY, width: 140, height: 28)
+        root.addSubview(sendButton)
+
+        // Status label (hidden by default)
+        statusLabel = NSTextField(labelWithString: "")
+        statusLabel.frame = NSRect(x: pad, y: btnY + 32, width: W - pad * 2, height: 18)
+        statusLabel.font = .systemFont(ofSize: 11)
+        statusLabel.alignment = .center
+        statusLabel.isHidden = true
+        root.addSubview(statusLabel)
     }
 
     // MARK: - Debug Info
@@ -183,52 +188,142 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Actions
 
-    @objc private func openGitHubIssue() {
-        let catIndex = categoryPopUp.indexOfSelectedItem
-        let category = categories[catIndex]
+    @objc private func sendFeedback() {
+        let config = Config.load()
+        let category = categories[categoryPopUp.indexOfSelectedItem]
         let description = descriptionTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         let debugInfo = debugInfoTextView.string
 
-        // Build issue title
-        let title: String
-        if description.count > 60 {
-            title = String(description.prefix(57)) + "..."
-        } else if description.isEmpty {
-            title = "\(category.label): "
+        guard !description.isEmpty else {
+            showStatus("Please enter a description.", color: .systemRed)
+            return
+        }
+
+        // Try Telegram first, fall back to email
+        if let token = config.telegramBotToken, !token.isEmpty,
+           let chatId = config.telegramChatId, !chatId.isEmpty {
+            sendViaTelegram(token: token, chatId: chatId, category: category, description: description, debugInfo: debugInfo)
         } else {
-            title = description.components(separatedBy: .newlines).first ?? description
+            sendViaEmail(category: category, description: description, debugInfo: debugInfo)
+        }
+    }
+
+    // MARK: - Telegram
+
+    private func sendViaTelegram(token: String, chatId: String, category: String, description: String, debugInfo: String) {
+        sendButton.isEnabled = false
+        showStatus("Sending...", color: .secondaryLabelColor)
+
+        let emoji: String
+        switch category {
+        case "Bug Report": emoji = "🐛"
+        case "Feature Request": emoji = "💡"
+        default: emoji = "💬"
         }
 
-        // Build issue body — never include user correction text
-        var body = ""
-        if !description.isEmpty {
-            body += "## Description\n\n\(description)\n\n"
-        }
-        body += "## Debug Info\n\n```\n\(debugInfo)\n```\n"
+        let text = """
+        \(emoji) *CorrectMe Feedback*
 
-        // Build URL
-        var urlString = "\(Self.repoURL)/issues/new?"
-        var params: [String] = []
-        params.append("title=\(urlEncode(title))")
-        params.append("body=\(urlEncode(body))")
-        if !category.ghLabel.isEmpty {
-            params.append("labels=\(urlEncode(category.ghLabel))")
-        }
-        urlString += params.joined(separator: "&")
+        *Category:* \(escapeMarkdown(category))
+        *Description:*
+        \(escapeMarkdown(description))
 
-        if let url = URL(string: urlString) {
+        ```
+        \(debugInfo)
+        ```
+        """
+
+        let urlString = "https://api.telegram.org/bot\(token)/sendMessage"
+        guard let url = URL(string: urlString) else {
+            showStatus("Invalid bot token.", color: .systemRed)
+            sendButton.isEnabled = true
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload: [String: Any] = [
+            "chat_id": chatId,
+            "text": text,
+            "parse_mode": "Markdown",
+        ]
+
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else {
+            showStatus("Failed to build request.", color: .systemRed)
+            sendButton.isEnabled = true
+            return
+        }
+        request.httpBody = body
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                self?.sendButton.isEnabled = true
+
+                if let error = error {
+                    self?.showStatus("Failed: \(error.localizedDescription)", color: .systemRed)
+                    return
+                }
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    self?.showStatus("No response from Telegram.", color: .systemRed)
+                    return
+                }
+
+                if httpResponse.statusCode == 200 {
+                    self?.showStatus("Feedback sent! Thank you.", color: .systemGreen)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        self?.window?.close()
+                    }
+                } else {
+                    let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? "unknown error"
+                    debugLog("Telegram feedback error: \(httpResponse.statusCode) \(body)")
+                    self?.showStatus("Telegram error (\(httpResponse.statusCode)). Try again.", color: .systemRed)
+                }
+            }
+        }.resume()
+    }
+
+    /// Escape Markdown special characters for Telegram.
+    private func escapeMarkdown(_ text: String) -> String {
+        // In Markdown mode, escape _ * [ ] ( ) ~ ` > # + - = | { } . !
+        // But keep it simple — only escape the most common ones that break formatting
+        return text
+            .replacingOccurrences(of: "*", with: "\\*")
+            .replacingOccurrences(of: "_", with: "\\_")
+            .replacingOccurrences(of: "`", with: "\\`")
+            .replacingOccurrences(of: "[", with: "\\[")
+    }
+
+    // MARK: - Email Fallback
+
+    private func sendViaEmail(category: String, description: String, debugInfo: String) {
+        let subject = "CorrectMe Feedback: \(category)"
+        let body = "\(description)\n\n---\n\(debugInfo)"
+
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = "feedback@correctme.app"
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: subject),
+            URLQueryItem(name: "body", value: body),
+        ]
+
+        if let url = components.url {
             NSWorkspace.shared.open(url)
         }
 
         window?.close()
     }
 
+    // MARK: - Helpers
+
     @objc private func copyDebugInfo() {
         let debugInfo = debugInfoTextView.string
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(debugInfo, forType: .string)
 
-        // Brief visual feedback — change button title temporarily
         if let root = window?.contentView {
             for subview in root.subviews {
                 if let btn = subview as? NSButton, btn.title == "Copy Debug Info" {
@@ -246,10 +341,10 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
         window?.close()
     }
 
-    // MARK: - Helpers
-
-    private func urlEncode(_ string: String) -> String {
-        return string.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? string
+    private func showStatus(_ message: String, color: NSColor) {
+        statusLabel.stringValue = message
+        statusLabel.textColor = color
+        statusLabel.isHidden = false
     }
 
     func windowWillClose(_ notification: Notification) {
