@@ -1,9 +1,10 @@
 ---
 id: TASK-006
 title: 'Code signing, notarization, and DMG installer for distribution'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-23 09:03'
+updated_date: '2026-02-26 00:19'
 labels: []
 dependencies: []
 priority: high
