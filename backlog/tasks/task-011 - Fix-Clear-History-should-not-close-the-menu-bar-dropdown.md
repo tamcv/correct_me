@@ -1,9 +1,10 @@
 ---
 id: TASK-011
 title: 'Fix: Clear History should not close the menu bar dropdown'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-24 08:36'
+updated_date: '2026-02-26 00:06'
 labels:
   - bug
   - ui
