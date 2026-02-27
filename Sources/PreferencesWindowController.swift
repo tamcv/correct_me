@@ -33,6 +33,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     // General tab
     private var autoStartCheckbox: NSButton!
+    private var forceApplyCheckbox: NSButton!
 
     private let W: CGFloat = 520
     private let H: CGFloat = 540
@@ -112,33 +113,39 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         autoStartCheckbox.state = DaemonManager.isLaunchAgentInstalled ? .on : .off
         view.addSubview(autoStartCheckbox)
 
+        // Force apply checkbox
+        forceApplyCheckbox = NSButton(checkboxWithTitle: "Apply corrections immediately (skip review)", target: nil, action: nil)
+        forceApplyCheckbox.frame = NSRect(x: pad, y: y0 - 25, width: 400, height: 20)
+        forceApplyCheckbox.state = (config.forceApply ?? false) ? .on : .off
+        view.addSubview(forceApplyCheckbox)
+
         // Current hotkey
         let hkLabel = NSTextField(labelWithString: "Current hotkey:")
-        hkLabel.frame = NSRect(x: pad, y: y0 - 40, width: 120, height: 20)
+        hkLabel.frame = NSRect(x: pad, y: y0 - 55, width: 120, height: 20)
         hkLabel.font = .systemFont(ofSize: 13)
         view.addSubview(hkLabel)
 
         let hkValue = NSTextField(labelWithString: config.hotkey.displayName)
-        hkValue.frame = NSRect(x: 140, y: y0 - 40, width: 200, height: 20)
+        hkValue.frame = NSRect(x: 140, y: y0 - 55, width: 200, height: 20)
         hkValue.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
         view.addSubview(hkValue)
 
         // Separator
         let sep = NSBox()
         sep.boxType = .separator
-        sep.frame = NSRect(x: pad, y: y0 - 70, width: W - pad * 2, height: 1)
+        sep.frame = NSRect(x: pad, y: y0 - 85, width: W - pad * 2, height: 1)
         view.addSubview(sep)
 
         // Version
         let versionLabel = NSTextField(labelWithString: "Version: \(AppVersion.fullVersion)")
-        versionLabel.frame = NSRect(x: pad, y: y0 - 100, width: 300, height: 20)
+        versionLabel.frame = NSRect(x: pad, y: y0 - 115, width: 300, height: 20)
         versionLabel.font = .systemFont(ofSize: 12)
         versionLabel.textColor = .secondaryLabelColor
         view.addSubview(versionLabel)
 
         // Provider info
         let providerLabel = NSTextField(labelWithString: "Provider: \(config.aiProvider.rawValue)")
-        providerLabel.frame = NSRect(x: pad, y: y0 - 125, width: 300, height: 20)
+        providerLabel.frame = NSRect(x: pad, y: y0 - 140, width: 300, height: 20)
         providerLabel.font = .systemFont(ofSize: 12)
         providerLabel.textColor = .secondaryLabelColor
         view.addSubview(providerLabel)
@@ -882,6 +889,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             }
             config.perAppStyles = dict
         }
+
+        // Collect from General tab
+        config.forceApply = forceApplyCheckbox.state == .on ? true : nil
 
         // Save
         do {

@@ -22,6 +22,7 @@ struct Config: Codable {
     var perAppStyles: [String: String]?
     var telegramBotToken: String?
     var telegramChatId: String?
+    var forceApply: Bool?
 
     enum AIProvider: String, Codable {
         case claude = "claude"
@@ -58,7 +59,8 @@ struct Config: Codable {
             writingStyle: nil,
             perAppStyles: nil,
             telegramBotToken: nil,
-            telegramChatId: nil
+            telegramChatId: nil,
+            forceApply: nil
         )
     }
 

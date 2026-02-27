@@ -6,6 +6,7 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
     static let shared = DiffPreviewWindow()
 
     private var panel: NSPanel?
+    private var alwaysApplyCheckbox: NSButton?
 
     /// Called when the user accepts the correction.
     var onAccept: (() -> Void)?
@@ -51,6 +52,12 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
     // MARK: - Button actions
 
     @objc private func acceptPressed() {
+        // Save "always apply" preference if checked
+        if alwaysApplyCheckbox?.state == .on {
+            var config = Config.load()
+            config.forceApply = true
+            try? config.save()
+        }
         dismissSilently()
         onAccept?()
         onAccept = nil
@@ -232,6 +239,14 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         let corrScroll = makeScrollView(frame: NSRect(x: pad, y: corrScrollY, width: W - pad * 2, height: scrollH))
         makeTextView(in: corrScroll, attributedText: diff.corrAttr)
         root.addSubview(corrScroll)
+
+        // ── "Always apply" checkbox
+        let alwaysApply = NSButton(checkboxWithTitle: "Always apply without review", target: nil, action: nil)
+        alwaysApply.frame = NSRect(x: pad, y: pad, width: 250, height: btnH)
+        alwaysApply.font = .systemFont(ofSize: 11)
+        alwaysApply.autoresizingMask = [.maxYMargin]
+        root.addSubview(alwaysApply)
+        self.alwaysApplyCheckbox = alwaysApply
 
         // ── Reject button (Escape)
         let rejectBtn = NSButton(title: "Discard  ⎋", target: self, action: #selector(rejectPressed))
