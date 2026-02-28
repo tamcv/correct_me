@@ -58,10 +58,11 @@ Create a Cloudflare Worker that acts as both an auth/quota gateway and AI proxy 
 <!-- AC:BEGIN -->
 - [ ] #1 Worker deploys and responds to health check
 - [ ] #2 POST /v1/correct validates license and proxies to DeepSeek successfully
-- [ ] #3 Usage counting increments correctly per request
+- [ ] #3 Usage counting increments correctly per license key (not per device)
 - [ ] #4 Returns 429 when quota exceeded with clear error message
-- [ ] #5 GET /v1/quota returns accurate usage info
-- [ ] #6 POST /v1/activate links license key to device
+- [ ] #5 GET /v1/quota returns accurate usage info for a license key
+- [ ] #6 POST /v1/activate verifies license key is valid (no device binding)
 - [ ] #7 Monthly cron resets usage counters
 - [ ] #8 DeepSeek API key is never exposed to client
+- [ ] #9 Same license key works from multiple devices simultaneously
 <!-- AC:END -->
