@@ -4,7 +4,7 @@ title: Integrate payment platform (LemonSqueezy/Paddle) for license generation
 status: To Do
 assignee: []
 created_date: '2026-02-28 07:58'
-updated_date: '2026-02-28 08:04'
+updated_date: '2026-02-28 08:12'
 labels:
   - cloudflare
   - backend
@@ -35,6 +35,11 @@ Setup payment platform to handle purchases and automatically generate license ke
 - On subscription cancel: downgrade `pro` → `free` tier (keep license key, reduce quota)
 - On subscription renew: keep `pro` tier active
 - License key format: `CM-XXXX-XXXX-XXXX`
+
+**Device policy:**
+- License key is not bound to any device
+- User can use the same license key on multiple Macs
+- No device activation/deactivation needed
 
 **Note:** BYO key users who buy one-time app purchase only need app activation — they don't use bundle key at all. Their license just unlocks the app past the 7-day trial.
 <!-- SECTION:DESCRIPTION:END -->
