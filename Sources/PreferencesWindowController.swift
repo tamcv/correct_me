@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 
 /// Full Preferences window with tabs: General, Provider, Hotkey, Writing Style, Advanced.
+/// Styled to match macOS Sequoia system settings.
 class PreferencesWindowController: NSObject, NSWindowDelegate {
     static let shared = PreferencesWindowController()
 
@@ -35,11 +36,49 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var autoStartCheckbox: NSButton!
     private var forceApplyCheckbox: NSButton!
 
-    private let W: CGFloat = 520
-    private let H: CGFloat = 540
-    private let pad: CGFloat = 20
+    private let W: CGFloat = 560
+    private let H: CGFloat = 560
+    private let pad: CGFloat = 24
 
     private override init() { super.init() }
+
+    // MARK: - Helpers
+
+    private func makeSFSymbol(_ name: String, size: CGFloat, color: NSColor? = nil) -> NSImageView {
+        let imageView = NSImageView()
+        if #available(macOS 11.0, *) {
+            let config = NSImage.SymbolConfiguration(pointSize: size, weight: .regular)
+            if let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config) {
+                imageView.image = image
+                if let color = color {
+                    imageView.contentTintColor = color
+                }
+            }
+        }
+        return imageView
+    }
+
+    private func makeSectionHeader(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .labelColor
+        return label
+    }
+
+    private func makeDescriptionLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .secondaryLabelColor
+        return label
+    }
+
+    private func makeSeparator(x: CGFloat, y: CGFloat, width: CGFloat) -> NSBox {
+        let sep = NSBox()
+        sep.boxType = .separator
+        sep.frame = NSRect(x: x, y: y, width: width, height: 1)
+        return sep
+    }
 
     // MARK: - Show
 
@@ -53,22 +92,25 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: W, height: H),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         panel.title = "Preferences"
+        panel.titlebarAppearsTransparent = false
         panel.delegate = self
         panel.isReleasedWhenClosed = false
         panel.level = .floating
+        panel.backgroundColor = .windowBackgroundColor
 
         let root = NSView(frame: panel.contentView!.bounds)
         root.autoresizingMask = [.width, .height]
         panel.contentView = root
 
         // Tab view
-        tabView = NSTabView(frame: NSRect(x: 0, y: 44, width: W, height: H - 44))
+        tabView = NSTabView(frame: NSRect(x: 0, y: 50, width: W, height: H - 50))
         tabView.autoresizingMask = [.width, .height]
+        tabView.tabViewType = .topTabsBezelBorder
         root.addSubview(tabView)
 
         tabView.addTabViewItem(makeGeneralTab())
@@ -81,14 +123,16 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let saveBtn = NSButton(title: "Save", target: self, action: #selector(save))
         saveBtn.bezelStyle = .rounded
         saveBtn.keyEquivalent = "\r"
-        saveBtn.frame = NSRect(x: W - pad - 80, y: 10, width: 80, height: 28)
+        saveBtn.controlSize = .large
+        saveBtn.frame = NSRect(x: W - pad - 90, y: 12, width: 90, height: 32)
         saveBtn.autoresizingMask = [.minXMargin, .maxYMargin]
         root.addSubview(saveBtn)
 
         let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancel))
         cancelBtn.bezelStyle = .rounded
         cancelBtn.keyEquivalent = "\u{1b}"
-        cancelBtn.frame = NSRect(x: W - pad - 170, y: 10, width: 80, height: 28)
+        cancelBtn.controlSize = .large
+        cancelBtn.frame = NSRect(x: W - pad - 190, y: 12, width: 90, height: 32)
         cancelBtn.autoresizingMask = [.minXMargin, .maxYMargin]
         root.addSubview(cancelBtn)
 
@@ -105,53 +149,81 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         item.label = "General"
         let view = NSView()
 
-        let y0: CGFloat = 280
+        let contentW = W - pad * 2
+        var y: CGFloat = 320
 
-        // Auto-start checkbox
+        // Section: Behavior
+        let behaviorLabel = makeSectionHeader("Behavior")
+        behaviorLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        view.addSubview(behaviorLabel)
+        y -= 30
+
         autoStartCheckbox = NSButton(checkboxWithTitle: "Start CorrectMe at login", target: nil, action: nil)
-        autoStartCheckbox.frame = NSRect(x: pad, y: y0, width: 300, height: 20)
+        autoStartCheckbox.frame = NSRect(x: pad, y: y, width: contentW, height: 20)
         autoStartCheckbox.state = DaemonManager.isLaunchAgentInstalled ? .on : .off
         view.addSubview(autoStartCheckbox)
+        y -= 26
 
-        // Force apply checkbox
         forceApplyCheckbox = NSButton(checkboxWithTitle: "Apply corrections immediately (skip review)", target: nil, action: nil)
-        forceApplyCheckbox.frame = NSRect(x: pad, y: y0 - 25, width: 400, height: 20)
+        forceApplyCheckbox.frame = NSRect(x: pad, y: y, width: contentW, height: 20)
         forceApplyCheckbox.state = (config.forceApply ?? false) ? .on : .off
         view.addSubview(forceApplyCheckbox)
+        y -= 36
 
-        // Current hotkey
-        let hkLabel = NSTextField(labelWithString: "Current hotkey:")
-        hkLabel.frame = NSRect(x: pad, y: y0 - 55, width: 120, height: 20)
-        hkLabel.font = .systemFont(ofSize: 13)
-        view.addSubview(hkLabel)
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 24
 
-        let hkValue = NSTextField(labelWithString: config.hotkey.displayName)
-        hkValue.frame = NSRect(x: 140, y: y0 - 55, width: 200, height: 20)
-        hkValue.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
-        view.addSubview(hkValue)
+        // Section: Current Configuration
+        let configLabel = makeSectionHeader("Current Configuration")
+        configLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        view.addSubview(configLabel)
+        y -= 28
 
-        // Separator
-        let sep = NSBox()
-        sep.boxType = .separator
-        sep.frame = NSRect(x: pad, y: y0 - 85, width: W - pad * 2, height: 1)
-        view.addSubview(sep)
+        let hotkeyRow = makeInfoRow(label: "Hotkey:", value: config.hotkey.displayName, isMono: true)
+        hotkeyRow.frame = NSRect(x: pad, y: y, width: contentW, height: 20)
+        view.addSubview(hotkeyRow)
+        y -= 24
+
+        let providerRow = makeInfoRow(label: "Provider:", value: config.aiProvider.rawValue, isMono: false)
+        providerRow.frame = NSRect(x: pad, y: y, width: contentW, height: 20)
+        view.addSubview(providerRow)
+        y -= 24
+
+        let modelRow = makeInfoRow(label: "Model:", value: config.model ?? "(default)", isMono: false)
+        modelRow.frame = NSRect(x: pad, y: y, width: contentW, height: 20)
+        view.addSubview(modelRow)
+        y -= 36
+
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 24
 
         // Version
-        let versionLabel = NSTextField(labelWithString: "Version: \(AppVersion.fullVersion)")
-        versionLabel.frame = NSRect(x: pad, y: y0 - 115, width: 300, height: 20)
+        let versionLabel = NSTextField(labelWithString: "CorrectMe \(AppVersion.fullVersion)")
+        versionLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 16)
         versionLabel.font = .systemFont(ofSize: 12)
-        versionLabel.textColor = .secondaryLabelColor
+        versionLabel.textColor = .tertiaryLabelColor
         view.addSubview(versionLabel)
-
-        // Provider info
-        let providerLabel = NSTextField(labelWithString: "Provider: \(config.aiProvider.rawValue)")
-        providerLabel.frame = NSRect(x: pad, y: y0 - 140, width: 300, height: 20)
-        providerLabel.font = .systemFont(ofSize: 12)
-        providerLabel.textColor = .secondaryLabelColor
-        view.addSubview(providerLabel)
 
         item.view = view
         return item
+    }
+
+    private func makeInfoRow(label: String, value: String, isMono: Bool) -> NSView {
+        let row = NSView()
+
+        let labelField = NSTextField(labelWithString: label)
+        labelField.font = .systemFont(ofSize: 13)
+        labelField.textColor = .secondaryLabelColor
+        labelField.frame = NSRect(x: 0, y: 0, width: 80, height: 20)
+        row.addSubview(labelField)
+
+        let valueField = NSTextField(labelWithString: value)
+        valueField.font = isMono ? .monospacedSystemFont(ofSize: 13, weight: .medium) : .systemFont(ofSize: 13)
+        valueField.textColor = .labelColor
+        valueField.frame = NSRect(x: 84, y: 0, width: 300, height: 20)
+        row.addSubview(valueField)
+
+        return row
     }
 
     // MARK: - Provider Tab
@@ -161,15 +233,17 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         item.label = "Provider"
         let view = NSView()
 
-        let y0: CGFloat = 280
+        let contentW = W - pad * 2
+        var y: CGFloat = 320
 
         // Provider dropdown
-        let pLabel = NSTextField(labelWithString: "AI Provider:")
-        pLabel.frame = NSRect(x: pad, y: y0, width: 100, height: 20)
-        pLabel.font = .systemFont(ofSize: 13)
+        let pLabel = makeSectionHeader("AI Provider")
+        pLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
         view.addSubview(pLabel)
+        y -= 28
 
-        providerPopUp = NSPopUpButton(frame: NSRect(x: 120, y: y0 - 3, width: 200, height: 26), pullsDown: false)
+        providerPopUp = NSPopUpButton(frame: NSRect(x: pad, y: y, width: contentW, height: 26), pullsDown: false)
+        providerPopUp.controlSize = .large
         let providers: [(label: String, value: Config.AIProvider)] = [
             ("Claude Code (CLI)", .claudeCode),
             ("Codex Code (CLI)", .codexCode),
@@ -182,7 +256,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             providerPopUp.addItem(withTitle: p.label)
             providerPopUp.lastItem?.representedObject = p.value.rawValue
         }
-        // Select current
         for i in 0..<providers.count {
             if providers[i].value == config.aiProvider {
                 providerPopUp.selectItem(at: i)
@@ -192,49 +265,59 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         providerPopUp.target = self
         providerPopUp.action = #selector(providerChanged)
         view.addSubview(providerPopUp)
+        y -= 36
+
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 20
 
         // API Key
-        apiKeyLabel = NSTextField(labelWithString: "API Key:")
-        apiKeyLabel.frame = NSRect(x: pad, y: y0 - 45, width: 100, height: 20)
-        apiKeyLabel.font = .systemFont(ofSize: 13)
+        apiKeyLabel = makeSectionHeader("API Key")
+        apiKeyLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
         view.addSubview(apiKeyLabel)
+        y -= 28
 
-        apiKeyField = NSSecureTextField(frame: NSRect(x: 120, y: y0 - 47, width: W - 140 - pad, height: 24))
+        apiKeyField = NSSecureTextField(frame: NSRect(x: pad, y: y, width: contentW, height: 24))
         apiKeyField.placeholderString = "sk-ant-... / AIzaSy... / sk-..."
         apiKeyField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        apiKeyField.controlSize = .large
         view.addSubview(apiKeyField)
-
-        // Load current API key for the selected provider
         loadAPIKeyForCurrentProvider()
+        y -= 34
 
         // Test button
         testButton = NSButton(title: "Test Connection", target: self, action: #selector(testConnection))
         testButton.bezelStyle = .rounded
-        testButton.frame = NSRect(x: 120, y: y0 - 82, width: 140, height: 28)
+        testButton.frame = NSRect(x: pad, y: y, width: 140, height: 28)
         view.addSubview(testButton)
 
         testResultLabel = NSTextField(labelWithString: "")
-        testResultLabel.frame = NSRect(x: 270, y: y0 - 82, width: W - 270 - pad, height: 28)
+        testResultLabel.frame = NSRect(x: pad + 148, y: y, width: contentW - 148, height: 28)
         testResultLabel.font = .systemFont(ofSize: 12)
         view.addSubview(testResultLabel)
+        y -= 36
+
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 20
 
         // Model
-        let mLabel = NSTextField(labelWithString: "Model:")
-        mLabel.frame = NSRect(x: pad, y: y0 - 120, width: 100, height: 20)
-        mLabel.font = .systemFont(ofSize: 13)
+        let mLabel = makeSectionHeader("Model")
+        mLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
         view.addSubview(mLabel)
+        y -= 28
 
-        modelField = NSTextField(frame: NSRect(x: 120, y: y0 - 122, width: W - 140 - pad, height: 24))
+        modelField = NSTextField(frame: NSRect(x: pad, y: y, width: contentW, height: 24))
         modelField.placeholderString = defaultModelForProvider(config.aiProvider)
         modelField.stringValue = config.model ?? ""
         modelField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        modelField.controlSize = .large
         view.addSubview(modelField)
+        y -= 28
 
         // Hint
         apiKeyHint = NSTextField(wrappingLabelWithString: "")
-        apiKeyHint.frame = NSRect(x: 120, y: y0 - 175, width: W - 140 - pad, height: 36)
+        apiKeyHint.frame = NSRect(x: pad, y: y, width: contentW, height: 32)
         apiKeyHint.font = .systemFont(ofSize: 11)
-        apiKeyHint.textColor = .secondaryLabelColor
+        apiKeyHint.textColor = .tertiaryLabelColor
         view.addSubview(apiKeyHint)
 
         updateProviderUI()
@@ -333,10 +416,10 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             DispatchQueue.main.async {
                 self?.testButton.isEnabled = true
                 if success {
-                    self?.testResultLabel.stringValue = "Connection successful!"
+                    self?.testResultLabel.stringValue = "✓ Connection successful!"
                     self?.testResultLabel.textColor = .systemGreen
                 } else {
-                    self?.testResultLabel.stringValue = "Connection failed. Check your key."
+                    self?.testResultLabel.stringValue = "✕ Connection failed. Check your key."
                     self?.testResultLabel.textColor = .systemRed
                 }
             }
@@ -363,21 +446,32 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         item.label = "Hotkey"
         let view = NSView()
 
-        let y0: CGFloat = 280
+        let contentW = W - pad * 2
+        var y: CGFloat = 320
 
-        let desc = NSTextField(wrappingLabelWithString:
-            "Choose a keyboard shortcut to trigger text correction.\nSelect any text and press this hotkey to correct it.")
-        desc.frame = NSRect(x: pad, y: y0, width: W - pad * 2, height: 40)
-        desc.font = .systemFont(ofSize: 13)
-        desc.textColor = .secondaryLabelColor
+        let desc = makeDescriptionLabel("Choose a keyboard shortcut to trigger text correction.\nSelect any text and press this hotkey to correct it.")
+        desc.frame = NSRect(x: pad, y: y, width: contentW, height: 36)
         view.addSubview(desc)
+        y -= 50
 
-        // Current hotkey display
+        // Current hotkey display — keycap style
+        let keyCapBg = NSView()
+        keyCapBg.wantsLayer = true
+        keyCapBg.layer?.cornerRadius = 12
+        keyCapBg.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        keyCapBg.layer?.borderWidth = 1
+        keyCapBg.layer?.borderColor = NSColor.separatorColor.cgColor
+        let keyCapWidth: CGFloat = 200
+        keyCapBg.frame = NSRect(x: (W - keyCapWidth) / 2, y: y, width: keyCapWidth, height: 52)
+        view.addSubview(keyCapBg)
+
         hotkeyDisplayLabel = NSTextField(labelWithString: config.hotkey.displayName)
         hotkeyDisplayLabel.font = .monospacedSystemFont(ofSize: 32, weight: .medium)
         hotkeyDisplayLabel.alignment = .center
-        hotkeyDisplayLabel.frame = NSRect(x: pad, y: y0 - 70, width: W - pad * 2, height: 44)
-        view.addSubview(hotkeyDisplayLabel)
+        hotkeyDisplayLabel.textColor = .labelColor
+        hotkeyDisplayLabel.frame = NSRect(x: 0, y: 6, width: keyCapWidth, height: 40)
+        keyCapBg.addSubview(hotkeyDisplayLabel)
+        y -= 72
 
         // Preset buttons
         let presets: [(label: String, keyCode: UInt16, modifiers: UInt64, display: String)] = [
@@ -387,7 +481,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             ("⌃⇧E", 14, CGEventFlags.maskControl.rawValue | CGEventFlags.maskShift.rawValue, "⌃⇧E"),
         ]
 
-        let btnW: CGFloat = 70
+        let btnW: CGFloat = 66
         let gap: CGFloat = 10
         let totalW = CGFloat(presets.count) * btnW + CGFloat(presets.count - 1) * gap
         var bx = (W - totalW) / 2
@@ -396,21 +490,23 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             let btn = NSButton(title: preset.label, target: self, action: #selector(hotkeyPresetTapped(_:)))
             btn.bezelStyle = .rounded
             btn.tag = i
-            btn.frame = NSRect(x: bx, y: y0 - 120, width: btnW, height: 28)
+            btn.frame = NSRect(x: bx, y: y, width: btnW, height: 28)
             view.addSubview(btn)
             bx += btnW + gap
         }
+        y -= 40
 
         // Capture custom button
         let captureBtn = NSButton(title: "Record Custom Hotkey…", target: self, action: #selector(captureCustomHotkey))
         captureBtn.bezelStyle = .rounded
-        captureBtn.frame = NSRect(x: (W - 200) / 2, y: y0 - 160, width: 200, height: 28)
+        captureBtn.frame = NSRect(x: (W - 200) / 2, y: y, width: 200, height: 28)
         view.addSubview(captureBtn)
+        y -= 40
 
         // Reset button
         let resetBtn = NSButton(title: "Reset to Default (⌘⇧E)", target: self, action: #selector(resetHotkey))
-        resetBtn.bezelStyle = .rounded
-        resetBtn.frame = NSRect(x: (W - 200) / 2, y: y0 - 200, width: 200, height: 28)
+        resetBtn.bezelStyle = .accessoryBarAction
+        resetBtn.frame = NSRect(x: (W - 200) / 2, y: y, width: 200, height: 24)
         view.addSubview(resetBtn)
 
         item.view = view
@@ -463,25 +559,23 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         item.label = "Writing Style"
         let view = NSView()
 
-        let y0: CGFloat = 340
+        let contentW = W - pad * 2
+        var y: CGFloat = 340
 
         // ── Global Style ──
-        let globalLabel = NSTextField(labelWithString: "Global Style")
-        globalLabel.frame = NSRect(x: pad, y: y0, width: 120, height: 18)
-        globalLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        let globalLabel = makeSectionHeader("Global Style")
+        globalLabel.frame = NSRect(x: pad, y: y, width: 120, height: 18)
         view.addSubview(globalLabel)
+        y -= 20
 
-        let desc = NSTextField(wrappingLabelWithString:
-            "Applied to every correction unless overridden by a per-app style:")
-        desc.frame = NSRect(x: pad, y: y0 - 22, width: W - pad * 2, height: 20)
-        desc.font = .systemFont(ofSize: 11)
-        desc.textColor = .secondaryLabelColor
+        let desc = makeDescriptionLabel("Applied to every correction unless overridden by a per-app style:")
+        desc.frame = NSRect(x: pad, y: y, width: contentW, height: 16)
         view.addSubview(desc)
+        y -= 24
 
         // Scrollable text view
         let scrollH: CGFloat = 80
-        let scrollY: CGFloat = y0 - scrollH - 28
-        let scrollView = NSScrollView(frame: NSRect(x: pad, y: scrollY, width: W - pad * 2, height: scrollH))
+        let scrollView = NSScrollView(frame: NSRect(x: pad, y: y - scrollH, width: contentW, height: scrollH))
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
 
@@ -504,7 +598,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         // Placeholder
         stylePlaceholder = NSTextField(labelWithString: "e.g. \"Write in a formal tone. Use bullet points when listing.\"")
-        stylePlaceholder.frame = NSRect(x: pad + 8, y: scrollY + scrollH - 26, width: W - pad * 2 - 16, height: 20)
+        stylePlaceholder.frame = NSRect(x: pad + 8, y: y - 26, width: contentW - 16, height: 20)
         stylePlaceholder.font = .systemFont(ofSize: 13)
         stylePlaceholder.textColor = .placeholderTextColor
         stylePlaceholder.isEditable = false
@@ -517,54 +611,50 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         tv.string = saved
         stylePlaceholder.isHidden = !saved.isEmpty
 
+        y -= scrollH + 8
+
         // Preset buttons (2 rows of 3)
-        let presetY = scrollY - 30
-        var bx: CGFloat = pad
         let bh: CGFloat = 22
         let gapX: CGFloat = 6
+        var bx: CGFloat = pad
 
         for (i, preset) in stylePresets.enumerated() {
-            if i == 3 { bx = pad } // second row
+            if i == 3 { bx = pad }
             let btn = NSButton(title: preset.label, target: self, action: #selector(stylePresetTapped(_:)))
             btn.bezelStyle = .rounded
             btn.font = .systemFont(ofSize: 11)
             btn.tag = i
             let bw = preset.label.size(withAttributes: [.font: btn.font!]).width + 24
             let row: CGFloat = i < 3 ? 1 : 0
-            btn.frame = NSRect(x: bx, y: presetY + row * (bh + gapX), width: bw, height: bh)
+            btn.frame = NSRect(x: bx, y: y - bh * 2 - gapX + row * (bh + gapX), width: bw, height: bh)
             view.addSubview(btn)
             bx += bw + gapX
         }
 
         // Clear style button
         let clearBtn = NSButton(title: "Clear", target: self, action: #selector(clearStyle))
-        clearBtn.bezelStyle = .rounded
-        clearBtn.frame = NSRect(x: W - pad - 60, y: presetY - 30, width: 60, height: 22)
+        clearBtn.bezelStyle = .accessoryBarAction
+        clearBtn.frame = NSRect(x: W - pad - 50, y: y - bh * 2 - gapX - 6, width: 50, height: 20)
         view.addSubview(clearBtn)
 
+        y -= bh * 2 + gapX + 16
+
         // ── Per-App Styles ──
-        let perAppY = presetY - 64
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 20
 
-        let sep = NSBox()
-        sep.boxType = .separator
-        sep.frame = NSRect(x: pad, y: perAppY + 20, width: W - pad * 2, height: 1)
-        view.addSubview(sep)
-
-        let perAppLabel = NSTextField(labelWithString: "Per-App Styles")
-        perAppLabel.frame = NSRect(x: pad, y: perAppY - 4, width: 120, height: 18)
-        perAppLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        let perAppLabel = makeSectionHeader("Per-App Styles")
+        perAppLabel.frame = NSRect(x: pad, y: y, width: 120, height: 18)
         view.addSubview(perAppLabel)
 
-        let perAppDesc = NSTextField(wrappingLabelWithString: "Override the global style for specific apps:")
-        perAppDesc.frame = NSRect(x: pad + 120, y: perAppY - 4, width: W - pad * 2 - 120, height: 18)
-        perAppDesc.font = .systemFont(ofSize: 11)
-        perAppDesc.textColor = .secondaryLabelColor
+        let perAppDesc = makeDescriptionLabel("Override the global style for specific apps:")
+        perAppDesc.frame = NSRect(x: pad + 124, y: y, width: contentW - 124, height: 18)
         view.addSubview(perAppDesc)
+        y -= 24
 
         // Container for per-app entries (scrollable)
         let containerH: CGFloat = 80
-        let containerY: CGFloat = perAppY - containerH - 10
-        let containerScroll = NSScrollView(frame: NSRect(x: pad, y: containerY, width: W - pad * 2, height: containerH))
+        let containerScroll = NSScrollView(frame: NSRect(x: pad, y: y - containerH, width: contentW, height: containerH))
         containerScroll.hasVerticalScroller = true
         containerScroll.borderType = .bezelBorder
         containerScroll.drawsBackground = true
@@ -572,7 +662,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let clipView = containerScroll.contentView
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: containerScroll.contentSize.width, height: containerH))
         containerScroll.documentView = containerView
-        _ = clipView // suppress unused warning
+        _ = clipView
         view.addSubview(containerScroll)
         perAppStylesContainer = containerView
 
@@ -581,17 +671,19 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             .sorted { $0.bundleId < $1.bundleId }
         rebuildPerAppList()
 
+        y -= containerH + 6
+
         // Add / Remove buttons
         let addBtn = NSButton(title: "Add App…", target: self, action: #selector(addPerAppStyle))
         addBtn.bezelStyle = .rounded
         addBtn.font = .systemFont(ofSize: 11)
-        addBtn.frame = NSRect(x: pad, y: containerY - 28, width: 90, height: 22)
+        addBtn.frame = NSRect(x: pad, y: y, width: 90, height: 22)
         view.addSubview(addBtn)
 
         let removeBtn = NSButton(title: "Remove", target: self, action: #selector(removePerAppStyle))
         removeBtn.bezelStyle = .rounded
         removeBtn.font = .systemFont(ofSize: 11)
-        removeBtn.frame = NSRect(x: pad + 96, y: containerY - 28, width: 70, height: 22)
+        removeBtn.frame = NSRect(x: pad + 96, y: y, width: 70, height: 22)
         view.addSubview(removeBtn)
 
         item.view = view
@@ -644,7 +736,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 100))
 
-        // App picker (running apps)
         let appPopUp = NSPopUpButton(frame: NSRect(x: 0, y: 72, width: 340, height: 26), pullsDown: false)
         let runningApps = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != nil }
@@ -659,7 +750,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         }
         accessory.addSubview(appPopUp)
 
-        // Style field
         let styleField = NSTextField(frame: NSRect(x: 0, y: 6, width: 340, height: 60))
         styleField.placeholderString = "Writing style for this app (e.g. \"casual tone\")"
         styleField.font = .systemFont(ofSize: 12)
@@ -680,7 +770,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let style = styleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !style.isEmpty else { return }
 
-        // Replace existing or add new
         if let idx = perAppEntries.firstIndex(where: { $0.bundleId == bundleId }) {
             perAppEntries[idx].style = style
         } else {
@@ -736,59 +825,62 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         item.label = "Advanced"
         let view = NSView()
 
-        let y0: CGFloat = 280
+        let contentW = W - pad * 2
+        var y: CGFloat = 320
 
         // Config file path
-        let pathLabel = NSTextField(labelWithString: "Config file:")
-        pathLabel.frame = NSRect(x: pad, y: y0, width: 80, height: 20)
-        pathLabel.font = .systemFont(ofSize: 13)
-        view.addSubview(pathLabel)
+        let pathHeader = makeSectionHeader("Configuration File")
+        pathHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        view.addSubview(pathHeader)
+        y -= 24
 
         let pathValue = NSTextField(labelWithString: Config.configPath.path)
-        pathValue.frame = NSRect(x: 100, y: y0, width: W - 100 - pad, height: 20)
+        pathValue.frame = NSRect(x: pad, y: y, width: contentW, height: 16)
         pathValue.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         pathValue.textColor = .secondaryLabelColor
         pathValue.lineBreakMode = .byTruncatingMiddle
         view.addSubview(pathValue)
+        y -= 28
 
-        // Open in Finder
         let openBtn = NSButton(title: "Show in Finder", target: self, action: #selector(showConfigInFinder))
         openBtn.bezelStyle = .rounded
-        openBtn.frame = NSRect(x: pad, y: y0 - 35, width: 140, height: 28)
+        openBtn.frame = NSRect(x: pad, y: y, width: 140, height: 28)
         view.addSubview(openBtn)
+        y -= 40
 
-        // Separator
-        let sep = NSBox()
-        sep.boxType = .separator
-        sep.frame = NSRect(x: pad, y: y0 - 65, width: W - pad * 2, height: 1)
-        view.addSubview(sep)
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 24
 
         // Export / Import
+        let transferHeader = makeSectionHeader("Transfer")
+        transferHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        view.addSubview(transferHeader)
+        y -= 28
+
         let exportBtn = NSButton(title: "Export Config…", target: self, action: #selector(exportConfig))
         exportBtn.bezelStyle = .rounded
-        exportBtn.frame = NSRect(x: pad, y: y0 - 100, width: 140, height: 28)
+        exportBtn.frame = NSRect(x: pad, y: y, width: 140, height: 28)
         view.addSubview(exportBtn)
 
         let importBtn = NSButton(title: "Import Config…", target: self, action: #selector(importConfig))
         importBtn.bezelStyle = .rounded
-        importBtn.frame = NSRect(x: pad + 150, y: y0 - 100, width: 140, height: 28)
+        importBtn.frame = NSRect(x: pad + 150, y: y, width: 140, height: 28)
         view.addSubview(importBtn)
+        y -= 44
 
-        // Separator
-        let sep2 = NSBox()
-        sep2.boxType = .separator
-        sep2.frame = NSRect(x: pad, y: y0 - 130, width: W - pad * 2, height: 1)
-        view.addSubview(sep2)
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 24
 
         // Danger zone
-        let dangerLabel = NSTextField(labelWithString: "Reset")
-        dangerLabel.frame = NSRect(x: pad, y: y0 - 160, width: 100, height: 20)
-        dangerLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        view.addSubview(dangerLabel)
+        let dangerHeader = makeSectionHeader("Reset")
+        dangerHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        dangerHeader.textColor = .systemRed
+        view.addSubview(dangerHeader)
+        y -= 28
 
         let resetBtn = NSButton(title: "Reset All Settings", target: self, action: #selector(resetAllSettings))
         resetBtn.bezelStyle = .rounded
-        resetBtn.frame = NSRect(x: pad, y: y0 - 195, width: 160, height: 28)
+        resetBtn.frame = NSRect(x: pad, y: y, width: 160, height: 28)
         view.addSubview(resetBtn)
 
         item.view = view
@@ -825,11 +917,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         do {
             let data = try Data(contentsOf: url)
-            // Validate it's valid config
             _ = try JSONDecoder().decode(Config.self, from: data)
             try data.write(to: Config.configPath)
 
-            // Reload
             config = Config.load()
             window?.close()
             window = nil
@@ -859,7 +949,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     // MARK: - Save / Cancel
 
     @objc private func save() {
-        // Collect from Provider tab
         config.aiProvider = selectedProvider()
 
         let key = apiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -875,11 +964,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let model = modelField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         config.model = model.isEmpty ? nil : model
 
-        // Collect from Writing Style tab
         let style = styleTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         config.writingStyle = style.isEmpty ? nil : style
 
-        // Collect per-app styles
         if perAppEntries.isEmpty {
             config.perAppStyles = nil
         } else {
@@ -890,10 +977,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             config.perAppStyles = dict
         }
 
-        // Collect from General tab
         config.forceApply = forceApplyCheckbox.state == .on ? true : nil
 
-        // Save
         do {
             try config.save()
         } catch {
@@ -901,7 +986,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             return
         }
 
-        // Notify that config changed (so HotkeyManager can reload)
         NotificationCenter.default.post(name: .configChanged, object: nil)
 
         window?.close()

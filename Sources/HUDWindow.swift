@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
 
-/// A small HUD window that appears near the mouse cursor to show correction status
+/// A small HUD window that appears near the mouse cursor to show correction status.
+/// Uses NSVisualEffectView for a modern vibrancy/blur appearance matching macOS Sequoia.
 class HUDWindow: NSWindow {
     private let hudView: HUDView
     private var autoHideTimer: Timer?
@@ -10,7 +11,7 @@ class HUDWindow: NSWindow {
         hudView = HUDView()
 
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 100, height: 70),
+            contentRect: NSRect(x: 0, y: 0, width: 110, height: 76),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -28,7 +29,7 @@ class HUDWindow: NSWindow {
 
     /// Store cached selection bounds
     private var cachedSelectionBounds: NSRect?
-    
+
     /// Cache the current selection bounds (call this before showing loading)
     func cacheSelectionBounds() {
         cachedSelectionBounds = AccessibilityHelper.getSelectedTextBounds()
@@ -64,19 +65,16 @@ class HUDWindow: NSWindow {
     }
 
     private func positionNearSelection() {
-        // Use cached bounds if available, otherwise try to get them now
         let selectionBounds = cachedSelectionBounds ?? AccessibilityHelper.getSelectedTextBounds()
-        cachedSelectionBounds = nil // Clear cache after use
-        
+        cachedSelectionBounds = nil
+
         if let bounds = selectionBounds {
             positionNearBounds(bounds)
         } else {
-            // Fallback to mouse cursor position
             positionNearMouse()
         }
     }
-    
-    /// Find the screen that best contains the given point (falls back to main screen)
+
     private func screen(containing point: CGPoint) -> NSScreen {
         return NSScreen.screens.first(where: { $0.frame.contains(point) })
             ?? NSScreen.main
@@ -85,22 +83,18 @@ class HUDWindow: NSWindow {
     }
 
     private func positionNearBounds(_ bounds: NSRect) {
-        // Find the screen containing the selection midpoint
         let selectionMid = CGPoint(x: bounds.midX, y: bounds.midY)
         let screenFrame = screen(containing: selectionMid).frame
 
-        // Position below the selection
         var hudOrigin = CGPoint(
             x: bounds.origin.x,
             y: bounds.origin.y - frame.height - 8
         )
 
-        // If HUD would go below screen bottom, position it above selection instead
         if hudOrigin.y < screenFrame.minY + 10 {
             hudOrigin.y = bounds.origin.y + bounds.height + 8
         }
 
-        // Ensure HUD stays on screen horizontally
         if hudOrigin.x + frame.width > screenFrame.maxX - 10 {
             hudOrigin.x = screenFrame.maxX - frame.width - 10
         }
@@ -108,7 +102,6 @@ class HUDWindow: NSWindow {
             hudOrigin.x = screenFrame.minX + 10
         }
 
-        // Ensure HUD stays on screen vertically
         if hudOrigin.y + frame.height > screenFrame.maxY - 10 {
             hudOrigin.y = screenFrame.maxY - frame.height - 10
         }
@@ -118,21 +111,17 @@ class HUDWindow: NSWindow {
 
     private func positionNearMouse() {
         let mouseLocation = NSEvent.mouseLocation
-        // Find the screen that actually contains the cursor
         let screenFrame = screen(containing: mouseLocation).frame
 
-        // Try to position below cursor first
         var hudOrigin = CGPoint(
             x: mouseLocation.x + 8,
             y: mouseLocation.y - frame.height - 8
         )
 
-        // If HUD would go below screen bottom, position it above cursor instead
         if hudOrigin.y < screenFrame.minY + 10 {
             hudOrigin.y = mouseLocation.y + 8
         }
 
-        // Ensure HUD stays on screen horizontally
         if hudOrigin.x + frame.width > screenFrame.maxX - 10 {
             hudOrigin.x = mouseLocation.x - frame.width - 8
         }
@@ -140,7 +129,6 @@ class HUDWindow: NSWindow {
             hudOrigin.x = screenFrame.minX + 10
         }
 
-        // Ensure HUD stays on screen vertically
         if hudOrigin.y + frame.height > screenFrame.maxY - 10 {
             hudOrigin.y = screenFrame.maxY - frame.height - 10
         }
@@ -166,16 +154,16 @@ class HUDWindow: NSWindow {
 
 // MARK: - HUD View
 
-private class HUDView: NSView {
-    enum State {
+private class HUDView: NSVisualEffectView {
+    enum HUDState {
         case loading
         case success
         case error
     }
 
-    private var state: State = .loading
+    private var hudState: HUDState = .loading
     private let spinner = NSProgressIndicator()
-    private let iconLabel = NSTextField()
+    private let iconView = NSImageView()
     private let textLabel = NSTextField()
 
     override init(frame frameRect: NSRect) {
@@ -188,9 +176,12 @@ private class HUDView: NSView {
     }
 
     private func setupViews() {
+        // Vibrancy / blur effect
+        material = .hudWindow
+        blendingMode = .behindWindow
         wantsLayer = true
-        layer?.cornerRadius = 10
-        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.85).cgColor
+        layer?.cornerRadius = 14
+        layer?.masksToBounds = true
 
         // Spinner
         spinner.style = .spinning
@@ -199,17 +190,11 @@ private class HUDView: NSView {
         spinner.translatesAutoresizingMaskIntoConstraints = false
         addSubview(spinner)
 
-        // Icon label (for success/error symbols)
-        iconLabel.isBezeled = false
-        iconLabel.drawsBackground = false
-        iconLabel.isEditable = false
-        iconLabel.isSelectable = false
-        iconLabel.alignment = .center
-        iconLabel.font = .systemFont(ofSize: 28)
-        iconLabel.textColor = .white
-        iconLabel.translatesAutoresizingMaskIntoConstraints = false
-        iconLabel.isHidden = true
-        addSubview(iconLabel)
+        // SF Symbol icon view
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.isHidden = true
+        iconView.imageScaling = .scaleProportionallyDown
+        addSubview(iconView)
 
         // Text label
         textLabel.isBezeled = false
@@ -217,8 +202,8 @@ private class HUDView: NSView {
         textLabel.isEditable = false
         textLabel.isSelectable = false
         textLabel.alignment = .center
-        textLabel.font = .systemFont(ofSize: 10, weight: .medium)
-        textLabel.textColor = .white.withAlphaComponent(0.9)
+        textLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        textLabel.textColor = .labelColor
         textLabel.translatesAutoresizingMaskIntoConstraints = false
         textLabel.maximumNumberOfLines = 2
         textLabel.lineBreakMode = .byWordWrapping
@@ -227,43 +212,60 @@ private class HUDView: NSView {
         // Layout
         NSLayoutConstraint.activate([
             spinner.centerXAnchor.constraint(equalTo: centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -6),
+            spinner.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -8),
 
-            iconLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            iconLabel.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -6),
+            iconView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -8),
+            iconView.widthAnchor.constraint(equalToConstant: 28),
+            iconView.heightAnchor.constraint(equalToConstant: 28),
 
             textLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            textLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+            textLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
             textLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 6),
             textLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6)
         ])
     }
 
-    func setState(_ newState: State) {
-        state = newState
+    func setState(_ newState: HUDState) {
+        hudState = newState
 
-        switch state {
+        switch hudState {
         case .loading:
             spinner.isHidden = false
             spinner.startAnimation(nil)
-            iconLabel.isHidden = true
-            textLabel.stringValue = "Correcting...\nStay in this app!"
+            iconView.isHidden = true
+            textLabel.stringValue = "Correcting…"
+            textLabel.textColor = .labelColor
 
         case .success:
             spinner.stopAnimation(nil)
             spinner.isHidden = true
-            iconLabel.isHidden = false
-            iconLabel.stringValue = "✓"
-            iconLabel.textColor = NSColor(calibratedRed: 0.2, green: 0.8, blue: 0.3, alpha: 1.0)
-            textLabel.stringValue = "Done!"
+            iconView.isHidden = false
+            if #available(macOS 11.0, *) {
+                let config = NSImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+                iconView.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: "Success")?
+                    .withSymbolConfiguration(config)
+                iconView.contentTintColor = .systemGreen
+            } else {
+                iconView.isHidden = true
+            }
+            textLabel.stringValue = "Done"
+            textLabel.textColor = .systemGreen
 
         case .error:
             spinner.stopAnimation(nil)
             spinner.isHidden = true
-            iconLabel.isHidden = false
-            iconLabel.stringValue = "✕"
-            iconLabel.textColor = NSColor(calibratedRed: 0.9, green: 0.3, blue: 0.3, alpha: 1.0)
+            iconView.isHidden = false
+            if #available(macOS 11.0, *) {
+                let config = NSImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+                iconView.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Error")?
+                    .withSymbolConfiguration(config)
+                iconView.contentTintColor = .systemRed
+            } else {
+                iconView.isHidden = true
+            }
             textLabel.stringValue = "Error"
+            textLabel.textColor = .systemRed
         }
     }
 }

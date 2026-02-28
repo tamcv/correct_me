@@ -3,6 +3,7 @@ import Foundation
 
 /// Feedback window: category picker, description, debug info.
 /// Sends feedback via Telegram Bot API. Falls back to mailto: if unconfigured.
+/// Styled to match modern macOS Sequoia design language.
 class FeedbackWindowController: NSObject, NSWindowDelegate {
     static let shared = FeedbackWindowController()
 
@@ -14,9 +15,9 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
     private var sendButton: NSButton!
     private var statusLabel: NSTextField!
 
-    private let W: CGFloat = 480
-    private let H: CGFloat = 440
-    private let pad: CGFloat = 20
+    private let W: CGFloat = 500
+    private let H: CGFloat = 480
+    private let pad: CGFloat = 24
 
     private let categories = ["Bug Report", "Feature Request", "Other"]
 
@@ -32,14 +33,17 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: W, height: H),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         panel.title = "Send Feedback"
+        panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .visible
         panel.delegate = self
         panel.isReleasedWhenClosed = false
         panel.level = .floating
+        panel.backgroundColor = .windowBackgroundColor
 
         let root = NSView(frame: panel.contentView!.bounds)
         root.autoresizingMask = [.width, .height]
@@ -56,31 +60,34 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
     // MARK: - UI
 
     private func buildUI(in root: NSView) {
-        var y: CGFloat = H - 40
+        let contentW = W - pad * 2
+        var y: CGFloat = H - 24
 
-        // Category
-        let catLabel = NSTextField(labelWithString: "Category:")
-        catLabel.frame = NSRect(x: pad, y: y, width: 70, height: 20)
-        catLabel.font = .systemFont(ofSize: 13)
-        root.addSubview(catLabel)
+        // Category section
+        y -= 20
+        let catHeader = makeSectionHeader("Category")
+        catHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        root.addSubview(catHeader)
+        y -= 30
 
-        categoryPopUp = NSPopUpButton(frame: NSRect(x: 90, y: y - 2, width: 200, height: 26), pullsDown: false)
+        categoryPopUp = NSPopUpButton(frame: NSRect(x: pad, y: y, width: contentW, height: 26), pullsDown: false)
+        categoryPopUp.controlSize = .large
         for cat in categories {
             categoryPopUp.addItem(withTitle: cat)
         }
         root.addSubview(categoryPopUp)
-
-        // Description
         y -= 36
-        let descLabel = NSTextField(labelWithString: "Description:")
-        descLabel.frame = NSRect(x: pad, y: y, width: 100, height: 20)
-        descLabel.font = .systemFont(ofSize: 13)
-        root.addSubview(descLabel)
 
-        y -= 110
-        let descScroll = NSScrollView(frame: NSRect(x: pad, y: y, width: W - pad * 2, height: 110))
+        // Description section
+        let descHeader = makeSectionHeader("Description")
+        descHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        root.addSubview(descHeader)
+        y -= 8
+
+        let descScroll = NSScrollView(frame: NSRect(x: pad, y: y - 110, width: contentW, height: 110))
         descScroll.hasVerticalScroller = true
         descScroll.borderType = .bezelBorder
+        descScroll.scrollerStyle = .overlay
 
         let descStorage = NSTextStorage()
         let descLayout = NSLayoutManager()
@@ -94,23 +101,28 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
         descTV.isRichText = false
         descTV.font = .systemFont(ofSize: 13)
         descTV.allowsUndo = true
-        descTV.textContainerInset = NSSize(width: 4, height: 6)
+        descTV.textContainerInset = NSSize(width: 6, height: 8)
         descScroll.documentView = descTV
         root.addSubview(descScroll)
         descriptionTextView = descTV
+        y -= 126
 
-        // Debug info
-        y -= 26
-        let debugLabel = NSTextField(labelWithString: "Debug Info (auto-filled, included in report):")
-        debugLabel.frame = NSRect(x: pad, y: y, width: W - pad * 2, height: 20)
-        debugLabel.font = .systemFont(ofSize: 11)
-        debugLabel.textColor = .secondaryLabelColor
-        root.addSubview(debugLabel)
+        // Debug info section
+        let debugHeader = makeSectionHeader("Debug Info")
+        debugHeader.frame = NSRect(x: pad, y: y, width: 80, height: 18)
+        root.addSubview(debugHeader)
 
-        y -= 100
-        let debugScroll = NSScrollView(frame: NSRect(x: pad, y: y, width: W - pad * 2, height: 100))
+        let debugHint = NSTextField(labelWithString: "Auto-filled, included in report")
+        debugHint.font = .systemFont(ofSize: 11)
+        debugHint.textColor = .tertiaryLabelColor
+        debugHint.frame = NSRect(x: pad + 84, y: y, width: contentW - 84, height: 18)
+        root.addSubview(debugHint)
+        y -= 8
+
+        let debugScroll = NSScrollView(frame: NSRect(x: pad, y: y - 100, width: contentW, height: 100))
         debugScroll.hasVerticalScroller = true
         debugScroll.borderType = .bezelBorder
+        debugScroll.scrollerStyle = .overlay
 
         let debugStorage = NSTextStorage()
         let debugLayout = NSLayoutManager()
@@ -123,42 +135,52 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
         debugTV.isEditable = false
         debugTV.isRichText = false
         debugTV.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        debugTV.textContainerInset = NSSize(width: 4, height: 6)
+        debugTV.textContainerInset = NSSize(width: 6, height: 8)
         debugTV.backgroundColor = NSColor.controlBackgroundColor
         debugScroll.documentView = debugTV
         root.addSubview(debugScroll)
         debugInfoTextView = debugTV
-
-        // Fill debug info
         debugTV.string = buildDebugInfo()
 
-        // Buttons
-        let btnY: CGFloat = 12
+        // Bottom buttons
+        let btnY: CGFloat = 16
 
         let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancel))
         cancelBtn.bezelStyle = .rounded
+        cancelBtn.controlSize = .large
         cancelBtn.keyEquivalent = "\u{1b}"
-        cancelBtn.frame = NSRect(x: pad, y: btnY, width: 80, height: 28)
+        cancelBtn.frame = NSRect(x: pad, y: btnY, width: 90, height: 32)
         root.addSubview(cancelBtn)
 
         let copyBtn = NSButton(title: "Copy Debug Info", target: self, action: #selector(copyDebugInfo))
         copyBtn.bezelStyle = .rounded
-        copyBtn.frame = NSRect(x: pad + 90, y: btnY, width: 130, height: 28)
+        copyBtn.controlSize = .large
+        copyBtn.frame = NSRect(x: pad + 100, y: btnY, width: 130, height: 32)
         root.addSubview(copyBtn)
 
         sendButton = NSButton(title: "Send Feedback", target: self, action: #selector(sendFeedback))
         sendButton.bezelStyle = .rounded
+        sendButton.controlSize = .large
         sendButton.keyEquivalent = "\r"
-        sendButton.frame = NSRect(x: W - pad - 140, y: btnY, width: 140, height: 28)
+        sendButton.frame = NSRect(x: W - pad - 140, y: btnY, width: 140, height: 32)
         root.addSubview(sendButton)
 
-        // Status label (hidden by default)
+        // Status label
         statusLabel = NSTextField(labelWithString: "")
-        statusLabel.frame = NSRect(x: pad, y: btnY + 32, width: W - pad * 2, height: 18)
-        statusLabel.font = .systemFont(ofSize: 11)
+        statusLabel.frame = NSRect(x: pad, y: btnY + 38, width: contentW, height: 18)
+        statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.alignment = .center
         statusLabel.isHidden = true
         root.addSubview(statusLabel)
+    }
+
+    // MARK: - Helpers
+
+    private func makeSectionHeader(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .labelColor
+        return label
     }
 
     // MARK: - Debug Info
@@ -199,7 +221,6 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
             return
         }
 
-        // Try Telegram first, fall back to email
         if let token = config.telegramBotToken, !token.isEmpty,
            let chatId = config.telegramChatId, !chatId.isEmpty {
             sendViaTelegram(token: token, chatId: chatId, category: category, description: description, debugInfo: debugInfo)
@@ -285,10 +306,7 @@ class FeedbackWindowController: NSObject, NSWindowDelegate {
         }.resume()
     }
 
-    /// Escape Markdown special characters for Telegram.
     private func escapeMarkdown(_ text: String) -> String {
-        // In Markdown mode, escape _ * [ ] ( ) ~ ` > # + - = | { } . !
-        // But keep it simple — only escape the most common ones that break formatting
         return text
             .replacingOccurrences(of: "*", with: "\\*")
             .replacingOccurrences(of: "_", with: "\\_")

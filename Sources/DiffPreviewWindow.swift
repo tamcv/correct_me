@@ -2,6 +2,7 @@ import AppKit
 
 /// A floating panel that shows the original and corrected text side-by-side,
 /// letting the user accept or reject the AI correction before it is applied.
+/// Styled to match modern macOS Sequoia design language.
 class DiffPreviewWindow: NSObject, NSWindowDelegate {
     static let shared = DiffPreviewWindow()
 
@@ -25,15 +26,18 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         dismissSilently()
 
         let p = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 360),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         p.title = "Review Correction"
+        p.titlebarAppearsTransparent = true
+        p.titleVisibility = .visible
         p.level = .floating
         p.isReleasedWhenClosed = false
         p.delegate = self
+        p.backgroundColor = .windowBackgroundColor
 
         buildContent(in: p, original: original, corrected: corrected)
         p.center()
@@ -52,7 +56,6 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
     // MARK: - Button actions
 
     @objc private func acceptPressed() {
-        // Save "always apply" preference if checked
         if alwaysApplyCheckbox?.state == .on {
             var config = Config.load()
             config.forceApply = true
@@ -84,7 +87,6 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
 
     // MARK: - Word-level diff (LCS-based)
 
-    /// Splits text into alternating word/whitespace tokens, preserving all characters.
     private func tokenize(_ text: String) -> [String] {
         var tokens: [String] = []
         var current = ""
@@ -105,7 +107,6 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
     private struct DiffResult {
         let origAttr: NSAttributedString
         let corrAttr: NSAttributedString
-        /// Number of non-whitespace words that were added or removed.
         let changedWordCount: Int
     }
 
@@ -115,7 +116,6 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         let m = origTokens.count
         let n = corrTokens.count
 
-        // Build LCS DP table
         var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
         if m > 0 && n > 0 {
             for i in 1...m {
@@ -129,7 +129,6 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
             }
         }
 
-        // Backtrack to reconstruct diff
         var origParts: [(text: String, deleted: Bool)] = []
         var corrParts: [(text: String, inserted: Bool)] = []
         var i = m, j = n
@@ -155,9 +154,8 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         let insertedCount = corrParts.filter { $0.inserted && isWord($0.text) }.count
         let changedCount = max(deletedCount, insertedCount)
 
-        let font = NSFont.systemFont(ofSize: 12)
+        let font = NSFont.systemFont(ofSize: 13)
 
-        // Original: deleted words in red + strikethrough
         let origAttr = NSMutableAttributedString()
         for part in origParts {
             var attrs: [NSAttributedString.Key: Any] = [
@@ -172,7 +170,6 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
             origAttr.append(NSAttributedString(string: part.text, attributes: attrs))
         }
 
-        // Corrected: inserted words in green
         let corrAttr = NSMutableAttributedString()
         for part in corrParts {
             var attrs: [NSAttributedString.Key: Any] = [
@@ -194,84 +191,128 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         guard let root = p.contentView else { return }
         let W = root.bounds.width
         let H = root.bounds.height
-        let pad: CGFloat = 14
-        let labelH: CGFloat = 17
-        let scrollH: CGFloat = 96
-        let btnH: CGFloat = 26
-        let vGap: CGFloat = 6
+        let pad: CGFloat = 20
+        let scrollH: CGFloat = 100
 
         let diff = computeDiff(original: original, corrected: corrected)
 
-        // ── Original label
-        let origLabel = makeLabel("Original:", bold: true)
-        origLabel.frame = NSRect(x: pad, y: H - pad - labelH, width: W - pad * 2, height: labelH)
-        origLabel.autoresizingMask = [.width, .maxYMargin]
+        var y = H - 16
+
+        // ── Original section
+        y -= 18
+        let origLabel = makeSectionLabel("Original", icon: "doc.text", color: .secondaryLabelColor)
+        origLabel.frame = NSRect(x: pad, y: y, width: W - pad * 2, height: 18)
         root.addSubview(origLabel)
 
-        // ── Original scroll view
-        let origY = H - pad - labelH - vGap - scrollH
-        let origScroll = makeScrollView(frame: NSRect(x: pad, y: origY, width: W - pad * 2, height: scrollH))
+        y -= scrollH + 6
+        let origScroll = makeScrollView(frame: NSRect(x: pad, y: y, width: W - pad * 2, height: scrollH))
         makeTextView(in: origScroll, attributedText: diff.origAttr)
         root.addSubview(origScroll)
 
-        // ── Corrected label (left) + change count (right)
-        let corrLabelY = origY - vGap * 2 - labelH
-        let corrLabel = makeLabel("Corrected:", bold: true)
-        corrLabel.frame = NSRect(x: pad, y: corrLabelY, width: 100, height: labelH)
-        corrLabel.textColor = NSColor(calibratedRed: 0.1, green: 0.65, blue: 0.2, alpha: 1.0)
-        corrLabel.autoresizingMask = [.maxYMargin]
+        y -= 28
+
+        // ── Corrected section with change count badge
+        let corrLabel = makeSectionLabel("Corrected", icon: "doc.text.fill", color: .systemGreen)
+        corrLabel.frame = NSRect(x: pad, y: y, width: 120, height: 18)
         root.addSubview(corrLabel)
 
+        // Change count badge
         let countText: String
         switch diff.changedWordCount {
         case 0:  countText = "no changes"
         case 1:  countText = "1 word changed"
         default: countText = "\(diff.changedWordCount) words changed"
         }
-        let changeCountLabel = makeLabel(countText, bold: false)
-        changeCountLabel.alignment = .right
-        changeCountLabel.frame = NSRect(x: pad, y: corrLabelY, width: W - pad * 2, height: labelH)
-        changeCountLabel.autoresizingMask = [.width, .maxYMargin]
-        root.addSubview(changeCountLabel)
 
-        // ── Corrected scroll view
-        let corrScrollY = corrLabelY - vGap - scrollH
-        let corrScroll = makeScrollView(frame: NSRect(x: pad, y: corrScrollY, width: W - pad * 2, height: scrollH))
+        let badge = makeChangeBadge(countText)
+        badge.frame = NSRect(x: W - pad - 130, y: y - 1, width: 130, height: 20)
+        root.addSubview(badge)
+
+        y -= scrollH + 6
+        let corrScroll = makeScrollView(frame: NSRect(x: pad, y: y, width: W - pad * 2, height: scrollH))
         makeTextView(in: corrScroll, attributedText: diff.corrAttr)
         root.addSubview(corrScroll)
 
-        // ── "Always apply" checkbox
+        // ── Bottom bar
+        let bottomY: CGFloat = pad
+
+        // "Always apply" checkbox
         let alwaysApply = NSButton(checkboxWithTitle: "Always apply without review", target: nil, action: nil)
-        alwaysApply.frame = NSRect(x: pad, y: pad, width: 250, height: btnH)
-        alwaysApply.font = .systemFont(ofSize: 11)
-        alwaysApply.autoresizingMask = [.maxYMargin]
+        alwaysApply.frame = NSRect(x: pad, y: bottomY + 4, width: 250, height: 20)
+        alwaysApply.font = .systemFont(ofSize: 12)
         root.addSubview(alwaysApply)
         self.alwaysApplyCheckbox = alwaysApply
 
-        // ── Reject button (Escape)
-        let rejectBtn = NSButton(title: "Discard  ⎋", target: self, action: #selector(rejectPressed))
+        // Reject button
+        let rejectBtn = NSButton(title: "Discard", target: self, action: #selector(rejectPressed))
         rejectBtn.bezelStyle = .rounded
+        rejectBtn.controlSize = .large
         rejectBtn.keyEquivalent = "\u{1b}"
         rejectBtn.keyEquivalentModifierMask = []
-        rejectBtn.frame = NSRect(x: W - pad - 240, y: pad, width: 110, height: btnH)
-        rejectBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        rejectBtn.frame = NSRect(x: W - pad - 220, y: bottomY, width: 100, height: 30)
+        rejectBtn.autoresizingMask = [.minXMargin]
         root.addSubview(rejectBtn)
 
-        // ── Accept button (⌘Return)
-        let acceptBtn = NSButton(title: "Apply  ⌘↩", target: self, action: #selector(acceptPressed))
+        // Accept button
+        let acceptBtn = NSButton(title: "Apply", target: self, action: #selector(acceptPressed))
         acceptBtn.bezelStyle = .rounded
+        acceptBtn.controlSize = .large
         acceptBtn.keyEquivalent = "\r"
         acceptBtn.keyEquivalentModifierMask = .command
-        acceptBtn.frame = NSRect(x: W - pad - 120, y: pad, width: 120, height: btnH)
-        acceptBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        acceptBtn.frame = NSRect(x: W - pad - 110, y: bottomY, width: 110, height: 30)
+        acceptBtn.autoresizingMask = [.minXMargin]
         root.addSubview(acceptBtn)
+
+        // Keyboard shortcut hints
+        let hintLabel = NSTextField(labelWithString: "⌘↩ Apply  ·  Esc Discard")
+        hintLabel.font = .systemFont(ofSize: 10)
+        hintLabel.textColor = .tertiaryLabelColor
+        hintLabel.alignment = .right
+        hintLabel.frame = NSRect(x: W - pad - 220, y: bottomY + 34, width: 220, height: 14)
+        hintLabel.autoresizingMask = [.minXMargin]
+        root.addSubview(hintLabel)
     }
 
-    private func makeLabel(_ text: String, bold: Bool) -> NSTextField {
-        let lbl = NSTextField(labelWithString: text)
-        lbl.font = bold ? .systemFont(ofSize: 12, weight: .semibold) : .systemFont(ofSize: 12)
-        lbl.textColor = .secondaryLabelColor
-        return lbl
+    // MARK: - UI Helpers
+
+    private func makeSectionLabel(_ text: String, icon: String, color: NSColor) -> NSView {
+        let container = NSView()
+
+        if #available(macOS 11.0, *) {
+            let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+            if let image = NSImage(systemSymbolName: icon, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config) {
+                let imageView = NSImageView()
+                imageView.image = image
+                imageView.contentTintColor = color
+                imageView.frame = NSRect(x: 0, y: 1, width: 16, height: 16)
+                container.addSubview(imageView)
+            }
+        }
+
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 12, weight: .semibold)
+        label.textColor = color
+        label.frame = NSRect(x: 20, y: 0, width: 200, height: 18)
+        container.addSubview(label)
+
+        return container
+    }
+
+    private func makeChangeBadge(_ text: String) -> NSView {
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 10
+        container.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.1).cgColor
+
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.textColor = .controlAccentColor
+        label.alignment = .center
+        label.frame = NSRect(x: 4, y: 2, width: 122, height: 16)
+        container.addSubview(label)
+
+        return container
     }
 
     private func makeScrollView(frame: NSRect) -> NSScrollView {
@@ -279,6 +320,7 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         sv.hasVerticalScroller = true
         sv.borderType = .bezelBorder
         sv.autoresizingMask = [.width]
+        sv.scrollerStyle = .overlay
         return sv
     }
 
@@ -289,6 +331,7 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         tv.isSelectable = true
         tv.backgroundColor = .textBackgroundColor
         tv.autoresizingMask = [.width]
+        tv.textContainerInset = NSSize(width: 6, height: 8)
         tv.textStorage?.setAttributedString(attributedText)
         scrollView.documentView = tv
         return tv
