@@ -1,9 +1,10 @@
 ---
 id: TASK-008
 title: Add privacy policy and data handling disclosure in-app
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-23 09:03'
+updated_date: '2026-02-28 10:20'
 labels: []
 dependencies: []
 priority: medium
@@ -30,3 +31,9 @@ File: Sources/MenuBarManager.swift (About/Privacy menu item)
 - [ ] #2 Onboarding includes a data handling summary step
 - [ ] #3 Privacy Policy URL is linked from within the app
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added "Privacy & Data…" menu item showing data handling summary (provider name, no logging, Keychain storage, no telemetry) with link to Privacy Policy URL. Added Privacy & Data Handling step in onboarding wizard (step 1) requiring user acknowledgment before setup.
+<!-- SECTION:FINAL_SUMMARY:END -->
