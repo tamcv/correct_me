@@ -19,7 +19,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     private var selectedModel: String?
 
     private var currentStep = 0
-    private let totalSteps = 5 // 0..4
+    private let totalSteps = 6 // 0..5
 
     // MARK: - Show
 
@@ -63,10 +63,11 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
 
         switch currentStep {
         case 0: renderWelcome()
-        case 1: renderProviderStep()
-        case 2: renderAPIKeyStep()
-        case 3: renderAccessibilityStep()
-        case 4: renderHotkeyStep()
+        case 1: renderPrivacyStep()
+        case 2: renderProviderStep()
+        case 3: renderAPIKeyStep()
+        case 4: renderAccessibilityStep()
+        case 5: renderHotkeyStep()
         default: renderDoneStep()
         }
 
@@ -103,7 +104,60 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         addNavigationButtons(showBack: false)
     }
 
-    // MARK: - Step 1: Choose Provider
+    // MARK: - Step 1: Privacy & Data
+
+    private func renderPrivacyStep() {
+        let bounds = contentView.bounds
+
+        let icon = NSTextField(labelWithString: "🔒")
+        icon.font = .systemFont(ofSize: 48)
+        icon.alignment = .center
+        icon.frame = NSRect(x: 0, y: bounds.height - 100, width: bounds.width, height: 60)
+        icon.autoresizingMask = [.width]
+        contentView.addSubview(icon)
+
+        let title = NSTextField(labelWithString: "Privacy & Data Handling")
+        title.font = .boldSystemFont(ofSize: 18)
+        title.alignment = .center
+        title.frame = NSRect(x: 20, y: bounds.height - 140, width: bounds.width - 40, height: 30)
+        title.autoresizingMask = [.width]
+        contentView.addSubview(title)
+
+        let desc = NSTextField(wrappingLabelWithString: """
+        Before we start, here's how CorrectMe handles your data:
+
+        \u{2022} Your selected text is sent to the AI provider you choose — only for correction. No other data is transmitted.
+
+        \u{2022} CorrectMe does not store, log, or share your text remotely. Correction history is kept locally on your Mac.
+
+        \u{2022} API keys are stored securely in the macOS Keychain.
+
+        \u{2022} No analytics, telemetry, or tracking is collected.
+
+        By clicking Next, you acknowledge this data handling.
+        """)
+        desc.font = .systemFont(ofSize: 13)
+        desc.alignment = .left
+        desc.frame = NSRect(x: 40, y: bounds.height - 340, width: bounds.width - 80, height: 180)
+        desc.autoresizingMask = [.width]
+        contentView.addSubview(desc)
+
+        let linkBtn = NSButton(title: "View Privacy Policy", target: self, action: #selector(openPrivacyPolicy))
+        linkBtn.bezelStyle = .rounded
+        linkBtn.frame = NSRect(x: (bounds.width - 160) / 2, y: bounds.height - 370, width: 160, height: 28)
+        linkBtn.autoresizingMask = [.minXMargin, .maxXMargin]
+        contentView.addSubview(linkBtn)
+
+        addNavigationButtons(showBack: true)
+    }
+
+    @objc private func openPrivacyPolicy() {
+        if let url = URL(string: "https://github.com/tamcv/correct_me/blob/main/PRIVACY.md") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    // MARK: - Step 2: Choose Provider
 
     private var providerPopup: NSPopUpButton?
 
@@ -565,7 +619,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     @objc private func nextStep() {
         // Validate current step before proceeding
-        if currentStep == 2 {
+        if currentStep == 3 {
             // API key step — capture the key value
             if let field = apiKeyField {
                 let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -591,10 +645,10 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             }
         }
 
-        if currentStep == 4 {
+        if currentStep == 5 {
             // Save config on the hotkey step (the last real step)
             saveOnboardingConfig()
-            currentStep = 5
+            currentStep = 6
         } else {
             currentStep += 1
         }
@@ -602,8 +656,8 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     @objc private func prevStep() {
-        // Capture API key when going back from step 2
-        if currentStep == 2, let field = apiKeyField {
+        // Capture API key when going back from step 3
+        if currentStep == 3, let field = apiKeyField {
             let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if !key.isEmpty {
                 apiKey = key

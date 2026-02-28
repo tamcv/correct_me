@@ -289,6 +289,14 @@ class MenuBarManager: NSObject {
         feedbackItem.target = self
         menu.addItem(feedbackItem)
 
+        let privacyItem = NSMenuItem(
+            title: "Privacy & Data…",
+            action: #selector(showPrivacyInfo),
+            keyEquivalent: ""
+        )
+        privacyItem.target = self
+        menu.addItem(privacyItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(
@@ -431,6 +439,41 @@ class MenuBarManager: NSObject {
     @objc private func openFeedback() {
         NSApp.activate(ignoringOtherApps: true)
         FeedbackWindowController.shared.showWindow()
+    }
+
+    @objc private func showPrivacyInfo() {
+        let cfg = Config.load()
+        let providerName = cfg.aiProvider.rawValue
+
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Privacy & Data Handling"
+        alert.informativeText = """
+        How CorrectMe handles your data:
+
+        \u{2022} Your selected text is sent to the \(providerName) API for correction. No other data is transmitted.
+
+        \u{2022} CorrectMe does not store, log, or share your text. Corrections are kept in local history only (~/.correctme/history.json).
+
+        \u{2022} API keys are stored in the macOS Keychain, not in plaintext.
+
+        \u{2022} No analytics, telemetry, or tracking is collected.
+
+        \u{2022} Data retention depends on your AI provider's policy.
+
+        For more details, visit the Privacy Policy.
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "View Privacy Policy")
+
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            if let url = URL(string: "https://github.com/tamcv/correct_me/blob/main/PRIVACY.md") {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     @objc private func quitApp() {
