@@ -133,14 +133,14 @@ enum DaemonManager {
         // Check if process is running
         guard isProcessRunning(pid) else {
             // Process not running - clean up stale PID file
-            print("⚠️  Found stale PID file (process \(pid) not running), cleaning up...")
+            debugLog("Found stale PID file (process \(pid) not running), cleaning up...")
             removePIDFile()
             return nil
         }
 
         // Check if it's actually a CorrectMe process
         guard isCorrectMeProcess(pid) else {
-            print("⚠️  Found PID file but process \(pid) is not CorrectMe, cleaning up...")
+            debugLog("Found PID file but process \(pid) is not CorrectMe, cleaning up...")
             removePIDFile()
             return nil
         }

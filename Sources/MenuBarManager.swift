@@ -17,23 +17,23 @@ class MenuBarManager: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         guard statusItem?.button != nil else {
-            print("❌ Failed to create status bar button")
+            debugLog("Failed to create status bar button")
             return
         }
 
-        print("[DEBUG] Status bar button created successfully")
+        debugLog("Status bar button created successfully")
         updateIcon(for: .idle)
 
         menu = NSMenu()
         menu?.delegate = self
-        print("[DEBUG] Menu created: \(menu != nil)")
-        
+        debugLog("Menu created: \(menu != nil)")
+
         statusItem?.menu = menu
-        print("[DEBUG] Menu assigned to statusItem: \(statusItem?.menu != nil)")
-        
+        debugLog("Menu assigned to statusItem: \(statusItem?.menu != nil)")
+
         updateMenu()
-        
-        print("✓ Menu bar initialized with \(menu?.items.count ?? 0) items")
+
+        debugLog("Menu bar initialized with \(menu?.items.count ?? 0) items")
     }
 
     private func setupObservers() {
@@ -134,10 +134,10 @@ class MenuBarManager: NSObject {
 
     private func updateMenu() {
         guard let menu = menu else {
-            print("⚠️  Menu is nil in updateMenu()")
+            debugLog("Menu is nil in updateMenu()")
             return
         }
-        print("[DEBUG] updateMenu() called")
+        debugLog("updateMenu() called")
         menu.removeAllItems()
 
         // Header
@@ -289,7 +289,7 @@ class MenuBarManager: NSObject {
         quitItem.target = self
         menu.addItem(quitItem)
         
-        print("[DEBUG] Menu updated with \(menu.items.count) items")
+        debugLog("Menu updated with \(menu.items.count) items")
     }
 
     @objc private func showErrorDetail(_ sender: NSMenuItem) {
@@ -435,11 +435,11 @@ class MenuBarManager: NSObject {
 // MARK: - NSMenuDelegate
 extension MenuBarManager: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
-        print("[DEBUG] Menu will open - menu has \(menu.items.count) items")
+        debugLog("Menu will open - menu has \(menu.items.count) items")
     }
 
     func menuDidClose(_ menu: NSMenu) {
-        print("[DEBUG] Menu did close")
+        debugLog("Menu did close")
     }
 }
 

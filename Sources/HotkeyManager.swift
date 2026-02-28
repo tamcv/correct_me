@@ -26,7 +26,7 @@ class HotkeyManager {
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            print("❌ Failed to create event tap. Make sure accessibility permissions are granted.")
+            ErrorLog.shared.log("Failed to create event tap - accessibility permissions may be missing", category: .systemError)
             return false
         }
         
