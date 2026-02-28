@@ -1,9 +1,10 @@
 ---
 id: TASK-010
 title: Limit menu bar history to 5 items with "View All" link to history file
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-24 08:32'
+updated_date: '2026-02-28 10:20'
 labels:
   - ui
 dependencies: []
@@ -27,3 +28,9 @@ Changes needed:
 - [ ] #2 "View All History…" menu item opens history file in default editor
 - [ ] #3 History is persisted to ~/.correctme/history.json
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Menu bar history limited to 5 items. Added "View All History…" link that opens ~/.correctme/history.json in default editor. CorrectionEntry made Codable, history persisted to disk with ISO 8601 dates. Internal max raised to 50 entries.
+<!-- SECTION:FINAL_SUMMARY:END -->
