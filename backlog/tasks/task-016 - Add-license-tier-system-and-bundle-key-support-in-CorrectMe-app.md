@@ -4,6 +4,7 @@ title: Add license tier system and bundle key support in CorrectMe app
 status: To Do
 assignee: []
 created_date: '2026-02-28 07:58'
+updated_date: '2026-02-28 08:04'
 labels:
   - correct_me
   - swift
@@ -17,17 +18,18 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add licensing logic to the CorrectMe macOS app so it can work with the bundle key proxy server.
+Add licensing logic to the CorrectMe macOS app so it can work with the bundle key proxy server and handle all tiers.
 
 **Scope:** correct_me codebase (Swift)
 
 **Components:**
 - New `LicenseManager.swift`:
   - Store license key in Keychain (alongside existing API keys)
-  - Detect tier: BYO key (user has own API key) vs bundle key (free/pro/one-time)
+  - Detect mode: BYO key (user has own API key) vs bundle key (free/pro/lifetime)
   - Device ID generation (hardware UUID)
   - License activation flow (call `/v1/activate`)
   - Quota check (call `/v1/quota`)
+  - Trial tracking for BYO free tier (7-day limit, stored locally)
 - New `BundleAIProvider` in `AIProviders.swift`:
   - Instead of calling DeepSeek directly, calls the Cloudflare Worker proxy endpoint
   - Sends `{ licenseKey, deviceId, text }` to `POST /v1/correct`
@@ -35,14 +37,18 @@ Add licensing logic to the CorrectMe macOS app so it can work with the bundle ke
 - Update `Config.swift`:
   - Add `useBundleKey: Bool` config option
   - Add `licenseKey: String?` config option
+  - Add `licenseTier: LicenseTier` enum (free/oneTime/pro/lifetime)
   - Add proxy server URL constant
 - Update `main.swift` / `handleHotkey()`:
   - Route through `BundleAIProvider` when `useBundleKey` is true
   - Show quota exceeded HUD message when limit reached
+  - Show trial expired message for BYO free users after 7 days
 
-**Logic:**
-- If user has their own API key → use existing providers (no change)
-- If user chooses bundle key → use BundleAIProvider → proxy server
+**Tier behavior in app:**
+- **Free (no license):** BYO key = 7-day trial then locked. Bundle key = 30 req/month.
+- **One-time ($9-15):** BYO key = unlimited forever. Bundle key = 30 req/month.
+- **Pro ($3-5/mo):** BYO key = unlimited. Bundle key = 1000 req/month.
+- **Lifetime ($29-49):** BYO key = unlimited forever. Bundle key = 1000 req/month forever.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
