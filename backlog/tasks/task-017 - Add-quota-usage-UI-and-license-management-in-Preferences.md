@@ -4,7 +4,7 @@ title: Add quota usage UI and license management in Preferences
 status: To Do
 assignee: []
 created_date: '2026-02-28 07:59'
-updated_date: '2026-02-28 08:04'
+updated_date: '2026-02-28 08:12'
 labels:
   - correct_me
   - swift
@@ -26,8 +26,9 @@ Add UI elements for users to see their quota usage, manage license, and choose b
 - **Menu bar**: Show usage indicator for bundle key users (e.g. "15/30" or progress bar)
 - **Preferences → new License tab**:
   - Current tier display (Free / One-time / Pro / Lifetime / BYO)
-  - License key input field + activate button
+  - License key input field + activate button (just validates key, no device binding)
   - For bundle key users: usage bar "X / Y requests used this month" with reset date
+  - Note: quota is shared across all devices using this license
   - For BYO free users: "Trial: X days remaining"
   - Upgrade button (opens purchase URL) — context-aware:
     - Free BYO → "Buy app ($9-15)" or "Try bundle key"
@@ -44,6 +45,10 @@ Add UI elements for users to see their quota usage, manage license, and choose b
 - When quota remaining < 20%: show warning color
 - When quota = 0: show "Quota exceeded — Upgrade or add your own key"
 - For BYO trial users: show "Trial: X days left" in menu
+
+**Device policy note:**
+- No device management UI needed — license key simply works on any Mac
+- Quota display reflects shared usage across all user's devices
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
