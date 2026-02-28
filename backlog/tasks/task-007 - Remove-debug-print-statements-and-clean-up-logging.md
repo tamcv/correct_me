@@ -1,9 +1,10 @@
 ---
 id: TASK-007
 title: Remove debug print statements and clean up logging
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-23 09:03'
+updated_date: '2026-02-28 10:20'
 labels: []
 dependencies: []
 priority: low
@@ -29,3 +30,9 @@ Files: Sources/*.swift (all)
 - [ ] #2 All logging goes through debugLog() or ErrorLog.shared
 - [ ] #3 No sensitive data (API keys, user text) in any log output
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replaced all 13 debug print() calls across MenuBarManager.swift, DaemonManager.swift, and HotkeyManager.swift with debugLog() (verbose-only) or ErrorLog.shared.log() (for actual errors). CLI user-facing print() calls kept as-is.
+<!-- SECTION:FINAL_SUMMARY:END -->
