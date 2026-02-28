@@ -4,6 +4,7 @@ title: Setup Cloudflare Worker as AI proxy + auth server
 status: To Do
 assignee: []
 created_date: '2026-02-28 07:58'
+updated_date: '2026-02-28 08:04'
 labels:
   - cloudflare
   - backend
@@ -35,11 +36,16 @@ Create a Cloudflare Worker that acts as both an auth/quota gateway and AI proxy 
 3. If valid: forward to DeepSeek, increment usage count, return response
 4. If invalid/exceeded: return appropriate error code
 
-**Tiers & quotas:**
-- `free`: 30 req/month
-- `pro`: 1000 req/month (subscription)
-- `one-time`: 1000 req/month (perpetual)
-- No bundle key (BYO): not handled by this server
+**Pricing model & tiers:**
+- `free`: Bundle key 30 req/month (BYO key = 7-day trial, handled client-side)
+- `one-time` ($9-15): BYO key unlimited (no proxy needed), Bundle key 30 req/month
+- `pro` ($3-5/mo subscription): Bundle key 1000 req/month
+- `lifetime` ($29-49 one-time): Bundle key 1000 req/month, perpetual
+
+**Quota limits enforced by Worker:**
+- free + one-time: 30 req/month
+- pro + lifetime: 1000 req/month
+- BYO key users don't hit this server at all
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
