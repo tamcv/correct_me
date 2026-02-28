@@ -4,7 +4,7 @@ title: Add license tier system and bundle key support in CorrectMe app
 status: To Do
 assignee: []
 created_date: '2026-02-28 07:58'
-updated_date: '2026-02-28 08:04'
+updated_date: '2026-02-28 08:12'
 labels:
   - correct_me
   - swift
@@ -26,8 +26,8 @@ Add licensing logic to the CorrectMe macOS app so it can work with the bundle ke
 - New `LicenseManager.swift`:
   - Store license key in Keychain (alongside existing API keys)
   - Detect mode: BYO key (user has own API key) vs bundle key (free/pro/lifetime)
-  - Device ID generation (hardware UUID)
-  - License activation flow (call `/v1/activate`)
+  - Device ID generation (hardware UUID) — for analytics only, not enforcement
+  - License validation flow (call `/v1/activate` to verify key is valid)
   - Quota check (call `/v1/quota`)
   - Trial tracking for BYO free tier (7-day limit, stored locally)
 - New `BundleAIProvider` in `AIProviders.swift`:
@@ -43,6 +43,11 @@ Add licensing logic to the CorrectMe macOS app so it can work with the bundle ke
   - Route through `BundleAIProvider` when `useBundleKey` is true
   - Show quota exceeded HUD message when limit reached
   - Show trial expired message for BYO free users after 7 days
+
+**Device policy:**
+- Same license key works on unlimited Macs — no device binding
+- User enters license key on each Mac, quota is shared across all devices
+- Device ID sent for analytics/debugging only
 
 **Tier behavior in app:**
 - **Free (no license):** BYO key = 7-day trial then locked. Bundle key = 30 req/month.
