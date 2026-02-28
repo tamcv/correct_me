@@ -173,14 +173,14 @@ class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Correction history
+        // Correction history (show max 5 in menu)
         let history = CorrectionHistory.shared.getEntries()
         if !history.isEmpty {
             let histHeaderItem = NSMenuItem(title: "📜 History (\(history.count))", action: nil, keyEquivalent: "")
             histHeaderItem.isEnabled = false
             menu.addItem(histHeaderItem)
 
-            for (index, entry) in history.prefix(10).enumerated() {
+            for (index, entry) in history.prefix(5).enumerated() {
                 let origSnippet = String(entry.originalText.prefix(30))
                     .replacingOccurrences(of: "\n", with: " ")
                 let corrSnippet = String(entry.correctedText.prefix(30))
@@ -199,6 +199,16 @@ class MenuBarManager: NSObject {
                 let timeItem = NSMenuItem(title: "    \(entry.timeAgo)", action: nil, keyEquivalent: "")
                 timeItem.isEnabled = false
                 menu.addItem(timeItem)
+            }
+
+            if history.count > 5 {
+                let viewAllItem = NSMenuItem(
+                    title: "  View All History…",
+                    action: #selector(viewAllHistory),
+                    keyEquivalent: ""
+                )
+                viewAllItem.target = self
+                menu.addItem(viewAllItem)
             }
 
             let clearHistItem = NSMenuItem(
@@ -359,6 +369,13 @@ class MenuBarManager: NSObject {
         // NSMenu auto-closes on any item action; re-open so the user sees the updated empty state
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             self.statusItem?.button?.performClick(nil)
+        }
+    }
+
+    @objc private func viewAllHistory() {
+        let historyPath = CorrectionHistory.historyFilePath
+        if FileManager.default.fileExists(atPath: historyPath.path) {
+            NSWorkspace.shared.open(historyPath)
         }
     }
 
