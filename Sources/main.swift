@@ -36,10 +36,6 @@ struct CorrectMeApp {
     /// The app that received the most recently accepted correction
     static var lastCorrectionSourceApp: NSRunningApplication?
     static var undoHotkeyManager: HotkeyManager?
-    /// Timer that retries starting hotkey listeners when accessibility permissions are not yet available
-    static var hotkeyRetryTimer: Timer?
-    /// Number of times we've attempted to start the hotkey listener since last failure
-    static var hotkeyRetryCount = 0
     
     static func main() {
         let args = CommandLine.arguments
@@ -1210,68 +1206,18 @@ struct CorrectMeApp {
             handleUndoHotkey()
         }
 
-        startHotkeyListeners()
-
-        logPrint("─────────────────────────\n")
-    }
-
-    /// Attempt to start both hotkey listeners. If accessibility permissions are not yet
-    /// available (common on boot when LaunchAgent starts before TCC is ready), schedules
-    /// a silent retry every 5 seconds. Only logs to ErrorLog after 6 failed attempts (~30s).
-    static func startHotkeyListeners() {
-        let mainStarted = hotkeyManager?.start() == true
-        let undoStarted = undoHotkeyManager?.start() == true
-
-        if mainStarted {
+        if hotkeyManager?.start() == true {
             logPrint("✓ Hotkey listener started")
-            hotkeyRetryTimer?.invalidate()
-            hotkeyRetryTimer = nil
-            hotkeyRetryCount = 0
+        } else {
+            logPrint("❌ Failed to start hotkey listener")
+            ErrorLog.shared.log("Failed to start hotkey listener", category: .systemError)
         }
-        if undoStarted {
+
+        if undoHotkeyManager?.start() == true {
             logPrint("✓ Undo hotkey listener started (⌘⌥Z)")
         }
 
-        if !mainStarted {
-            logPrint("⚠️  Hotkey listener not ready — waiting for accessibility permissions...")
-            scheduleHotkeyRetry()
-        }
-    }
-
-    static func scheduleHotkeyRetry() {
-        guard hotkeyRetryTimer == nil else { return }
-        hotkeyRetryTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            let options: [String: Any] = [
-                kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false
-            ]
-            guard AXIsProcessTrustedWithOptions(options as CFDictionary) else {
-                hotkeyRetryCount += 1
-                // Log to ErrorLog only after 6 silent retries (~30s) to avoid false alarms at boot
-                if hotkeyRetryCount == 6 {
-                    ErrorLog.shared.log(
-                        "Failed to create event tap - accessibility permissions may be missing",
-                        category: .systemError
-                    )
-                    ErrorLog.shared.log(
-                        "Failed to start hotkey listener - accessibility permissions may be missing",
-                        category: .systemError
-                    )
-                    logPrint("❌ Failed to start hotkey listener — grant accessibility permissions in")
-                    logPrint("   System Settings → Privacy & Security → Accessibility")
-                }
-                return
-            }
-            // Permissions now available — attempt to start
-            let mainOK = hotkeyManager?.start() == true
-            let undoOK = undoHotkeyManager?.start() == true
-            if mainOK {
-                logPrint("✓ Hotkey listener started (accessibility permissions now available)")
-                hotkeyRetryTimer?.invalidate()
-                hotkeyRetryTimer = nil
-                hotkeyRetryCount = 0
-            }
-            if undoOK { logPrint("✓ Undo hotkey listener started (⌘⌥Z)") }
-        }
+        logPrint("─────────────────────────\n")
     }
 
     static func runUpdate() {

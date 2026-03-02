@@ -1,92 +1,112 @@
 import AppKit
 import Carbon
 
+/// Registers a global hotkey using Carbon's RegisterEventHotKey API.
+/// This requires NO accessibility / TCC permissions — unlike CGEvent.tapCreate.
 class HotkeyManager {
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private var hotKeyRef: EventHotKeyRef?
     private let config: Config
     private let onTrigger: () -> Void
-    
+    private let hotKeyID: UInt32
+
+    // Shared Carbon event handler installed once for all HotkeyManager instances.
+    private static var eventHandlerRef: EventHandlerRef?
+    // Maps hot-key ID → trigger callback.
+    private static var registry: [UInt32: () -> Void] = [:]
+    private static var nextID: UInt32 = 1
+
     init(config: Config, onTrigger: @escaping () -> Void) {
         self.config = config
         self.onTrigger = onTrigger
+        hotKeyID = HotkeyManager.nextID
+        HotkeyManager.nextID += 1
     }
-    
+
+    deinit { stop() }
+
     func start() -> Bool {
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-        
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: eventMask,
-            callback: { proxy, type, event, refcon in
-                let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon!).takeUnretainedValue()
-                return manager.handleEvent(proxy: proxy, type: type, event: event)
-            },
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            ErrorLog.shared.log("Failed to create event tap - accessibility permissions may be missing", category: .systemError)
+        HotkeyManager.installSharedHandlerIfNeeded()
+
+        var id = EventHotKeyID()
+        id.signature = 0x434D544B  // 'CMTK' — arbitrary 4-char app tag
+        id.id = hotKeyID
+
+        let err = RegisterEventHotKey(
+            UInt32(config.hotkey.keyCode),
+            HotkeyManager.toCarbonModifiers(config.hotkey.modifiers),
+            id,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+        guard err == noErr else {
+            ErrorLog.shared.log(
+                "Failed to register hotkey (Carbon err \(err))",
+                category: .systemError
+            )
             return false
         }
-        
-        self.eventTap = tap
-        self.runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-        
+
+        HotkeyManager.registry[hotKeyID] = onTrigger
         return true
     }
-    
+
     func stop() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
+        if let ref = hotKeyRef {
+            UnregisterEventHotKey(ref)
+            hotKeyRef = nil
         }
-        if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
-        }
-        eventTap = nil
-        runLoopSource = nil
+        HotkeyManager.registry.removeValue(forKey: hotKeyID)
     }
-    
-    private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        guard type == .keyDown else {
-            return Unmanaged.passUnretained(event)
-        }
-        
-        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-        let flags = event.flags
-        
-        // Check if hotkey matches
-        let targetKeyCode = config.hotkey.keyCode
-        let targetModifiers = config.hotkey.modifiers
-        
-        let hasCommand = flags.contains(.maskCommand)
-        let hasShift = flags.contains(.maskShift)
-        let hasControl = flags.contains(.maskControl)
-        let hasOption = flags.contains(.maskAlternate)
-        
-        let targetHasCommand = (targetModifiers & CGEventFlags.maskCommand.rawValue) != 0
-        let targetHasShift = (targetModifiers & CGEventFlags.maskShift.rawValue) != 0
-        let targetHasControl = (targetModifiers & CGEventFlags.maskControl.rawValue) != 0
-        let targetHasOption = (targetModifiers & CGEventFlags.maskAlternate.rawValue) != 0
-        
-        if keyCode == targetKeyCode &&
-           hasCommand == targetHasCommand &&
-           hasShift == targetHasShift &&
-           hasControl == targetHasControl &&
-           hasOption == targetHasOption {
-            
-            // Trigger correction on main thread
-            DispatchQueue.main.async {
-                self.onTrigger()
+
+    // MARK: - Private helpers
+
+    private static func toCarbonModifiers(_ cgFlags: UInt64) -> UInt32 {
+        var mods: UInt32 = 0
+        if (cgFlags & CGEventFlags.maskCommand.rawValue)  != 0 { mods |= UInt32(cmdKey) }
+        if (cgFlags & CGEventFlags.maskShift.rawValue)    != 0 { mods |= UInt32(shiftKey) }
+        if (cgFlags & CGEventFlags.maskControl.rawValue)  != 0 { mods |= UInt32(controlKey) }
+        if (cgFlags & CGEventFlags.maskAlternate.rawValue) != 0 { mods |= UInt32(optionKey) }
+        return mods
+    }
+
+    /// Install a single Carbon event handler shared by all instances.
+    /// @convention(c) closures may only reference static/global state — no captures.
+    private static func installSharedHandlerIfNeeded() {
+        guard eventHandlerRef == nil else { return }
+
+        var spec = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind:  UInt32(kEventHotKeyPressed)
+        )
+
+        let handler: EventHandlerUPP = { _, event, _ -> OSStatus in
+            guard let event else { return OSStatus(eventNotHandledErr) }
+            var hkID = EventHotKeyID()
+            GetEventParameter(
+                event,
+                EventParamName(kEventParamDirectObject),
+                EventParamType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &hkID
+            )
+            if let callback = HotkeyManager.registry[hkID.id] {
+                DispatchQueue.main.async { callback() }
+                return noErr
             }
-            
-            // Consume the event
-            return nil
+            return OSStatus(eventNotHandledErr)
         }
-        
-        return Unmanaged.passUnretained(event)
+
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            handler,
+            1,
+            &spec,
+            nil,
+            &eventHandlerRef
+        )
     }
 }
 
