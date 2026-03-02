@@ -8,6 +8,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     private var window: NSPanel?
     private var tabView: NSTabView!
+    private var segmentedControl: NSSegmentedControl!
 
     // ── State (loaded from Config on show, written on Save) ──
     private var config: Config = .default
@@ -107,10 +108,30 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         root.autoresizingMask = [.width, .height]
         panel.contentView = root
 
-        // Tab view
-        tabView = NSTabView(frame: NSRect(x: 0, y: 50, width: W, height: H - 50))
+        // Segmented control for tab switching
+        let tabLabels = ["General", "Provider", "Hotkey", "Writing Style", "Advanced"]
+        segmentedControl = NSSegmentedControl(labels: tabLabels, trackingMode: .selectOne, target: self, action: #selector(segmentChanged(_:)))
+        segmentedControl.selectedSegment = 0
+        segmentedControl.segmentStyle = .automatic
+        segmentedControl.controlSize = .regular
+        segmentedControl.sizeToFit()
+        let segW = segmentedControl.fittingSize.width
+        let segH: CGFloat = 24
+        segmentedControl.frame = NSRect(x: (W - segW) / 2, y: H - 44, width: segW, height: segH)
+        segmentedControl.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin]
+        root.addSubview(segmentedControl)
+
+        // Separator below segmented control
+        let tabSep = NSBox()
+        tabSep.boxType = .separator
+        tabSep.frame = NSRect(x: 0, y: H - 56, width: W, height: 1)
+        tabSep.autoresizingMask = [.width, .minYMargin]
+        root.addSubview(tabSep)
+
+        // Tab view (hidden tabs — content only)
+        tabView = NSTabView(frame: NSRect(x: 0, y: 50, width: W, height: H - 106))
         tabView.autoresizingMask = [.width, .height]
-        tabView.tabViewType = .topTabsBezelBorder
+        tabView.tabViewType = .noTabsNoBorder
         root.addSubview(tabView)
 
         tabView.addTabViewItem(makeGeneralTab())
@@ -944,6 +965,12 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         window?.close()
         window = nil
         showWindow()
+    }
+
+    // MARK: - Tab Switching
+
+    @objc private func segmentChanged(_ sender: NSSegmentedControl) {
+        tabView.selectTabViewItem(at: sender.selectedSegment)
     }
 
     // MARK: - Save / Cancel
