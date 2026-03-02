@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 enum DaemonManager {
@@ -86,6 +87,13 @@ enum DaemonManager {
     }
 
     static func removePIDFile() {
+        // Only remove if the file contains OUR pid, preventing a race where
+        // atexit/SIGTERM fires after a new daemon has already written its pid.
+        guard let pid = readPID(), pid == getpid() else { return }
+        try? FileManager.default.removeItem(at: pidFilePath)
+    }
+
+    static func removePIDFileForce() {
         try? FileManager.default.removeItem(at: pidFilePath)
     }
 
@@ -134,14 +142,14 @@ enum DaemonManager {
         guard isProcessRunning(pid) else {
             // Process not running - clean up stale PID file
             debugLog("Found stale PID file (process \(pid) not running), cleaning up...")
-            removePIDFile()
+            removePIDFileForce()
             return nil
         }
 
         // Check if it's actually a CorrectMe process
         guard isCorrectMeProcess(pid) else {
             debugLog("Found PID file but process \(pid) is not CorrectMe, cleaning up...")
-            removePIDFile()
+            removePIDFileForce()
             return nil
         }
 
@@ -371,8 +379,23 @@ enum DaemonManager {
 
     static func restartViaLaunchAgent() -> Never {
         print("Restarting daemon...")
+
+        // Capture old PID before stopping so we can wait for it to exit
+        let oldPID = readPID()
+
         runLaunchctl(["stop", "com.correctme.daemon"])
-        sleep(1)
+
+        // Wait for old process to fully exit (up to 3s) before starting new one.
+        // This ensures the old NSStatusItem is removed before the new one appears.
+        if let pid = oldPID {
+            for _ in 0..<30 {
+                if !isProcessRunning(pid) { break }
+                usleep(100_000) // 100ms
+            }
+        } else {
+            sleep(1)
+        }
+
         let result = runLaunchctl(["start", "com.correctme.daemon"])
         usleep(400_000) // Wait for daemon to write PID file
 
@@ -388,24 +411,31 @@ enum DaemonManager {
     }
 
     static func setupCleanupHandlers() {
-        // Clean up PID file on exit
+        // Clean up PID file on exit (guarded: only removes if pid file belongs to us)
         atexit {
             DaemonManager.removePIDFile()
         }
 
-        // Handle termination signals
+        // Handle termination signals.
+        // Dispatch to main thread so NSApplication tears down properly —
+        // this removes the NSStatusItem before exit, preventing stale menu bar icons
+        // when the daemon is restarted.
         signal(SIGTERM) { _ in
-            print("\n👋 Daemon received SIGTERM, shutting down...")
-            fflush(stdout)
-            DaemonManager.removePIDFile()
-            exit(0)
+            DispatchQueue.main.async {
+                print("\n👋 Daemon received SIGTERM, shutting down...")
+                fflush(stdout)
+                DaemonManager.removePIDFile()
+                NSApplication.shared.terminate(nil)
+            }
         }
 
         signal(SIGINT) { _ in
-            print("\n👋 Daemon received SIGINT, shutting down...")
-            fflush(stdout)
-            DaemonManager.removePIDFile()
-            exit(0)
+            DispatchQueue.main.async {
+                print("\n👋 Daemon received SIGINT, shutting down...")
+                fflush(stdout)
+                DaemonManager.removePIDFile()
+                NSApplication.shared.terminate(nil)
+            }
         }
     }
 }
