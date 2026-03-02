@@ -34,7 +34,10 @@ Setup payment platform to handle purchases and automatically generate license ke
 - On Lifetime Pro purchase: generate license key with tier `lifetime`, store in KV
 - On subscription cancel: downgrade `pro` → `free` tier (keep license key, reduce quota)
 - On subscription renew: keep `pro` tier active
+- Handle lifecycle states: `active`, `past_due`, `grace_period`, `canceled`, `refunded`, `chargeback`
+- Define deterministic entitlement transitions for each lifecycle state
 - License key format: `CM-XXXX-XXXX-XXXX`
+- All webhook writes must be idempotent (dedupe by provider event id)
 
 **Device policy:**
 - License key is not bound to any device
@@ -42,13 +45,20 @@ Setup payment platform to handle purchases and automatically generate license ke
 - No device activation/deactivation needed
 
 **Note:** BYO key users who buy one-time app purchase only need app activation — they don't use bundle key at all. Their license just unlocks the app past the 7-day trial.
+
+**Positioning clarity (important):**
+- One-time = unlock app/BYO usage forever
+- One-time does **not** increase bundle quota (still 30 req/month)
+- Pro/Lifetime are the plans that increase bundle quota
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 Payment platform products configured (Pro subscription + One-time)
 - [ ] #2 Webhook receives purchase events and creates license in KV
-- [ ] #3 Webhook handles subscription cancellation (downgrade to free)
+- [ ] #3 Webhook handles full lifecycle states (past_due/grace_period/canceled/refunded/chargeback) with deterministic tier transitions
 - [ ] #4 License keys are generated in user-friendly format
 - [ ] #5 Webhook signature verification prevents spoofing
+- [ ] #6 Idempotency: duplicate webhook deliveries do not create duplicate licenses or incorrect entitlement transitions
+- [ ] #7 Entitlement event log stores source event id + timestamp for audit/recovery
 <!-- AC:END -->

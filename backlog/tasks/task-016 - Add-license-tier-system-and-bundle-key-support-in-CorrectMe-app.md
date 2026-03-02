@@ -12,6 +12,7 @@ labels:
 milestone: m-0
 dependencies:
   - TASK-014
+  - TASK-015
 priority: high
 ---
 
@@ -29,7 +30,7 @@ Add licensing logic to the CorrectMe macOS app so it can work with the bundle ke
   - Device ID generation (hardware UUID) — for analytics only, not enforcement
   - License validation flow (call `/v1/activate` to verify key is valid)
   - Quota check (call `/v1/quota`)
-  - Trial tracking for BYO free tier (7-day limit, stored locally)
+  - Trial tracking for BYO free tier (7-day limit). Prefer server-verified trial state; if local-only in MVP, mark as soft-enforcement
 - New `BundleAIProvider` in `AIProviders.swift`:
   - Instead of calling DeepSeek directly, calls the Cloudflare Worker proxy endpoint
   - Sends `{ licenseKey, deviceId, text }` to `POST /v1/correct`
@@ -50,8 +51,8 @@ Add licensing logic to the CorrectMe macOS app so it can work with the bundle ke
 - Device ID sent for analytics/debugging only
 
 **Tier behavior in app:**
-- **Free (no license):** BYO key = 7-day trial then locked. Bundle key = 30 req/month.
-- **One-time ($9-15):** BYO key = unlimited forever. Bundle key = 30 req/month.
+- **Free (no license):** BYO key = 7-day trial then locked (soft-enforced if local-only). Bundle key = 30 req/month.
+- **One-time ($9-15):** BYO key = unlimited forever. Bundle key = 30 req/month (no quota increase).
 - **Pro ($3-5/mo):** BYO key = unlimited. Bundle key = 1000 req/month.
 - **Lifetime ($29-49):** BYO key = unlimited forever. Bundle key = 1000 req/month forever.
 <!-- SECTION:DESCRIPTION:END -->
@@ -64,4 +65,6 @@ Add licensing logic to the CorrectMe macOS app so it can work with the bundle ke
 - [ ] #4 Quota exceeded shows clear HUD message with upgrade hint
 - [ ] #5 Existing BYO key users are completely unaffected
 - [ ] #6 Device ID is stable across app restarts
+- [ ] #7 One-time tier copy in app explicitly states: BYO unlocked forever, bundle quota remains 30/month
+- [ ] #8 Trial enforcement mode is explicit (server-verified preferred; if local-only MVP, documented as soft enforcement)
 <!-- AC:END -->

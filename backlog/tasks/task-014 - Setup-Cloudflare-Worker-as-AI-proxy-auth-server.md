@@ -28,7 +28,7 @@ Create a Cloudflare Worker that acts as both an auth/quota gateway and AI proxy 
 - Endpoint: `GET /v1/quota` — returns current usage and remaining quota for a license key
 - Endpoint: `POST /v1/activate` — verify license key is valid (no device binding)
 - Rate limiting and error handling
-- Cron trigger for monthly usage reset
+- Cron trigger for monthly usage reset (calendar month in UTC)
 
 **Auth flow:**
 1. App sends `{ licenseKey, deviceId, text }` to Worker
@@ -52,6 +52,10 @@ Create a Cloudflare Worker that acts as both an auth/quota gateway and AI proxy 
 - free + one-time: 30 req/month
 - pro + lifetime: 1000 req/month
 - BYO key users don't hit this server at all
+
+**Quota reset policy:**
+- Reset by calendar month (UTC), not rolling 30 days
+- `/v1/quota` must include `resetAt` so client can show exact reset time
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -60,9 +64,9 @@ Create a Cloudflare Worker that acts as both an auth/quota gateway and AI proxy 
 - [ ] #2 POST /v1/correct validates license and proxies to DeepSeek successfully
 - [ ] #3 Usage counting increments correctly per license key (not per device)
 - [ ] #4 Returns 429 when quota exceeded with clear error message
-- [ ] #5 GET /v1/quota returns accurate usage info for a license key
+- [ ] #5 GET /v1/quota returns accurate usage info for a license key, including `resetAt` (UTC)
 - [ ] #6 POST /v1/activate verifies license key is valid (no device binding)
-- [ ] #7 Monthly cron resets usage counters
+- [ ] #7 Monthly cron resets usage counters using calendar month UTC
 - [ ] #8 DeepSeek API key is never exposed to client
 - [ ] #9 Same license key works from multiple devices simultaneously
 <!-- AC:END -->

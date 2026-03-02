@@ -34,6 +34,7 @@ Add UI elements for users to see their quota usage, manage license, and choose b
     - Free BYO → "Buy app ($9-15)" or "Try bundle key"
     - Free bundle → "Upgrade to Pro ($3-5/mo)" or "Buy Lifetime ($29-49)"
     - One-time bundle → "Upgrade to Pro" or "Buy Lifetime"
+  - Explicit helper text for One-time users: "Bạn đã mở khóa BYO vĩnh viễn. Gói này không tăng quota built-in AI (vẫn 30/tháng)."
   - "Use my own API key instead" toggle
 - **Onboarding/Setup wizard update**:
   - Add choice: "Use built-in AI (free, 30 req/month)" vs "Use your own API key (free 7-day trial)"
@@ -60,4 +61,5 @@ Add UI elements for users to see their quota usage, manage license, and choose b
 - [ ] #5 Setup wizard offers bundle key vs BYO key choice
 - [ ] #6 Quota warning appears when usage > 80%
 - [ ] #7 BYO key users see no quota-related UI
+- [ ] #8 One-time tier UI copy clearly explains BYO unlocked forever, but built-in AI quota remains 30/month
 <!-- AC:END -->
