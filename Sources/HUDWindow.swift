@@ -65,10 +65,8 @@ class HUDWindow: NSWindow {
     }
 
     private func positionNearSelection() {
-        let selectionBounds = cachedSelectionBounds ?? AccessibilityHelper.getSelectedTextBounds()
-        cachedSelectionBounds = nil
-
-        if let bounds = selectionBounds {
+        if let bounds = cachedSelectionBounds {
+            cachedSelectionBounds = nil
             positionNearBounds(bounds)
         } else {
             positionNearMouse()

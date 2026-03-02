@@ -1322,9 +1322,6 @@ struct CorrectMeApp {
         isProcessing = true
         debugLog("handleHotkey() triggered")
 
-        // Cache selection bounds before any async operations
-        hud?.cacheSelectionBounds()
-
         // Remember the source app so we can paste back to it even if user switches apps
         let sourceApp = NSWorkspace.shared.frontmostApplication
         debugLog("Source app: \(sourceApp?.localizedName ?? "nil")")
@@ -1332,34 +1329,50 @@ struct CorrectMeApp {
         // Set bundle ID for per-app writing style resolution
         currentCorrectionBundleId = sourceApp?.bundleIdentifier
 
-        // Show HUD loading state near selection (or cursor as fallback)
+        // Show HUD immediately near mouse cursor — no AX call here so the main thread
+        // stays free and the ⏳ icon updates right away.
         hud?.showLoading()
 
-        // Longer delay to let the hotkey event fully complete
+        // Brief delay to let the hotkey event fully clear before we simulate Cmd+C.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            // Capture clipboard content BEFORE getSelectedText(), which may overwrite it
-            // via the Cmd+C fallback. This lets us restore the user's original clipboard
-            // after the corrected text is pasted.
+            // Snapshot clipboard BEFORE getSelectedText(), which may overwrite it
+            // via the Cmd+C fallback.
             let clipboardBeforeCorrection = NSPasteboard.general.string(forType: .string)
 
-            guard let selectedText = AccessibilityHelper.getSelectedText(), !selectedText.isEmpty else {
-                let errorMsg = "No text selected"
-                logPrint("⚠️  \(errorMsg)")
-                ErrorLog.shared.log(errorMsg, category: .userError)
-                isProcessing = false
-                hud?.showError()
-                return
-            }
+            // Move text capture to a background thread so the main thread stays
+            // responsive. getSelectedText() may call Thread.sleep() in its clipboard
+            // fallback path, which would otherwise freeze the HUD animation and
+            // prevent the menu-bar icon from updating.
+            Task.detached {
+                guard let selectedText = AccessibilityHelper.getSelectedText(), !selectedText.isEmpty else {
+                    let errorMsg = "No text selected"
+                    logPrint("⚠️  \(errorMsg)")
+                    ErrorLog.shared.log(errorMsg, category: .userError)
+                    await MainActor.run {
+                        isProcessing = false
+                        hud?.showError()
+                    }
+                    return
+                }
 
-            let preview = selectedText.prefix(50)
-            logPrint("📝 Correcting: \"\(preview)\(selectedText.count > 50 ? "..." : "")\"")
+                let preview = selectedText.prefix(50)
+                logPrint("📝 Correcting: \"\(preview)\(selectedText.count > 50 ? "..." : "")\"")
 
-            Task {
+                guard let provider = aiProvider else {
+                    let errorMsg = "No AI provider configured"
+                    logPrint("❌ \(errorMsg)")
+                    ErrorLog.shared.log(errorMsg, category: .userError)
+                    await MainActor.run {
+                        isProcessing = false
+                        hud?.showError()
+                    }
+                    return
+                }
+
                 do {
-                    let correctedText = try await aiProvider!.correctText(selectedText)
+                    let correctedText = try await provider.correctText(selectedText)
 
                     await MainActor.run {
-                        // Hide loading HUD before showing result
                         hud?.hide()
 
                         let applyCorrection = {
@@ -1367,7 +1380,6 @@ struct CorrectMeApp {
                                 original: selectedText,
                                 corrected: correctedText
                             )
-                            // Store for undo
                             lastOriginalText = selectedText
                             lastCorrectionSourceApp = sourceApp
                             let pasteSuccess = AccessibilityHelper.replaceSelectedText(
@@ -1386,7 +1398,6 @@ struct CorrectMeApp {
                             isProcessing = false
                         }
 
-                        // Force apply: skip review panel, apply immediately
                         if Config.load().forceApply ?? false {
                             applyCorrection()
                             return
