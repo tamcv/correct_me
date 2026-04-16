@@ -46,6 +46,30 @@ chmod +x "${MACOS_DIR}/correctme"
 cp Resources/Info.plist "${CONTENTS_DIR}/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${CONTENTS_DIR}/Info.plist" 2>/dev/null || true
 
+# ── Bundle Sparkle.framework ───────────────────────────────────────────────
+# Sparkle is a dynamic framework; it must live in Contents/Frameworks so
+# the binary can find it at runtime (@rpath/Sparkle.framework/Sparkle).
+FRAMEWORKS_DIR="${CONTENTS_DIR}/Frameworks"
+SPARKLE_XCFW=$(find .build/artifacts -name "Sparkle.xcframework" 2>/dev/null | head -1)
+if [ -n "$SPARKLE_XCFW" ]; then
+    echo "📎 Bundling Sparkle.framework..."
+    mkdir -p "$FRAMEWORKS_DIR"
+    # The xcframework slice for macOS (arm64 + x86_64 universal)
+    SPARKLE_FW="${SPARKLE_XCFW}/macos-arm64_x86_64/Sparkle.framework"
+    if [ ! -d "$SPARKLE_FW" ]; then
+        # Fallback: find any macos slice
+        SPARKLE_FW=$(find "$SPARKLE_XCFW" -maxdepth 2 -name "Sparkle.framework" | grep -i macos | head -1)
+    fi
+    if [ -d "$SPARKLE_FW" ]; then
+        cp -R "$SPARKLE_FW" "$FRAMEWORKS_DIR/"
+        echo "  ✅ Sparkle.framework bundled from $SPARKLE_FW"
+    else
+        echo "  ⚠️  Sparkle.framework slice not found inside $SPARKLE_XCFW"
+    fi
+else
+    echo "  ⚠️  Sparkle.xcframework not found in .build/artifacts — run: swift package resolve"
+fi
+
 echo "✅ App bundle created at: ${APP_DIR}"
 echo ""
 

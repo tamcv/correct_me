@@ -1,0 +1,17 @@
+{
+  "name": "correctme-license-server",
+  "version": "1.0.0",
+  "description": "CorrectMe license server — Stripe payments + license key generation + email delivery",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "resend": "^3.0.0",
+    "stripe": "^14.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

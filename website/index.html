@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CorrectMe — AI text correction for macOS</title>
+  <meta name="description" content="Select any text, press a hotkey, get it corrected by AI. Works in every app on your Mac.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #fff;
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --border: #d2d2d7;
+      --card-bg: #f5f5f7;
+      --green: #1db954;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #000;
+        --text: #f5f5f7;
+        --muted: #a1a1a6;
+        --accent: #2997ff;
+        --accent-hover: #47a9ff;
+        --border: #3a3a3c;
+        --card-bg: #1c1c1e;
+      }
+    }
+
+    html { scroll-behavior: smooth; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+           background: var(--bg); color: var(--text); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── NAV ─────────────────────────────────────────── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 52px;
+      background: rgba(255,255,255,0.85); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    @media (prefers-color-scheme: dark) {
+      nav { background: rgba(0,0,0,0.85); }
+    }
+    .nav-logo { font-size: 17px; font-weight: 600; color: var(--text); }
+    .nav-links { display: flex; gap: 24px; font-size: 14px; }
+    .nav-links a { color: var(--muted); }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-cta { font-size: 14px; font-weight: 500; background: var(--accent); color: #fff !important;
+               padding: 7px 16px; border-radius: 980px; transition: background .15s; }
+    .nav-cta:hover { background: var(--accent-hover) !important; text-decoration: none !important; }
+
+    /* ── HERO ────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 100px 24px 80px;
+      max-width: 860px; margin: 0 auto;
+    }
+    .badge {
+      display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      padding: 4px 12px; border-radius: 980px; margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 64px); font-weight: 700; line-height: 1.08;
+      letter-spacing: -.03em; margin-bottom: 20px;
+    }
+    .hero p {
+      font-size: clamp(16px, 2vw, 20px); color: var(--muted); max-width: 540px; margin: 0 auto 40px;
+    }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      display: inline-block; padding: 14px 28px; border-radius: 980px;
+      background: var(--accent); color: #fff; font-size: 16px; font-weight: 600;
+      transition: background .15s; cursor: pointer; border: none;
+    }
+    .btn-primary:hover { background: var(--accent-hover); text-decoration: none; }
+    .btn-secondary {
+      display: inline-block; padding: 14px 28px; border-radius: 980px;
+      background: var(--card-bg); color: var(--text); font-size: 16px; font-weight: 500;
+      transition: opacity .15s;
+    }
+    .btn-secondary:hover { opacity: .8; text-decoration: none; }
+
+    /* ── DEMO ────────────────────────────────────────── */
+    .demo {
+      max-width: 720px; margin: 0 auto 80px;
+      background: var(--card-bg); border-radius: 20px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .demo-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--card-bg) 80%, var(--bg) 20%);
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-red { background: #ff5f57; }
+    .dot-yellow { background: #febc2e; }
+    .dot-green { background: #28c840; }
+    .demo-label { font-size: 13px; color: var(--muted); margin-left: 8px; }
+    .demo-body { padding: 28px 32px; }
+    .demo-row { display: grid; grid-template-columns: 1fr 40px 1fr; gap: 16px; align-items: center; }
+    .demo-text {
+      font-size: 15px; line-height: 1.7; padding: 16px 18px;
+      background: var(--bg); border-radius: 10px; border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .demo-arrow { text-align: center; font-size: 22px; color: var(--accent); }
+    .demo-corrected { border-color: var(--green) !important; }
+    .hotkey {
+      text-align: center; margin-top: 20px; font-size: 13px; color: var(--muted);
+    }
+    kbd {
+      display: inline-block; padding: 2px 8px; font-family: inherit; font-size: 12px;
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 5px;
+      box-shadow: 0 1px 0 var(--border); color: var(--text);
+    }
+
+    /* ── FEATURES ────────────────────────────────────── */
+    .section { max-width: 1040px; margin: 0 auto; padding: 80px 24px; }
+    .section-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 12px; text-align: center; }
+    .section-sub { font-size: 17px; color: var(--muted); text-align: center; margin-bottom: 56px; }
+
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .feature-card {
+      background: var(--card-bg); border-radius: 16px; padding: 28px 24px;
+      border: 1px solid var(--border);
+    }
+    .feature-icon { font-size: 32px; margin-bottom: 14px; }
+    .feature-card h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+    .feature-card p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+    /* ── PRICING ─────────────────────────────────────── */
+    #pricing { background: var(--card-bg); }
+    .pricing-card {
+      max-width: 420px; margin: 0 auto;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 24px; padding: 48px 40px; text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,.08);
+    }
+    .price { font-size: 56px; font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+    .price-sub { font-size: 14px; color: var(--muted); margin-bottom: 32px; margin-top: 4px; }
+    .feature-list { list-style: none; text-align: left; margin-bottom: 36px; display: flex; flex-direction: column; gap: 12px; }
+    .feature-list li { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+    .feature-list li::before { content: "✓"; color: var(--green); font-weight: 700; }
+    #buy-btn {
+      width: 100%; padding: 16px; border-radius: 980px;
+      background: var(--accent); color: #fff; font-size: 17px; font-weight: 600;
+      border: none; cursor: pointer; transition: background .15s;
+    }
+    #buy-btn:hover { background: var(--accent-hover); }
+    #buy-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .guarantee { font-size: 13px; color: var(--muted); margin-top: 16px; }
+
+    /* ── FAQ ─────────────────────────────────────────── */
+    .faq-list { display: flex; flex-direction: column; gap: 16px; max-width: 680px; margin: 0 auto; }
+    details {
+      background: var(--card-bg); border-radius: 12px; padding: 0;
+      border: 1px solid var(--border); overflow: hidden;
+    }
+    summary {
+      padding: 18px 22px; font-size: 16px; font-weight: 500; cursor: pointer;
+      list-style: none; display: flex; justify-content: space-between; align-items: center;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; font-size: 20px; color: var(--muted); transition: transform .2s; }
+    details[open] summary::after { transform: rotate(45deg); }
+    .faq-body { padding: 0 22px 18px; font-size: 15px; color: var(--muted); line-height: 1.7; }
+
+    /* ── FOOTER ──────────────────────────────────────── */
+    footer {
+      text-align: center; padding: 48px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px; color: var(--muted);
+    }
+
+    /* ── SUCCESS PAGE ────────────────────────────────── */
+    .success-page { display: none; }
+    body.purchase-complete .main-content { display: none; }
+    body.purchase-complete .success-page { display: flex; flex-direction: column; align-items: center;
+                                           justify-content: center; min-height: 80vh; text-align: center; padding: 40px; }
+  </style>
+</head>
+<body>
+
+<!-- Success page (shown after Stripe redirect) -->
+<div class="success-page">
+  <div style="font-size: 64px; margin-bottom: 24px;">🎉</div>
+  <h1 style="font-size: 32px; font-weight: 700; margin-bottom: 12px;">Purchase Complete!</h1>
+  <p style="font-size: 18px; color: var(--muted); max-width: 480px; margin-bottom: 32px;">
+    Your license key is on its way. Check your email (including spam) — it should arrive within a minute.
+  </p>
+  <a href="/" class="btn-secondary">Back to homepage →</a>
+</div>
+
+<div class="main-content">
+
+<!-- NAV -->
+<nav>
+  <span class="nav-logo">✏️ CorrectMe</span>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">FAQ</a>
+  </div>
+  <a href="#pricing" class="nav-links nav-cta">Buy — $9</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="badge">macOS Menu Bar App</div>
+  <h1>Fix any text,<br>in any app,<br>instantly.</h1>
+  <p>Select text, press <kbd>⌘⇧E</kbd>, and AI corrects your spelling and grammar — right where you typed it.</p>
+  <div class="hero-actions">
+    <a href="#pricing" class="btn-primary">Buy for $9</a>
+    <a href="https://github.com/tamcv/correct_me/releases/latest" class="btn-secondary">Download Free Trial</a>
+  </div>
+</section>
+
+<!-- DEMO -->
+<div class="demo" style="padding: 0 24px; max-width: 760px; margin: 0 auto 80px;">
+  <div style="background: var(--card-bg); border-radius: 20px; overflow: hidden; border: 1px solid var(--border);">
+    <div class="demo-bar">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <span class="demo-label">Any app — Slack, Mail, VS Code, Notes…</span>
+    </div>
+    <div class="demo-body">
+      <div class="demo-row">
+        <div class="demo-text">i dont know if teh meetig is stil on for tomrrow</div>
+        <div class="demo-arrow">→</div>
+        <div class="demo-text demo-corrected">I don't know if the meeting is still on for tomorrow.</div>
+      </div>
+      <div class="hotkey">Press <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>E</kbd> to correct selected text</div>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <h2 class="section-title">Everything you need</h2>
+  <p class="section-sub">Designed for macOS. Respects your privacy.</p>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">⚡️</div>
+      <h3>Works everywhere</h3>
+      <p>Works in every macOS app — Slack, Mail, Notion, VS Code, Notes, browsers, anything.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔑</div>
+      <h3>Your AI, your key</h3>
+      <p>Connect Claude, GPT-4, Gemini, or OpenRouter. Your API key, your costs, your data.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🌍</div>
+      <h3>Multilingual</h3>
+      <p>Detects your language automatically. Full support for Vietnamese, English, and more.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">✍️</div>
+      <h3>Writing style</h3>
+      <p>Tell the AI your preferred style — more formal, more casual, shorter. Per-app styles too.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">👀</div>
+      <h3>Preview before applying</h3>
+      <p>See the diff before it replaces your text. Accept or reject with a keypress.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔒</div>
+      <h3>Private by design</h3>
+      <p>No account, no telemetry. API keys stored in macOS Keychain. Zero data collection.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing" style="background: var(--card-bg);">
+  <h2 class="section-title">One price, yours forever</h2>
+  <p class="section-sub">No subscription. No usage limits. One payment.</p>
+  <div class="pricing-card">
+    <div class="price">$9</div>
+    <div class="price-sub">One-time payment · macOS 13+</div>
+    <ul class="feature-list">
+      <li>Lifetime license — no subscription</li>
+      <li>All 6 AI providers (Claude, GPT, Gemini, OpenRouter…)</li>
+      <li>Unlimited corrections</li>
+      <li>Free updates for life</li>
+      <li>Priority email support</li>
+    </ul>
+    <button id="buy-btn" onclick="startCheckout()">Buy CorrectMe — $9</button>
+    <p class="guarantee">30-day money-back guarantee · No questions asked</p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section" id="faq">
+  <h2 class="section-title">Questions</h2>
+  <p class="section-sub"></p>
+  <div class="faq-list">
+    <details>
+      <summary>How does it work?</summary>
+      <div class="faq-body">
+        CorrectMe runs as a menu bar app. Select any text in any app, press the hotkey (default <kbd>⌘⇧E</kbd>),
+        and your selected text is sent to the AI provider of your choice. The corrected text replaces the original instantly.
+      </div>
+    </details>
+    <details>
+      <summary>Do I need an AI API key?</summary>
+      <div class="faq-body">
+        Yes — CorrectMe connects to your own AI account (Claude, OpenAI, Gemini, or OpenRouter).
+        This keeps your data private and your costs predictable. For most users, API costs are
+        well under $1/month. OpenRouter has models with a free tier.
+      </div>
+    </details>
+    <details>
+      <summary>What macOS version is required?</summary>
+      <div class="faq-body">macOS 13 Ventura or later.</div>
+    </details>
+    <details>
+      <summary>Can I use it in any language?</summary>
+      <div class="faq-body">
+        Yes. CorrectMe detects the language of your text automatically and corrects it in that language.
+        Vietnamese (tiếng Việt) is specifically supported, including diacritics and tone marks.
+      </div>
+    </details>
+    <details>
+      <summary>What happens after I buy?</summary>
+      <div class="faq-body">
+        You'll receive a license key by email within a minute of purchase.
+        Enter it in CorrectMe → <strong>Activate License…</strong> to unlock the app.
+      </div>
+    </details>
+    <details>
+      <summary>Can I get a refund?</summary>
+      <div class="faq-body">
+        Yes — 30-day no-questions-asked refund. Just reply to your purchase email.
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p style="margin-bottom: 8px;">✏️ <strong>CorrectMe</strong> — AI text correction for macOS</p>
+  <p>
+    <a href="https://github.com/tamcv/correct_me">GitHub</a> ·
+    <a href="https://github.com/tamcv/correct_me/releases">Download</a> ·
+    <a href="mailto:support@correctme.app">Support</a>
+  </p>
+  <p style="margin-top: 16px; font-size: 12px;">© 2025 CorrectMe. All rights reserved.</p>
+</footer>
+
+</div><!-- .main-content -->
+
+<script>
+  // Show success page if redirected from Stripe
+  if (window.location.pathname === '/success') {
+    document.body.classList.add('purchase-complete');
+  }
+
+  async function startCheckout() {
+    const btn = document.getElementById('buy-btn');
+    btn.disabled = true;
+    btn.textContent = 'Redirecting to checkout…';
+
+    try {
+      const res = await fetch('/api/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Unknown error');
+      }
+    } catch (err) {
+      alert('Something went wrong: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = 'Buy CorrectMe — $9';
+    }
+  }
+</script>
+</body>
+</html>

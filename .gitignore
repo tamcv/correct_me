@@ -4,3 +4,9 @@ dist/
 *.bak
 .vscode/settings.json
 plan.md
+
+# License server
+license-server/node_modules/
+license-server/.env.local
+license-server/.env
+license-server/.vercel/

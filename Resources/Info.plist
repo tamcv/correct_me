@@ -21,10 +21,10 @@
     <string>APPL</string>
 
     <key>CFBundleShortVersionString</key>
-    <string>0.2.1</string>
+    <string>0.3.4</string>
 
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>34</string>
 
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
@@ -37,5 +37,24 @@
 
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+
+    <!-- Sparkle auto-update configuration -->
+    <!-- SUFeedURL: host your appcast.xml at this URL (e.g. GitHub Pages).
+         Generate the ed25519 key pair once with Sparkle's generate_keys tool,
+         then put the public key here and keep the private key secret. -->
+    <key>SUFeedURL</key>
+    <string>https://correctme.app/appcast.xml</string>
+
+    <!-- Run: .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/.../generate_keys -->
+    <!-- Then paste the public key (EdDSA, base64) here: -->
+    <key>SUPublicEDKey</key>
+    <string>REPLACE_WITH_YOUR_SPARKLE_PUBLIC_ED_KEY</string>
+
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+
+    <!-- Check every 24 hours (in seconds) -->
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
 </dict>
 </plist>

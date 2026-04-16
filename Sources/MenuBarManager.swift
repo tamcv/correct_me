@@ -281,6 +281,23 @@ class MenuBarManager: NSObject {
         prefsItem.target = self
         menu.addItem(prefsItem)
 
+        let updatesItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updatesItem.target = self
+        menu.addItem(updatesItem)
+
+        let licenseTitle = LicenseManager.shared.isActivated ? "✓ License Activated" : "Activate License…"
+        let licenseItem = NSMenuItem(
+            title: licenseTitle,
+            action: #selector(openLicense),
+            keyEquivalent: ""
+        )
+        licenseItem.target = self
+        menu.addItem(licenseItem)
+
         let feedbackItem = NSMenuItem(
             title: "Send Feedback…",
             action: #selector(openFeedback),
@@ -434,6 +451,14 @@ class MenuBarManager: NSObject {
     @objc private func openPreferences() {
         NSApp.activate(ignoringOtherApps: true)
         PreferencesWindowController.shared.showWindow()
+    }
+
+    @objc private func checkForUpdates() {
+        AppUpdater.shared.checkForUpdates()
+    }
+
+    @objc private func openLicense() {
+        LicenseWindowController.shared.showWindow()
     }
 
     @objc private func openFeedback() {

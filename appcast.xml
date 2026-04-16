@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  appcast.xml — Sparkle auto-update feed for CorrectMe.
+
+  HOST THIS FILE at the URL set in Info.plist → SUFeedURL.
+  Simplest approach: commit to GitHub Pages branch, then SUFeedURL =
+    https://<user>.github.io/correct_me/appcast.xml
+
+  SIGN EACH RELEASE:
+    1. Generate your key pair once (keep private key safe!):
+         .build/artifacts/sparkle/.../generate_keys
+    2. For each release, sign the DMG:
+         .build/artifacts/sparkle/.../sign_update CorrectMe-v0.3.4-macos.dmg
+    3. Paste the edSignature and length values below.
+-->
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>CorrectMe</title>
+    <link>https://correctme.app/appcast.xml</link>
+    <description>CorrectMe release feed</description>
+    <language>en</language>
+
+    <item>
+      <title>CorrectMe 0.3.4</title>
+      <sparkle:version>34</sparkle:version>
+      <sparkle:shortVersionString>0.3.4</sparkle:shortVersionString>
+      <pubDate>Wed, 16 Apr 2025 00:00:00 +0000</pubDate>
+      <sparkle:releaseNotesLink>https://correctme.app/release-notes/0.3.4.html</sparkle:releaseNotesLink>
+      <description><![CDATA[
+        <h3>What's new in 0.3.4</h3>
+        <ul>
+          <li>OpenRouter API support — access hundreds of models with one key</li>
+          <li>Sparkle auto-update support</li>
+          <li>License key activation</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/tamcv/correct_me/releases/download/v0.3.4/CorrectMe-v0.3.4-macos.dmg"
+        sparkle:version="34"
+        sparkle:shortVersionString="0.3.4"
+        length="0"
+        type="application/octet-stream"
+        sparkle:edSignature="REPLACE_WITH_SIGNATURE_FROM_sign_update_TOOL"
+      />
+    </item>
+
+  </channel>
+</rss>
