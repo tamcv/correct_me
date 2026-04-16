@@ -25,6 +25,7 @@ class MenuBarManager: NSObject {
         updateIcon(for: .idle)
 
         menu = NSMenu()
+        menu?.autoenablesItems = false
         menu?.delegate = self
         debugLog("Menu created: \(menu != nil)")
 
@@ -197,7 +198,7 @@ class MenuBarManager: NSObject {
         let historyItem = NSMenuItem(
             title: historyTitle,
             action: #selector(openHistory),
-            keyEquivalent: "h"
+            keyEquivalent: ""
         )
         historyItem.target = self
         menu.addItem(historyItem)
@@ -286,7 +287,8 @@ class MenuBarManager: NSObject {
         ErrorLog.shared.clearErrors()
     }
 
-    @objc private func openHistory() {
+    @objc func openHistory() {
+        NSApp.activate(ignoringOtherApps: true)
         HistoryWindowController.shared.showWindow()
     }
 

@@ -1,6 +1,10 @@
 import Cocoa
 
 // MARK: - HistoryWindowController
+//
+// Uses frame-based (autoresizingMask) layout — same pattern as
+// PreferencesWindowController which is proven to work in our
+// menu-bar daemon context.
 
 final class HistoryWindowController: NSObject, NSWindowDelegate {
     static let shared = HistoryWindowController()
@@ -27,22 +31,28 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
     // MARK: - Public
 
     func showWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        if let existing = window, existing.isVisible {
+        if let existing = window {
+            reloadData()
             existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
         buildWindow()
         reloadData()
         window?.center()
         window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
-    // MARK: - Build UI
+    // MARK: - Build UI (frame-based)
 
     private func buildWindow() {
+        let w: CGFloat = 640
+        let h: CGFloat = 420
+        let bottomBarH: CGFloat = 40
+
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: w, height: h),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
@@ -51,27 +61,63 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.isReleasedWhenClosed = false
         panel.minSize = NSSize(width: 480, height: 300)
+        panel.level = .floating
+        panel.hidesOnDeactivate = false
 
-        // Use the panel's own contentView — do NOT replace it; replacing with a
-        // translatesAutoresizingMaskIntoConstraints=false view leaves it frameless.
-        guard let root = panel.contentView else { return }
+        guard let contentView = panel.contentView else { return }
+        let bounds = contentView.bounds
+
+        // ── Bottom bar ─────────────────────────────────────────
+        let bottomBar = NSView(frame: NSRect(x: 0, y: 0, width: bounds.width, height: bottomBarH))
+        bottomBar.autoresizingMask = [.width]
+        contentView.addSubview(bottomBar)
+
+        let clearBtn = NSButton(title: "Clear All", target: self, action: #selector(clearAll))
+        clearBtn.bezelStyle = .rounded
+        clearBtn.controlSize = .small
+        clearBtn.sizeToFit()
+        clearBtn.frame.origin = NSPoint(x: 12, y: (bottomBarH - clearBtn.frame.height) / 2)
+        clearBtn.autoresizingMask = [.maxXMargin]
+        bottomBar.addSubview(clearBtn)
+
+        let copyBtn = NSButton(title: "Copy Corrected", target: self, action: #selector(copySelected))
+        copyBtn.bezelStyle = .rounded
+        copyBtn.controlSize = .small
+        copyBtn.sizeToFit()
+        copyBtn.frame.origin = NSPoint(x: clearBtn.frame.maxX + 8, y: clearBtn.frame.origin.y)
+        copyBtn.autoresizingMask = [.maxXMargin]
+        bottomBar.addSubview(copyBtn)
+
+        let lbl = NSTextField(labelWithString: "")
+        lbl.font = .systemFont(ofSize: 11)
+        lbl.textColor = .secondaryLabelColor
+        lbl.alignment = .right
+        lbl.frame = NSRect(x: bounds.width - 160, y: (bottomBarH - 16) / 2, width: 148, height: 16)
+        lbl.autoresizingMask = [.minXMargin]
+        bottomBar.addSubview(lbl)
+        self.countLabel = lbl
+
+        // ── Separator ──────────────────────────────────────────
+        let sep = NSBox(frame: NSRect(x: 0, y: bottomBarH, width: bounds.width, height: 1))
+        sep.boxType = .separator
+        sep.autoresizingMask = [.width]
+        contentView.addSubview(sep)
 
         // ── Table ──────────────────────────────────────────────
-        let scrollView = NSScrollView()
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        let tableY = bottomBarH + 1
+        let tableH = bounds.height - tableY
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: tableY, width: bounds.width, height: tableH))
+        scrollView.autoresizingMask = [.width, .height]
         scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
-        root.addSubview(scrollView)
+        contentView.addSubview(scrollView)
 
-        let tv = NSTableView()
-        tv.usesAutomaticRowHeights = true
+        let tv = NSTableView(frame: scrollView.bounds)
         tv.style = .inset
         tv.rowSizeStyle = .medium
-        tv.gridStyleMask = .solidHorizontalGridLineMask
-        tv.gridColor = NSColor.separatorColor
-        tv.selectionHighlightStyle = .regular
+        tv.usesAlternatingRowBackgroundColors = true
         tv.allowsMultipleSelection = false
         tv.doubleAction = #selector(copySelected)
         tv.target = self
@@ -82,93 +128,26 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         timeCol.title = "Time"
         timeCol.width = 80
         timeCol.minWidth = 60
-        timeCol.maxWidth = 100
-        timeCol.resizingMask = .userResizingMask
+        timeCol.maxWidth = 120
 
         let origCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("original"))
         origCol.title = "Original"
-        origCol.minWidth = 120
+        origCol.width = 240
+        origCol.minWidth = 100
         origCol.resizingMask = [.userResizingMask, .autoresizingMask]
 
         let corrCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("corrected"))
         corrCol.title = "Corrected"
-        corrCol.minWidth = 120
+        corrCol.width = 240
+        corrCol.minWidth = 100
         corrCol.resizingMask = [.userResizingMask, .autoresizingMask]
 
         tv.addTableColumn(timeCol)
         tv.addTableColumn(origCol)
         tv.addTableColumn(corrCol)
-        tv.sizeLastColumnToFit()
 
         scrollView.documentView = tv
         self.tableView = tv
-
-        // ── Bottom bar ─────────────────────────────────────────
-        let divider = NSBox()
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        divider.boxType = .separator
-        root.addSubview(divider)
-
-        let bottomBar = NSView()
-        bottomBar.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(bottomBar)
-
-        let clearBtn = NSButton(title: "Clear All", target: self, action: #selector(clearAll))
-        clearBtn.translatesAutoresizingMaskIntoConstraints = false
-        clearBtn.bezelStyle = .rounded
-        clearBtn.controlSize = .small
-        bottomBar.addSubview(clearBtn)
-
-        let copyBtn = NSButton(title: "Copy Corrected", target: self, action: #selector(copySelected))
-        copyBtn.translatesAutoresizingMaskIntoConstraints = false
-        copyBtn.bezelStyle = .rounded
-        copyBtn.controlSize = .small
-        bottomBar.addSubview(copyBtn)
-
-        let lbl = NSTextField(labelWithString: "")
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        lbl.font = .systemFont(ofSize: 11)
-        lbl.textColor = .secondaryLabelColor
-        lbl.alignment = .right
-        bottomBar.addSubview(lbl)
-        self.countLabel = lbl
-
-        let hint = NSTextField(labelWithString: "Double-click a row to copy corrected text")
-        hint.translatesAutoresizingMaskIntoConstraints = false
-        hint.font = .systemFont(ofSize: 10)
-        hint.textColor = .tertiaryLabelColor
-        hint.alignment = .center
-        bottomBar.addSubview(hint)
-
-        // ── Constraints ────────────────────────────────────────
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: root.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: divider.topAnchor),
-
-            divider.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            divider.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            divider.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
-            divider.heightAnchor.constraint(equalToConstant: 1),
-
-            bottomBar.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            bottomBar.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            bottomBar.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            bottomBar.heightAnchor.constraint(equalToConstant: 44),
-
-            clearBtn.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 12),
-            clearBtn.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
-
-            copyBtn.leadingAnchor.constraint(equalTo: clearBtn.trailingAnchor, constant: 8),
-            copyBtn.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
-
-            hint.centerXAnchor.constraint(equalTo: bottomBar.centerXAnchor),
-            hint.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
-
-            lbl.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -12),
-            lbl.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
-        ])
 
         self.window = panel
     }
@@ -178,7 +157,8 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
     private func reloadData() {
         entries = CorrectionHistory.shared.getEntries()
         tableView?.reloadData()
-        countLabel?.stringValue = entries.isEmpty ? "No entries" : "\(entries.count) correction\(entries.count == 1 ? "" : "s")"
+        let count = entries.count
+        countLabel?.stringValue = count == 0 ? "No entries" : "\(count) correction\(count == 1 ? "" : "s")"
     }
 
     @objc private func historyUpdated() {
@@ -213,8 +193,8 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         pasteboard.setString(entries[row].correctedText, forType: .string)
 
         // Brief visual feedback
-        let oldTitle = window?.title ?? ""
-        window?.title = "✓ Copied!"
+        let oldTitle = window?.title ?? "Correction History"
+        window?.title = "✓ Copied to clipboard!"
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             self?.window?.title = oldTitle
         }
@@ -223,7 +203,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
-        // nothing
+        // Keep the window around for reuse
     }
 }
 
@@ -239,9 +219,9 @@ extension HistoryWindowController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard row < entries.count else { return nil }
         let entry = entries[row]
-        let id = tableColumn?.identifier.rawValue ?? ""
+        let colId = tableColumn?.identifier.rawValue ?? ""
 
-        let cellId = NSUserInterfaceItemIdentifier("cell-\(id)")
+        let cellId = NSUserInterfaceItemIdentifier("hist-\(colId)")
         let cell: NSTableCellView
         if let reused = tableView.makeView(withIdentifier: cellId, owner: self) as? NSTableCellView {
             cell = reused
@@ -249,42 +229,31 @@ extension HistoryWindowController: NSTableViewDelegate {
             cell = NSTableCellView()
             cell.identifier = cellId
             let tf = NSTextField(labelWithString: "")
-            tf.translatesAutoresizingMaskIntoConstraints = false
             tf.lineBreakMode = .byTruncatingTail
             tf.maximumNumberOfLines = 1
+            tf.frame = cell.bounds
+            tf.autoresizingMask = [.width, .height]
             cell.addSubview(tf)
             cell.textField = tf
-            NSLayoutConstraint.activate([
-                tf.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
-                tf.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
-                tf.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            ])
         }
 
-        switch id {
+        switch colId {
         case "time":
             cell.textField?.stringValue = entry.timeAgo
             cell.textField?.textColor = .secondaryLabelColor
             cell.textField?.font = .systemFont(ofSize: 11)
-            cell.textField?.alignment = .left
         case "original":
             cell.textField?.stringValue = entry.originalText.replacingOccurrences(of: "\n", with: " ")
             cell.textField?.textColor = .labelColor
             cell.textField?.font = .systemFont(ofSize: 12)
-            cell.textField?.alignment = .left
         case "corrected":
             cell.textField?.stringValue = entry.correctedText.replacingOccurrences(of: "\n", with: " ")
-            cell.textField?.textColor = NSColor(calibratedRed: 0.2, green: 0.6, blue: 0.2, alpha: 1.0)
+            cell.textField?.textColor = .systemGreen
             cell.textField?.font = .systemFont(ofSize: 12)
-            cell.textField?.alignment = .left
         default:
             break
         }
 
         return cell
-    }
-
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        // nothing — copy is on double-click
     }
 }

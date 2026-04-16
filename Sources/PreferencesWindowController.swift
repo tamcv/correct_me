@@ -16,6 +16,10 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     // Provider tab
     private var providerPopUp: NSPopUpButton!
     private var apiKeyField: NSSecureTextField!
+    private var apiKeyPlainField: NSTextField!
+    private var apiKeyRevealed = false
+    private var apiKeyToggleBtn: NSButton!
+    private var apiKeyPreviewLabel: NSTextField!
     private var modelField: NSTextField!
     private var testResultLabel: NSTextField!
     private var testButton: NSButton!
@@ -298,13 +302,51 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(apiKeyLabel)
         y -= 28
 
-        apiKeyField = NSSecureTextField(frame: NSRect(x: pad, y: y, width: contentW, height: 24))
-        apiKeyField.placeholderString = "sk-ant-... / AIzaSy... / sk-..."
+        // Secure field (shown by default)
+        let fieldW = contentW - 100  // leave room for buttons
+        apiKeyField = NSSecureTextField(frame: NSRect(x: pad, y: y, width: fieldW, height: 24))
+        apiKeyField.placeholderString = "Paste your API key here"
         apiKeyField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         apiKeyField.controlSize = .large
+        apiKeyField.target = self
+        apiKeyField.action = #selector(apiKeyFieldChanged)
         view.addSubview(apiKeyField)
+
+        // Plain text field (hidden, used when revealed)
+        apiKeyPlainField = NSTextField(frame: apiKeyField.frame)
+        apiKeyPlainField.placeholderString = apiKeyField.placeholderString
+        apiKeyPlainField.font = apiKeyField.font
+        apiKeyPlainField.controlSize = .large
+        apiKeyPlainField.isHidden = true
+        apiKeyPlainField.target = self
+        apiKeyPlainField.action = #selector(apiKeyFieldChanged)
+        view.addSubview(apiKeyPlainField)
+
+        // Show/Hide toggle
+        apiKeyToggleBtn = NSButton(title: "Show", target: self, action: #selector(toggleAPIKeyVisibility))
+        apiKeyToggleBtn.bezelStyle = .rounded
+        apiKeyToggleBtn.controlSize = .small
+        apiKeyToggleBtn.frame = NSRect(x: pad + fieldW + 4, y: y, width: 48, height: 24)
+        view.addSubview(apiKeyToggleBtn)
+
+        // Paste button
+        let pasteBtn = NSButton(title: "Paste", target: self, action: #selector(pasteAPIKey))
+        pasteBtn.bezelStyle = .rounded
+        pasteBtn.controlSize = .small
+        pasteBtn.frame = NSRect(x: pad + fieldW + 56, y: y, width: 44, height: 24)
+        view.addSubview(pasteBtn)
+
         loadAPIKeyForCurrentProvider()
-        y -= 34
+        y -= 6
+
+        // Key preview label (shows "sk-ant-api0...xY4z  (51 chars)" when key is entered)
+        apiKeyPreviewLabel = NSTextField(labelWithString: "")
+        apiKeyPreviewLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 16)
+        apiKeyPreviewLabel.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        apiKeyPreviewLabel.textColor = .tertiaryLabelColor
+        view.addSubview(apiKeyPreviewLabel)
+        updateAPIKeyPreview()
+        y -= 24
 
         // Test button
         testButton = NSButton(title: "Test Connection", target: self, action: #selector(testConnection))
@@ -372,6 +414,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let needsKey = providerNeedsAPIKey(provider)
 
         apiKeyField.isEnabled = needsKey
+        apiKeyPlainField.isEnabled = needsKey
+        apiKeyToggleBtn.isEnabled = needsKey
         apiKeyLabel.textColor = needsKey ? .labelColor : .tertiaryLabelColor
         testButton.isEnabled = needsKey
 
@@ -379,34 +423,107 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             apiKeyHint.stringValue = "Your API key is stored securely in the macOS Keychain."
         } else {
             apiKeyHint.stringValue = "This provider uses a local CLI tool. No API key needed."
-            apiKeyField.stringValue = ""
+            setAPIKeyValue("")
         }
 
         modelField.placeholderString = defaultModelForProvider(provider)
         testResultLabel.stringValue = ""
 
         loadAPIKeyForCurrentProvider()
+        updateAPIKeyPreview()
     }
 
     private func loadAPIKeyForCurrentProvider() {
         let provider = selectedProvider()
         guard providerNeedsAPIKey(provider) else {
-            apiKeyField.stringValue = ""
+            setAPIKeyValue("")
             return
         }
 
+        let value: String
         switch provider {
-        case .claude:
-            apiKeyField.stringValue = config.anthropicAPIKey ?? ""
-        case .gemini:
-            apiKeyField.stringValue = config.geminiAPIKey ?? ""
-        case .codex:
-            apiKeyField.stringValue = config.openaiAPIKey ?? ""
-        case .openrouter:
-            apiKeyField.stringValue = config.openrouterAPIKey ?? ""
-        default:
-            apiKeyField.stringValue = ""
+        case .claude:     value = config.anthropicAPIKey ?? ""
+        case .gemini:     value = config.geminiAPIKey ?? ""
+        case .codex:      value = config.openaiAPIKey ?? ""
+        case .openrouter: value = config.openrouterAPIKey ?? ""
+        default:          value = ""
         }
+        setAPIKeyValue(value)
+        updateAPIKeyPreview()
+    }
+
+    /// Get the current API key value from whichever field is active.
+    private func currentAPIKeyValue() -> String {
+        apiKeyRevealed ? apiKeyPlainField.stringValue : apiKeyField.stringValue
+    }
+
+    /// Set the API key value on both fields (keeps them in sync).
+    private func setAPIKeyValue(_ value: String) {
+        apiKeyField.stringValue = value
+        apiKeyPlainField.stringValue = value
+    }
+
+    /// Show a masked preview: "sk-ant-a...xY4z  (51 chars)" so the user
+    /// can verify the key was pasted correctly without revealing it entirely.
+    private func updateAPIKeyPreview() {
+        let key = currentAPIKeyValue().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            apiKeyPreviewLabel.stringValue = ""
+            return
+        }
+        let count = key.count
+        let preview: String
+        if count <= 10 {
+            preview = String(repeating: "•", count: count)
+        } else {
+            let prefix = String(key.prefix(8))
+            let suffix = String(key.suffix(4))
+            preview = "\(prefix)…\(suffix)"
+        }
+        apiKeyPreviewLabel.stringValue = "\(preview)   (\(count) chars)"
+    }
+
+    @objc private func toggleAPIKeyVisibility() {
+        apiKeyRevealed.toggle()
+        if apiKeyRevealed {
+            // Copy value from secure → plain
+            apiKeyPlainField.stringValue = apiKeyField.stringValue
+            apiKeyField.isHidden = true
+            apiKeyPlainField.isHidden = false
+            apiKeyToggleBtn.title = "Hide"
+            // Select all text so user can review
+            apiKeyPlainField.selectText(nil)
+        } else {
+            // Copy value from plain → secure
+            apiKeyField.stringValue = apiKeyPlainField.stringValue
+            apiKeyPlainField.isHidden = true
+            apiKeyField.isHidden = false
+            apiKeyToggleBtn.title = "Show"
+        }
+        updateAPIKeyPreview()
+    }
+
+    @objc private func pasteAPIKey() {
+        guard let clip = NSPasteboard.general.string(forType: .string) else { return }
+        let trimmed = clip.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        setAPIKeyValue(trimmed)
+        updateAPIKeyPreview()
+        // Flash the preview green briefly to confirm paste
+        apiKeyPreviewLabel.textColor = .systemGreen
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.apiKeyPreviewLabel.textColor = .tertiaryLabelColor
+        }
+    }
+
+    @objc private func apiKeyFieldChanged() {
+        // Sync values between fields
+        if apiKeyRevealed {
+            apiKeyField.stringValue = apiKeyPlainField.stringValue
+        } else {
+            apiKeyPlainField.stringValue = apiKeyField.stringValue
+        }
+        updateAPIKeyPreview()
     }
 
     private func defaultModelForProvider(_ provider: Config.AIProvider) -> String {
@@ -423,7 +540,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     @objc private func testConnection() {
         let provider = selectedProvider()
-        let key = apiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = currentAPIKeyValue().trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !key.isEmpty else {
             testResultLabel.stringValue = "Enter an API key first."
@@ -984,7 +1101,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     @objc private func save() {
         config.aiProvider = selectedProvider()
 
-        let key = apiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = currentAPIKeyValue().trimmingCharacters(in: .whitespacesAndNewlines)
         if providerNeedsAPIKey(config.aiProvider) && !key.isEmpty {
             switch config.aiProvider {
             case .claude: config.anthropicAPIKey = key
