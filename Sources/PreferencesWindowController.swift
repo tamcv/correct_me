@@ -272,6 +272,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             ("Claude API", .claude),
             ("Gemini API", .gemini),
             ("OpenAI/Codex API", .codex),
+            ("OpenRouter API", .openrouter),
         ]
         for p in providers {
             providerPopUp.addItem(withTitle: p.label)
@@ -361,7 +362,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     private func providerNeedsAPIKey(_ provider: Config.AIProvider) -> Bool {
         switch provider {
-        case .claude, .gemini, .codex: return true
+        case .claude, .gemini, .codex, .openrouter: return true
         case .claudeCode, .codexCode, .copilot: return false
         }
     }
@@ -401,6 +402,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             apiKeyField.stringValue = config.geminiAPIKey ?? ""
         case .codex:
             apiKeyField.stringValue = config.openaiAPIKey ?? ""
+        case .openrouter:
+            apiKeyField.stringValue = config.openrouterAPIKey ?? ""
         default:
             apiKeyField.stringValue = ""
         }
@@ -414,6 +417,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         case .codex: return Config.DefaultModels.openaiCodex
         case .codexCode: return Config.DefaultModels.openaiCodex
         case .copilot: return Config.DefaultModels.copilot
+        case .openrouter: return Config.DefaultModels.openrouter
         }
     }
 
@@ -455,6 +459,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             return CorrectMeApp.fetchGeminiModels(apiKey: key) != nil
         case .codex:
             return CorrectMeApp.fetchOpenAIModels(apiKey: key) != nil
+        case .openrouter:
+            return CorrectMeApp.fetchOpenRouterModels(apiKey: key) != nil
         default:
             return true
         }
@@ -984,6 +990,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             case .claude: config.anthropicAPIKey = key
             case .gemini: config.geminiAPIKey = key
             case .codex: config.openaiAPIKey = key
+            case .openrouter: config.openrouterAPIKey = key
             default: break
             }
         }

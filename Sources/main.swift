@@ -251,6 +251,13 @@ struct CorrectMeApp {
                 print("    → Run: correctme config openai-key <YOUR_KEY>")
                 allGood = false
             }
+        case .openrouter:
+            let hasKey = !(cfg.openrouterAPIKey ?? "").isEmpty
+            printCheck(hasKey, "OpenRouter API key configured")
+            if !hasKey {
+                print("    → Set your OpenRouter API key in Preferences → Provider")
+                allGood = false
+            }
         }
 
         // ── 3. Hotkey
@@ -699,6 +706,31 @@ struct CorrectMeApp {
                 return
             }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let dataArray = json["data"] as? [[String: Any]] else {
+                return
+            }
+            result = dataArray.compactMap { $0["id"] as? String }
+        }.resume()
+
+        semaphore.wait()
+        return result
+    }
+
+    static func fetchOpenRouterModels(apiKey: String) -> [String]? {
+        let url = URL(string: "https://openrouter.ai/api/v1/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: [String]? = nil
+
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            defer { semaphore.signal() }
+            guard let data,
+                  let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let dataArray = json["data"] as? [[String: Any]] else {
                 return
             }

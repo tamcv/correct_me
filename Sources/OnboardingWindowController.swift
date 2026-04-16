@@ -291,6 +291,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             (.claude, "Claude API (key required)"),
             (.gemini, "Gemini API (key required)"),
             (.codex, "OpenAI / Codex API (key required)"),
+            (.openrouter, "OpenRouter API (key required)"),
         ]
 
         for (_, label) in providers {
@@ -321,7 +322,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     @objc private func providerChanged(_ sender: NSPopUpButton) {
-        let providers: [Config.AIProvider] = [.claudeCode, .codexCode, .copilot, .claude, .gemini, .codex]
+        let providers: [Config.AIProvider] = [.claudeCode, .codexCode, .copilot, .claude, .gemini, .codex, .openrouter]
         selectedProvider = providers[sender.indexOfSelectedItem]
         updateProviderStatus()
     }
@@ -350,6 +351,9 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             label.textColor = .secondaryLabelColor
         case .codex:
             label.stringValue = "Requires an OpenAI API key"
+            label.textColor = .secondaryLabelColor
+        case .openrouter:
+            label.stringValue = "Requires an OpenRouter API key"
             label.textColor = .secondaryLabelColor
         }
     }
@@ -416,6 +420,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         case .claude: keyLabel = "Anthropic API Key"
         case .gemini: keyLabel = "Gemini API Key"
         case .codex: keyLabel = "OpenAI API Key"
+        case .openrouter: keyLabel = "OpenRouter API Key"
         default: keyLabel = "API Key"
         }
 
@@ -503,6 +508,8 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             return CorrectMeApp.fetchGeminiModels(apiKey: key) != nil
         case .codex:
             return CorrectMeApp.fetchOpenAIModels(apiKey: key) != nil
+        case .openrouter:
+            return CorrectMeApp.fetchOpenRouterModels(apiKey: key) != nil
         default:
             return true
         }
@@ -868,6 +875,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         case .claude: config.model = Config.DefaultModels.anthropic
         case .gemini: config.model = Config.DefaultModels.gemini
         case .codex: config.model = Config.DefaultModels.openaiCodex
+        case .openrouter: config.model = Config.DefaultModels.openrouter
         }
 
         // Set API key
@@ -875,6 +883,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         case .claude: config.anthropicAPIKey = apiKey
         case .gemini: config.geminiAPIKey = apiKey
         case .codex: config.openaiAPIKey = apiKey
+        case .openrouter: config.openrouterAPIKey = apiKey
         default: break
         }
 

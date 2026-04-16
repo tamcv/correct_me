@@ -475,6 +475,62 @@ class OpenAICodexProvider: AIProvider {
     }
 }
 
+// MARK: - OpenRouter (OpenAI-compatible Chat Completions API)
+class OpenRouterProvider: AIProvider {
+    private let apiKey: String
+    private let model: String
+
+    init(apiKey: String, model: String) {
+        self.apiKey = apiKey
+        self.model = model
+    }
+
+    func correctText(_ text: String) async throws -> String {
+        let url = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15.0
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("close", forHTTPHeaderField: "Connection")
+
+        let prompt = buildCorrectionPrompt(
+            text: text,
+            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
+        )
+
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "user", "content": prompt]
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let session = getFreshURLSession()
+        let (data, response) = try await session.data(for: request)
+        session.invalidateAndCancel()
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw AIError.apiError("OpenRouter API request failed (\(status)): \(parseErrorMessage(from: data))")
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let result = message["content"] as? String else {
+            throw AIError.parseError
+        }
+
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 // MARK: - Errors
 enum AIError: Error, LocalizedError {
     case commandFailed(String)
@@ -539,6 +595,12 @@ func createAIProvider(from config: Config) throws -> AIProvider {
         }
         let model = config.model ?? Config.DefaultModels.openaiCodex
         return OpenAICodexProvider(apiKey: apiKey, model: model)
+    case .openrouter:
+        guard let apiKey = config.openrouterAPIKey, !apiKey.isEmpty else {
+            throw AIError.noProviderConfigured
+        }
+        let model = config.model ?? Config.DefaultModels.openrouter
+        return OpenRouterProvider(apiKey: apiKey, model: model)
     }
 }
 
