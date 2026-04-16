@@ -43,7 +43,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
     private func buildWindow() {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -51,11 +51,10 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.isReleasedWhenClosed = false
         panel.minSize = NSSize(width: 480, height: 300)
-        panel.titlebarAppearsTransparent = false
 
-        let root = NSView()
-        root.translatesAutoresizingMaskIntoConstraints = false
-        panel.contentView = root
+        // Use the panel's own contentView — do NOT replace it; replacing with a
+        // translatesAutoresizingMaskIntoConstraints=false view leaves it frameless.
+        guard let root = panel.contentView else { return }
 
         // ── Table ──────────────────────────────────────────────
         let scrollView = NSScrollView()
