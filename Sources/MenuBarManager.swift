@@ -140,138 +140,67 @@ class MenuBarManager: NSObject {
         debugLog("updateMenu() called")
         menu.removeAllItems()
 
-        // Header
-        let headerItem = NSMenuItem(title: "CorrectMe v\(AppVersion.current)", action: nil, keyEquivalent: "")
+        // ── Header ──────────────────────────────────────────────
+        let headerItem = NSMenuItem(title: "CorrectMe  v\(AppVersion.current)", action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)
 
-        // Provider and model info
-        let cfg = Config.load()
-        let modelName = cfg.model ?? "(default)"
-        let providerItem = NSMenuItem(
-            title: "Provider: \(cfg.aiProvider.rawValue) · \(modelName)",
-            action: nil,
-            keyEquivalent: ""
-        )
-        providerItem.isEnabled = false
-        menu.addItem(providerItem)
-
         menu.addItem(NSMenuItem.separator())
 
-        // Status
+        // ── Status + provider (single compact line) ──────────────
+        let cfg = Config.load()
         let status = StatusManager.shared.currentStatus
-        let statusItem = NSMenuItem(title: "Status: \(status.rawValue)", action: nil, keyEquivalent: "")
+        let statusDot: String
+        switch status {
+        case .idle:       statusDot = "●"
+        case .processing: statusDot = "◌"
+        case .success:    statusDot = "●"
+        case .error:      statusDot = "●"
+        }
+
+        // Truncate model name so it fits nicely
+        let modelRaw = cfg.model ?? ""
+        let modelShort: String
+        if modelRaw.count > 28 {
+            modelShort = String(modelRaw.prefix(26)) + "…"
+        } else {
+            modelShort = modelRaw.isEmpty ? "(default)" : modelRaw
+        }
+        let providerLine = "\(cfg.aiProvider.rawValue) · \(modelShort)"
+        let statusLine = "\(statusDot)  \(status.rawValue.capitalized)    \(providerLine)"
+        let statusItem = NSMenuItem(title: statusLine, action: nil, keyEquivalent: "")
         statusItem.isEnabled = false
         menu.addItem(statusItem)
 
-        // Last correction time
+        // Last correction time (only when relevant)
         if let timeAgo = StatusManager.shared.lastCorrectionTimeAgo {
-            let timeItem = NSMenuItem(title: "Last correction: \(timeAgo)", action: nil, keyEquivalent: "")
+            let timeItem = NSMenuItem(title: "   Last correction: \(timeAgo)", action: nil, keyEquivalent: "")
             timeItem.isEnabled = false
             menu.addItem(timeItem)
         }
 
+        // Recent error (show just the latest one, inline, if any)
+        let errors = ErrorLog.shared.getErrors()
+        if let latestError = errors.first {
+            let snippet = String(latestError.message.prefix(50))
+            let errItem = NSMenuItem(title: "   ⚠ \(snippet)", action: #selector(showErrorDetail(_:)), keyEquivalent: "")
+            errItem.tag = 0
+            errItem.target = self
+            menu.addItem(errItem)
+        }
+
         menu.addItem(NSMenuItem.separator())
 
-        // Correction history (show max 5 in menu)
-        let history = CorrectionHistory.shared.getEntries()
-        if !history.isEmpty {
-            let histHeaderItem = NSMenuItem(title: "📜 History (\(history.count))", action: nil, keyEquivalent: "")
-            histHeaderItem.isEnabled = false
-            menu.addItem(histHeaderItem)
-
-            for (index, entry) in history.prefix(5).enumerated() {
-                let origSnippet = String(entry.originalText.prefix(30))
-                    .replacingOccurrences(of: "\n", with: " ")
-                let corrSnippet = String(entry.correctedText.prefix(30))
-                    .replacingOccurrences(of: "\n", with: " ")
-                let ellipsis = entry.originalText.count > 30 ? "…" : ""
-                let title = "  \(origSnippet)\(ellipsis) → \(corrSnippet)"
-                let item = NSMenuItem(
-                    title: title,
-                    action: #selector(showHistoryDetail(_:)),
-                    keyEquivalent: ""
-                )
-                item.tag = index
-                item.target = self
-                menu.addItem(item)
-
-                let timeItem = NSMenuItem(title: "    \(entry.timeAgo)", action: nil, keyEquivalent: "")
-                timeItem.isEnabled = false
-                menu.addItem(timeItem)
-            }
-
-            if history.count > 5 {
-                let viewAllItem = NSMenuItem(
-                    title: "  View All History…",
-                    action: #selector(viewAllHistory),
-                    keyEquivalent: ""
-                )
-                viewAllItem.target = self
-                menu.addItem(viewAllItem)
-            }
-
-            let clearHistItem = NSMenuItem(
-                title: "  Clear History",
-                action: #selector(clearHistory),
-                keyEquivalent: ""
-            )
-            clearHistItem.target = self
-            menu.addItem(clearHistItem)
-
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        // Recent errors
-        let errors = ErrorLog.shared.getErrors()
-        if !errors.isEmpty {
-            let errorsHeaderItem = NSMenuItem(title: "📋 Recent Errors (\(errors.count))", action: nil, keyEquivalent: "")
-            errorsHeaderItem.isEnabled = false
-            menu.addItem(errorsHeaderItem)
-
-            for (index, error) in errors.prefix(5).enumerated() {
-                let errorText = error.message.prefix(50)
-                let displayText = errorText.count < error.message.count ? "\(errorText)..." : String(errorText)
-                let errorItem = NSMenuItem(
-                    title: "  • \(displayText)",
-                    action: #selector(showErrorDetail(_:)),
-                    keyEquivalent: ""
-                )
-                errorItem.tag = index
-                errorItem.target = self
-                menu.addItem(errorItem)
-
-                // Submenu for time
-                let timeItem = NSMenuItem(title: "    \(error.timeAgo)", action: nil, keyEquivalent: "")
-                timeItem.isEnabled = false
-                menu.addItem(timeItem)
-            }
-
-            // Clear errors
-            let clearItem = NSMenuItem(
-                title: "  Clear Errors",
-                action: #selector(clearErrors),
-                keyEquivalent: ""
-            )
-            clearItem.target = self
-            menu.addItem(clearItem)
-
-            menu.addItem(NSMenuItem.separator())
-        } else {
-            let noErrorsItem = NSMenuItem(title: "No recent errors", action: nil, keyEquivalent: "")
-            noErrorsItem.isEnabled = false
-            menu.addItem(noErrorsItem)
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        // Actions
-        let restartItem = NSMenuItem(
-            title: "🔄 Restart Daemon",
-            action: #selector(restartDaemon),
-            keyEquivalent: "r"
+        // ── Core actions ─────────────────────────────────────────
+        let historyCount = CorrectionHistory.shared.getEntries().count
+        let historyTitle = historyCount > 0 ? "Correction History  (\(historyCount))" : "Correction History"
+        let historyItem = NSMenuItem(
+            title: historyTitle,
+            action: #selector(openHistory),
+            keyEquivalent: "h"
         )
-        restartItem.target = self
-        menu.addItem(restartItem)
+        historyItem.target = self
+        menu.addItem(historyItem)
 
         let prefsItem = NSMenuItem(
             title: "⚙️  Preferences...",
@@ -281,6 +210,9 @@ class MenuBarManager: NSObject {
         prefsItem.target = self
         menu.addItem(prefsItem)
 
+        menu.addItem(NSMenuItem.separator())
+
+        // ── App management ────────────────────────────────────────
         let updatesItem = NSMenuItem(
             title: "Check for Updates…",
             action: #selector(checkForUpdates),
@@ -292,29 +224,23 @@ class MenuBarManager: NSObject {
         let licenseTitle = LicenseManager.shared.isActivated ? "✓ License Activated" : "Activate License…"
         let licenseItem = NSMenuItem(
             title: licenseTitle,
-            action: #selector(openLicense),
+            action: LicenseManager.shared.isActivated ? nil : #selector(openLicense),
             keyEquivalent: ""
         )
         licenseItem.target = self
+        licenseItem.isEnabled = !LicenseManager.shared.isActivated
         menu.addItem(licenseItem)
 
-        let feedbackItem = NSMenuItem(
-            title: "Send Feedback…",
-            action: #selector(openFeedback),
-            keyEquivalent: ""
-        )
-        feedbackItem.target = self
-        menu.addItem(feedbackItem)
-
-        let privacyItem = NSMenuItem(
-            title: "Privacy & Data…",
-            action: #selector(showPrivacyInfo),
-            keyEquivalent: ""
-        )
-        privacyItem.target = self
-        menu.addItem(privacyItem)
-
         menu.addItem(NSMenuItem.separator())
+
+        // ── System ────────────────────────────────────────────────
+        let restartItem = NSMenuItem(
+            title: "Restart Daemon",
+            action: #selector(restartDaemon),
+            keyEquivalent: "r"
+        )
+        restartItem.target = self
+        menu.addItem(restartItem)
 
         let quitItem = NSMenuItem(
             title: "Quit CorrectMe",
@@ -323,7 +249,7 @@ class MenuBarManager: NSObject {
         )
         quitItem.target = self
         menu.addItem(quitItem)
-        
+
         debugLog("Menu updated with \(menu.items.count) items")
     }
 
@@ -360,48 +286,8 @@ class MenuBarManager: NSObject {
         ErrorLog.shared.clearErrors()
     }
 
-    @objc private func showHistoryDetail(_ sender: NSMenuItem) {
-        let entries = CorrectionHistory.shared.getEntries()
-        guard sender.tag < entries.count else { return }
-
-        let entry = entries[sender.tag]
-
-        NSApp.activate(ignoringOtherApps: true)
-
-        let alert = NSAlert()
-        alert.messageText = "Correction — \(entry.timeAgo)"
-        alert.informativeText = """
-        Original:
-        \(entry.originalText)
-
-        Corrected:
-        \(entry.correctedText)
-        """
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Copy Corrected")
-
-        let response = alert.runModal()
-        if response == .alertSecondButtonReturn {
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(entry.correctedText, forType: .string)
-        }
-    }
-
-    @objc private func clearHistory() {
-        CorrectionHistory.shared.clear()
-        // NSMenu auto-closes on any item action; re-open so the user sees the updated empty state
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            self.statusItem?.button?.performClick(nil)
-        }
-    }
-
-    @objc private func viewAllHistory() {
-        let historyPath = CorrectionHistory.historyFilePath
-        if FileManager.default.fileExists(atPath: historyPath.path) {
-            NSWorkspace.shared.open(historyPath)
-        }
+    @objc private func openHistory() {
+        HistoryWindowController.shared.showWindow()
     }
 
     @objc private func restartDaemon() {
