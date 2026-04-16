@@ -43,7 +43,7 @@
          Generate the ed25519 key pair once with Sparkle's generate_keys tool,
          then put the public key here and keep the private key secret. -->
     <key>SUFeedURL</key>
-    <string>https://correctme.app/appcast.xml</string>
+    <string>https://license-server-liard.vercel.app/appcast.xml</string>
 
     <!-- Run: .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/.../generate_keys -->
     <!-- Then paste the public key (EdDSA, base64) here: -->
