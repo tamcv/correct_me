@@ -454,21 +454,25 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     /// Get the current API key value from whichever field is active.
     private func currentAPIKeyValue() -> String {
-        apiKeyRevealed ? apiKeyPlainField.stringValue : apiKeyField.stringValue
+        if apiKeyRevealed {
+            return apiKeyPlainField?.stringValue ?? ""
+        }
+        return apiKeyField?.stringValue ?? ""
     }
 
     /// Set the API key value on both fields (keeps them in sync).
     private func setAPIKeyValue(_ value: String) {
-        apiKeyField.stringValue = value
-        apiKeyPlainField.stringValue = value
+        apiKeyField?.stringValue = value
+        apiKeyPlainField?.stringValue = value
     }
 
     /// Show a masked preview: "sk-ant-a...xY4z  (51 chars)" so the user
     /// can verify the key was pasted correctly without revealing it entirely.
     private func updateAPIKeyPreview() {
+        guard let label = apiKeyPreviewLabel else { return }
         let key = currentAPIKeyValue().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
-            apiKeyPreviewLabel.stringValue = ""
+            label.stringValue = ""
             return
         }
         let count = key.count
@@ -480,7 +484,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             let suffix = String(key.suffix(4))
             preview = "\(prefix)…\(suffix)"
         }
-        apiKeyPreviewLabel.stringValue = "\(preview)   (\(count) chars)"
+        label.stringValue = "\(preview)   (\(count) chars)"
     }
 
     @objc private func toggleAPIKeyVisibility() {
