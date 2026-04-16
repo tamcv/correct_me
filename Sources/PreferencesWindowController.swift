@@ -302,9 +302,11 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(apiKeyLabel)
         y -= 28
 
-        // Secure field (shown by default)
+        // API key field container — holds either a secure or plain field
         let fieldW = contentW - 100  // leave room for buttons
-        apiKeyField = NSSecureTextField(frame: NSRect(x: pad, y: y, width: fieldW, height: 24))
+        let fieldFrame = NSRect(x: pad, y: y, width: fieldW, height: 24)
+
+        apiKeyField = NSSecureTextField(frame: fieldFrame)
         apiKeyField.placeholderString = "Paste your API key here"
         apiKeyField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         apiKeyField.controlSize = .large
@@ -312,15 +314,13 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         apiKeyField.action = #selector(apiKeyFieldChanged)
         view.addSubview(apiKeyField)
 
-        // Plain text field (hidden, used when revealed)
-        apiKeyPlainField = NSTextField(frame: apiKeyField.frame)
-        apiKeyPlainField.placeholderString = apiKeyField.placeholderString
-        apiKeyPlainField.font = apiKeyField.font
+        // Plain field — NOT added to view initially; swapped in on Show
+        apiKeyPlainField = NSTextField(frame: fieldFrame)
+        apiKeyPlainField.placeholderString = "Paste your API key here"
+        apiKeyPlainField.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         apiKeyPlainField.controlSize = .large
-        apiKeyPlainField.isHidden = true
         apiKeyPlainField.target = self
         apiKeyPlainField.action = #selector(apiKeyFieldChanged)
-        view.addSubview(apiKeyPlainField)
 
         // Show/Hide toggle
         apiKeyToggleBtn = NSButton(title: "Show", target: self, action: #selector(toggleAPIKeyVisibility))
@@ -490,18 +490,21 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     @objc private func toggleAPIKeyVisibility() {
         apiKeyRevealed.toggle()
         if apiKeyRevealed {
-            // Copy value from secure → plain
-            apiKeyPlainField.stringValue = apiKeyField.stringValue
-            apiKeyField.isHidden = true
-            apiKeyPlainField.isHidden = false
+            // Swap: remove secure field, add plain field in its place
+            let value = apiKeyField.stringValue
+            let parent = apiKeyField.superview!
+            apiKeyField.removeFromSuperview()
+            apiKeyPlainField.stringValue = value
+            parent.addSubview(apiKeyPlainField)
             apiKeyToggleBtn.title = "Hide"
-            // Select all text so user can review
             apiKeyPlainField.selectText(nil)
         } else {
-            // Copy value from plain → secure
-            apiKeyField.stringValue = apiKeyPlainField.stringValue
-            apiKeyPlainField.isHidden = true
-            apiKeyField.isHidden = false
+            // Swap back: remove plain field, add secure field
+            let value = apiKeyPlainField.stringValue
+            let parent = apiKeyPlainField.superview!
+            apiKeyPlainField.removeFromSuperview()
+            apiKeyField.stringValue = value
+            parent.addSubview(apiKeyField)
             apiKeyToggleBtn.title = "Show"
         }
         updateAPIKeyPreview()
