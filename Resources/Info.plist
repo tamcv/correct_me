@@ -48,7 +48,7 @@
     <!-- Run: .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/.../generate_keys -->
     <!-- Then paste the public key (EdDSA, base64) here: -->
     <key>SUPublicEDKey</key>
-    <string>REPLACE_WITH_YOUR_SPARKLE_PUBLIC_ED_KEY</string>
+    <string>53e9sD/N+IQe0noAQdIRrEds+/BjZPi4L2mgke2iEyc=</string>
 
     <key>SUEnableAutomaticChecks</key>
     <true/>
