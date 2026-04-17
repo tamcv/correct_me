@@ -1158,6 +1158,23 @@ struct CorrectMeApp {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
 
+        // Add a hidden main menu so standard edit shortcuts (⌘V, ⌘C, ⌘X, ⌘A, ⌘Z)
+        // work in text fields. Without this, NSSecureTextField / NSTextField ignore
+        // keyboard shortcuts because there's no Edit menu in the responder chain.
+        let mainMenu = NSMenu()
+        let editMenuItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+        app.mainMenu = mainMenu
+
         // Show onboarding wizard on first launch (no config file present)
         if !FileManager.default.fileExists(atPath: Config.configPath.path) {
             debugLog("No config file found — launching onboarding wizard")

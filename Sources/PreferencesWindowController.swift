@@ -1147,6 +1147,11 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         NotificationCenter.default.post(name: .configChanged, object: nil)
 
         window?.close()
+
+        // Restart daemon so new config takes effect immediately
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            MenuBarManager.shared.restartDaemon()
+        }
     }
 
     @objc private func cancel() {

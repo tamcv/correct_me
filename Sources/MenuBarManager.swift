@@ -292,48 +292,22 @@ class MenuBarManager: NSObject {
         HistoryWindowController.shared.showWindow()
     }
 
-    @objc private func restartDaemon() {
-        // Get the path to the correctme executable
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["bash", "-c", "which correctme"]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-
+    @objc func restartDaemon() {
+        // Use launchctl kickstart -k to kill & restart the daemon in one step.
+        // This works because launchd manages our process via LaunchAgent.
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        task.arguments = ["kickstart", "-k", "gui/\(getuid())/com.correctme.daemon"]
         do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let correctmePath = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !correctmePath.isEmpty {
-                // Found correctme, execute restart command
-                let restartProcess = Process()
-                restartProcess.executableURL = URL(fileURLWithPath: correctmePath)
-                restartProcess.arguments = ["restart"]
-
-                try restartProcess.run()
-
-                // The daemon will exit, so no need to show success message
-            } else {
-                // Fallback: show alert if correctme not found
-                showRestartInstructions()
-            }
+            try task.run()
         } catch {
-            // On error, show instructions
-            showRestartInstructions()
+            // Fallback: use the executable from the running bundle
+            let bundleExec = Bundle.main.executablePath ?? "/Applications/CorrectMe.app/Contents/MacOS/correctme"
+            let fallback = Process()
+            fallback.executableURL = URL(fileURLWithPath: bundleExec)
+            fallback.arguments = ["restart"]
+            try? fallback.run()
         }
-    }
-
-    private func showRestartInstructions() {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Restart Daemon"
-        alert.informativeText = "Run 'correctme restart' from terminal to restart the daemon."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
     }
 
     @objc private func openPreferences() {
