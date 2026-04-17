@@ -19,6 +19,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var apiKeyToggleBtn: NSButton!
     private var apiKeyPreviewLabel: NSTextField!
     private var modelField: NSTextField!
+    private var fallbackModelsField: NSTextField!
+    private var findModelsButton: NSButton!
+    private var findModelsStatus: NSTextField!
     private var testResultLabel: NSTextField!
     private var testButton: NSButton!
     private var apiKeyLabel: NSTextField!
@@ -351,8 +354,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
         y -= 20
 
-        // Model
-        let mLabel = makeSectionHeader("Model")
+        // Model (primary)
+        let mLabel = makeSectionHeader("Primary Model")
         mLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
         view.addSubview(mLabel)
         y -= 28
@@ -363,7 +366,55 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         modelField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         modelField.controlSize = .large
         view.addSubview(modelField)
-        y -= 28
+        y -= 30
+
+        // Fallback models (OpenRouter-specific, shown/hidden via updateProviderUI)
+        let fbLabel = makeSectionHeader("Fallback Models (retry on 429)")
+        fbLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        fbLabel.tag = 700  // tag for show/hide
+        view.addSubview(fbLabel)
+        y -= 6
+
+        let fbHint = NSTextField(labelWithString: "One model per line. Tried in order if primary returns 429.")
+        fbHint.frame = NSRect(x: pad, y: y, width: contentW, height: 14)
+        fbHint.font = .systemFont(ofSize: 10)
+        fbHint.textColor = .tertiaryLabelColor
+        fbHint.tag = 701
+        view.addSubview(fbHint)
+        y -= 20
+
+        // Multi-line text field for fallback models (using NSScrollView + NSTextView would be heavy,
+        // so use a tall NSTextField with wrapping)
+        fallbackModelsField = NSTextField(frame: NSRect(x: pad, y: y - 52, width: contentW - 110, height: 72))
+        fallbackModelsField.placeholderString = "e.g.\nmeta-llama/llama-3.1-8b-instruct:free\ngoogle/gemma-3-1b-it:free"
+        fallbackModelsField.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        fallbackModelsField.lineBreakMode = .byCharWrapping
+        fallbackModelsField.usesSingleLineMode = false
+        fallbackModelsField.maximumNumberOfLines = 5
+        fallbackModelsField.tag = 702
+        // Load existing fallback models
+        if let fallbacks = config.fallbackModels, !fallbacks.isEmpty {
+            fallbackModelsField.stringValue = fallbacks.joined(separator: "\n")
+        }
+        view.addSubview(fallbackModelsField)
+
+        // "Find Best Models" button
+        findModelsButton = NSButton(title: "Find Best\nFree Models", target: self, action: #selector(findBestFreeModels))
+        findModelsButton.bezelStyle = .rounded
+        findModelsButton.frame = NSRect(x: pad + contentW - 102, y: y - 52, width: 102, height: 42)
+        findModelsButton.tag = 703
+        view.addSubview(findModelsButton)
+
+        // Status label for find operation
+        findModelsStatus = NSTextField(labelWithString: "")
+        findModelsStatus.frame = NSRect(x: pad + contentW - 102, y: y - 14, width: 102, height: 14)
+        findModelsStatus.font = .systemFont(ofSize: 9)
+        findModelsStatus.textColor = .secondaryLabelColor
+        findModelsStatus.alignment = .center
+        findModelsStatus.tag = 704
+        view.addSubview(findModelsStatus)
+
+        y -= 80
 
         // Hint
         apiKeyHint = NSTextField(wrappingLabelWithString: "")
@@ -415,6 +466,15 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         modelField.placeholderString = defaultModelForProvider(provider)
         testResultLabel.stringValue = ""
+
+        // Show fallback models only for OpenRouter
+        let showFallback = provider == .openrouter
+        for tag in 700...704 {
+            apiKeyField.superview?.viewWithTag(tag)?.isHidden = !showFallback
+        }
+        fallbackModelsField?.isHidden = !showFallback
+        findModelsButton?.isHidden = !showFallback
+        findModelsStatus?.isHidden = !showFallback
 
         loadAPIKeyForCurrentProvider()
         updateAPIKeyPreview()
@@ -548,6 +608,77 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     @objc private func apiKeyFieldChanged() {
         updateAPIKeyPreview()
+    }
+
+    @objc private func findBestFreeModels() {
+        let key = currentAPIKeyValue().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            findModelsStatus?.stringValue = "Enter API key first"
+            findModelsStatus?.textColor = .systemRed
+            return
+        }
+
+        findModelsButton?.isEnabled = false
+        findModelsStatus?.stringValue = "Fetching models..."
+        findModelsStatus?.textColor = .secondaryLabelColor
+
+        Task {
+            // 1. Fetch all free models
+            let freeModels = await OpenRouterProvider.fetchFreeModels(apiKey: key)
+            guard !freeModels.isEmpty else {
+                await MainActor.run {
+                    findModelsStatus?.stringValue = "No free models found"
+                    findModelsStatus?.textColor = .systemRed
+                    findModelsButton?.isEnabled = true
+                }
+                return
+            }
+
+            await MainActor.run {
+                findModelsStatus?.stringValue = "Testing \(freeModels.count) models..."
+            }
+
+            // 2. Benchmark each model (in parallel, max 8 concurrent)
+            var results: [(id: String, latencyMs: Int)] = []
+            await withTaskGroup(of: (String, Int)?.self) { group in
+                for model in freeModels {
+                    group.addTask {
+                        await OpenRouterProvider.benchmarkModel(apiKey: key, modelId: model.id)
+                    }
+                }
+                for await result in group {
+                    if let r = result {
+                        results.append(r)
+                    }
+                    await MainActor.run {
+                        let done = results.count
+                        findModelsStatus?.stringValue = "Tested \(done)/\(freeModels.count)..."
+                    }
+                }
+            }
+
+            // 3. Sort by latency, take top 5
+            results.sort { $0.latencyMs < $1.latencyMs }
+            let best = Array(results.prefix(5))
+
+            await MainActor.run {
+                if best.isEmpty {
+                    findModelsStatus?.stringValue = "All models failed"
+                    findModelsStatus?.textColor = .systemRed
+                } else {
+                    // Set primary = fastest, fallbacks = rest
+                    modelField?.stringValue = best[0].id
+                    if best.count > 1 {
+                        let fallbacks = best.dropFirst().map { $0.id }
+                        fallbackModelsField?.stringValue = fallbacks.joined(separator: "\n")
+                    }
+                    let times = best.map { "\($0.latencyMs)ms" }.joined(separator: ", ")
+                    findModelsStatus?.stringValue = "✓ Top \(best.count): \(times)"
+                    findModelsStatus?.textColor = .systemGreen
+                }
+                findModelsButton?.isEnabled = true
+            }
+        }
     }
 
     private func defaultModelForProvider(_ provider: Config.AIProvider) -> String {
@@ -1138,6 +1269,13 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         let model = modelField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         config.model = model.isEmpty ? nil : model
+
+        // Save fallback models (one per line)
+        let fbText = fallbackModelsField?.stringValue ?? ""
+        let fallbacks = fbText.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        config.fallbackModels = fallbacks.isEmpty ? nil : fallbacks
 
         let style = styleTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         config.writingStyle = style.isEmpty ? nil : style

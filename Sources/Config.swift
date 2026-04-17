@@ -20,6 +20,7 @@ struct Config: Codable {
     var hotkey: HotkeyConfig
     var customPrompt: String?
     var model: String?
+    var fallbackModels: [String]?
     var writingStyle: String?
     var perAppStyles: [String: String]?
     var telegramBotToken: String?

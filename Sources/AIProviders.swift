@@ -479,13 +479,59 @@ class OpenAICodexProvider: AIProvider {
 class OpenRouterProvider: AIProvider {
     private let apiKey: String
     private let model: String
+    private let fallbackModels: [String]
 
-    init(apiKey: String, model: String) {
+    /// Track the model that was actually used for the last successful call.
+    private(set) var lastUsedModel: String?
+
+    init(apiKey: String, model: String, fallbackModels: [String] = []) {
         self.apiKey = apiKey
         self.model = model
+        self.fallbackModels = fallbackModels
     }
 
     func correctText(_ text: String) async throws -> String {
+        // Build the model chain: primary + fallbacks
+        var modelsToTry = [model] + fallbackModels
+
+        // De-duplicate while preserving order
+        var seen = Set<String>()
+        modelsToTry = modelsToTry.filter { seen.insert($0).inserted }
+
+        let prompt = buildCorrectionPrompt(
+            text: text,
+            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
+        )
+
+        var lastError: Error = AIError.noProviderConfigured
+
+        for (index, currentModel) in modelsToTry.enumerated() {
+            do {
+                let result = try await callOpenRouter(model: currentModel, prompt: prompt)
+                lastUsedModel = currentModel
+                if index > 0 {
+                    debugLog("OpenRouter: model \(model) unavailable, used fallback \(currentModel)")
+                }
+                return result
+            } catch let error as AIError {
+                lastError = error
+                // Only retry on 429 (rate limit) or 503 (overloaded)
+                if case .apiError(let msg) = error,
+                   (msg.contains("(429)") || msg.contains("(503)")) {
+                    debugLog("OpenRouter: \(currentModel) returned rate limit/overload, trying next model...")
+                    continue
+                }
+                // Other errors (auth, parse, etc.) — don't retry
+                throw error
+            }
+        }
+
+        // All models exhausted
+        throw lastError
+    }
+
+    /// Single API call to OpenRouter with a specific model.
+    private func callOpenRouter(model: String, prompt: String) async throws -> String {
         let url = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -494,11 +540,6 @@ class OpenRouterProvider: AIProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("close", forHTTPHeaderField: "Connection")
-
-        let prompt = buildCorrectionPrompt(
-            text: text,
-            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
-        )
 
         let body: [String: Any] = [
             "model": model,
@@ -528,6 +569,68 @@ class OpenRouterProvider: AIProvider {
         }
 
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Static: discover and benchmark free models
+
+    /// Fetch all free models from OpenRouter API.
+    static func fetchFreeModels(apiKey: String) async -> [(id: String, name: String)] {
+        guard let url = URL(string: "https://openrouter.ai/api/v1/models") else { return [] }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 10
+
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let models = json["data"] as? [[String: Any]] else {
+            return []
+        }
+
+        return models.compactMap { m -> (String, String)? in
+            guard let id = m["id"] as? String,
+                  id.hasSuffix(":free"),
+                  let name = m["name"] as? String else { return nil }
+            return (id, name)
+        }.sorted { $0.1 < $1.1 }
+    }
+
+    /// Benchmark a single model: send a short correction prompt and measure latency.
+    /// Returns (model_id, latency_ms) on success, nil on failure.
+    static func benchmarkModel(apiKey: String, modelId: String) async -> (id: String, latencyMs: Int)? {
+        let url = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 12
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = [
+            "model": modelId,
+            "messages": [
+                ["role": "user", "content": "Fix the grammar: \"She dont goes to school yesterday\""]
+            ]
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        let start = CFAbsoluteTimeGetCurrent()
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              http.statusCode == 200 else {
+            return nil
+        }
+
+        // Verify we got a valid response
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let first = choices.first,
+              let msg = first["message"] as? [String: Any],
+              let content = msg["content"] as? String,
+              !content.isEmpty else {
+            return nil
+        }
+
+        let elapsed = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        return (modelId, elapsed)
     }
 }
 
@@ -600,7 +703,7 @@ func createAIProvider(from config: Config) throws -> AIProvider {
             throw AIError.noProviderConfigured
         }
         let model = config.model ?? Config.DefaultModels.openrouter
-        return OpenRouterProvider(apiKey: apiKey, model: model)
+        return OpenRouterProvider(apiKey: apiKey, model: model, fallbackModels: config.fallbackModels ?? [])
     }
 }
 
