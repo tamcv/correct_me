@@ -16,7 +16,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     // Provider tab
     private var providerPopUp: NSPopUpButton!
     private var apiKeyField: NSSecureTextField!
-    private var apiKeyRevealed = false
     private var apiKeyToggleBtn: NSButton!
     private var apiKeyPreviewLabel: NSTextField!
     private var modelField: NSTextField!
@@ -301,8 +300,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(apiKeyLabel)
         y -= 28
 
-        // API key input (secure field — dots)
-        let fieldW = contentW - 100  // leave room for buttons
+        // API key input (secure field — single line of dots)
+        let fieldW = contentW - 148  // room for Show + Paste buttons
         apiKeyField = NSSecureTextField(frame: NSRect(x: pad, y: y, width: fieldW, height: 24))
         apiKeyField.placeholderString = "Paste your API key here"
         apiKeyField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
@@ -311,33 +310,31 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         apiKeyField.action = #selector(apiKeyFieldChanged)
         view.addSubview(apiKeyField)
 
-        // Show/Hide toggle + Paste button
-        apiKeyToggleBtn = NSButton(title: "Show", target: self, action: #selector(toggleAPIKeyVisibility))
+        // Show button — reveals full key in a popover
+        apiKeyToggleBtn = NSButton(title: "👁 Show", target: self, action: #selector(toggleAPIKeyVisibility))
         apiKeyToggleBtn.bezelStyle = .rounded
         apiKeyToggleBtn.controlSize = .small
-        apiKeyToggleBtn.frame = NSRect(x: pad + fieldW + 4, y: y, width: 48, height: 24)
+        apiKeyToggleBtn.frame = NSRect(x: pad + fieldW + 6, y: y, width: 68, height: 24)
         view.addSubview(apiKeyToggleBtn)
 
+        // Paste button
         let pasteBtn = NSButton(title: "Paste", target: self, action: #selector(pasteAPIKey))
         pasteBtn.bezelStyle = .rounded
         pasteBtn.controlSize = .small
-        pasteBtn.frame = NSRect(x: pad + fieldW + 56, y: y, width: 44, height: 24)
+        pasteBtn.frame = NSRect(x: pad + fieldW + 78, y: y, width: 68, height: 24)
         view.addSubview(pasteBtn)
 
         loadAPIKeyForCurrentProvider()
-        y -= 4
+        y -= 6
 
-        // Key preview — masked summary ("sk-or-v1…Y4z  52 chars") or full key when revealed
-        apiKeyPreviewLabel = NSTextField(wrappingLabelWithString: "")
-        apiKeyPreviewLabel.frame = NSRect(x: pad, y: y - 32, width: contentW, height: 36)
-        apiKeyPreviewLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        apiKeyPreviewLabel.textColor = .secondaryLabelColor
-        apiKeyPreviewLabel.isSelectable = true  // allow copy from preview
-        apiKeyPreviewLabel.lineBreakMode = .byCharWrapping
-        apiKeyPreviewLabel.maximumNumberOfLines = 3
+        // One-line masked preview: "sk-or-v1…91b1  (73 chars)"
+        apiKeyPreviewLabel = NSTextField(labelWithString: "")
+        apiKeyPreviewLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 16)
+        apiKeyPreviewLabel.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        apiKeyPreviewLabel.textColor = .tertiaryLabelColor
         view.addSubview(apiKeyPreviewLabel)
         updateAPIKeyPreview()
-        y -= 40
+        y -= 24
 
         // Test button
         testButton = NSButton(title: "Test Connection", target: self, action: #selector(testConnection))
@@ -462,30 +459,78 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             return
         }
         let count = key.count
-
-        if apiKeyRevealed {
-            // Show full key — readable, selectable, word-wrapped
-            label.stringValue = key
-            label.textColor = .labelColor
-            label.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        let preview: String
+        if count <= 10 {
+            preview = String(repeating: "•", count: count)
         } else {
-            // Masked preview: "sk-or-v1…Y4z  (52 chars)"
-            let preview: String
-            if count <= 10 {
-                preview = String(repeating: "•", count: count)
-            } else {
-                preview = "\(String(key.prefix(8)))…\(String(key.suffix(4)))"
-            }
-            label.stringValue = "\(preview)  (\(count) chars)"
-            label.textColor = .secondaryLabelColor
-            label.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+            preview = "\(String(key.prefix(8)))…\(String(key.suffix(4)))"
         }
+        label.stringValue = "\(preview)  (\(count) chars)"
     }
 
     @objc private func toggleAPIKeyVisibility() {
-        apiKeyRevealed.toggle()
-        apiKeyToggleBtn.title = apiKeyRevealed ? "Hide" : "Show"
-        updateAPIKeyPreview()
+        let key = currentAPIKeyValue().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+
+        // Show full key in a popover anchored to the Show button
+        let popover = NSPopover()
+        popover.behavior = .transient  // auto-close on click outside
+
+        let vc = NSViewController()
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 100))
+
+        // Readable, selectable, word-wrapping text view for the full key
+        let scrollView = NSScrollView(frame: NSRect(x: 12, y: 40, width: 396, height: 48))
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .bezelBorder
+
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 390, height: 44))
+        textView.string = key
+        textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.textContainerInset = NSSize(width: 6, height: 4)
+        textView.backgroundColor = .textBackgroundColor
+        scrollView.documentView = textView
+        container.addSubview(scrollView)
+
+        // Copy button
+        let copyBtn = NSButton(title: "Copy to Clipboard", target: nil, action: nil)
+        copyBtn.bezelStyle = .rounded
+        copyBtn.controlSize = .small
+        copyBtn.sizeToFit()
+        copyBtn.frame.origin = NSPoint(x: 12, y: 8)
+        container.addSubview(copyBtn)
+
+        // Char count
+        let countLabel = NSTextField(labelWithString: "\(key.count) characters")
+        countLabel.font = .systemFont(ofSize: 11)
+        countLabel.textColor = .secondaryLabelColor
+        countLabel.sizeToFit()
+        countLabel.frame.origin = NSPoint(x: 420 - countLabel.frame.width - 12, y: 12)
+        container.addSubview(countLabel)
+
+        vc.view = container
+        popover.contentViewController = vc
+
+        // Wire copy button action via target-action on the button
+        copyBtn.target = self
+        copyBtn.action = #selector(copyKeyFromPopover(_:))
+        copyBtn.tag = key.hashValue  // store for identification
+
+        popover.show(relativeTo: apiKeyToggleBtn.bounds, of: apiKeyToggleBtn, preferredEdge: .maxY)
+    }
+
+    @objc private func copyKeyFromPopover(_ sender: NSButton) {
+        let key = currentAPIKeyValue().trimmingCharacters(in: .whitespacesAndNewlines)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(key, forType: .string)
+        sender.title = "✓ Copied!"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            sender.title = "Copy to Clipboard"
+        }
     }
 
     @objc private func pasteAPIKey() {
