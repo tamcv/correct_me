@@ -639,41 +639,58 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             }
 
             // 2. Benchmark each model (in parallel, max 8 concurrent)
-            var results: [(id: String, latencyMs: Int)] = []
-            await withTaskGroup(of: (String, Int)?.self) { group in
+            var results: [(id: String, latencyMs: Int, quality: Double)] = []
+            var tested = 0
+            await withTaskGroup(of: (String, Int, Double)?.self) { group in
                 for model in freeModels {
                     group.addTask {
                         await OpenRouterProvider.benchmarkModel(apiKey: key, modelId: model.id)
                     }
                 }
                 for await result in group {
+                    tested += 1
                     if let r = result {
                         results.append(r)
                     }
                     await MainActor.run {
-                        let done = results.count
-                        findModelsStatus?.stringValue = "Tested \(done)/\(freeModels.count)..."
+                        findModelsStatus?.stringValue = "Tested \(tested)/\(freeModels.count)..."
                     }
                 }
             }
 
-            // 3. Sort by latency, take top 5
-            results.sort { $0.latencyMs < $1.latencyMs }
-            let best = Array(results.prefix(5))
+            // 3. Filter out low-quality models (score < 0.5), then sort by quality desc, latency asc
+            let qualityThreshold = 0.5
+            let goodModels = results.filter { $0.quality >= qualityThreshold }
+            // Sort: higher quality first, then lower latency as tiebreaker
+            let sorted = goodModels.sorted { a, b in
+                if abs(a.quality - b.quality) > 0.1 {
+                    return a.quality > b.quality  // better quality wins
+                }
+                return a.latencyMs < b.latencyMs  // same quality tier → faster wins
+            }
+            let best = Array(sorted.prefix(5))
+            let droppedCount = results.count - goodModels.count
 
             await MainActor.run {
                 if best.isEmpty {
-                    findModelsStatus?.stringValue = "All models failed"
+                    let msg = results.isEmpty
+                        ? "All models failed"
+                        : "All \(results.count) models failed quality check"
+                    findModelsStatus?.stringValue = msg
                     findModelsStatus?.textColor = .systemRed
                 } else {
-                    // Set primary = fastest, fallbacks = rest
+                    // Set primary = best quality+speed, fallbacks = rest
                     modelField?.stringValue = best[0].id
                     if best.count > 1 {
                         let fallbacks = best.dropFirst().map { $0.id }
                         fallbackModelsField?.stringValue = fallbacks.joined(separator: "\n")
                     }
-                    let times = best.map { "\($0.latencyMs)ms" }.joined(separator: ", ")
-                    findModelsStatus?.stringValue = "✓ Top \(best.count): \(times)"
+                    let details = best.map { "\($0.latencyMs)ms/\(Int($0.quality * 100))%" }.joined(separator: ", ")
+                    var status = "✓ Top \(best.count): \(details)"
+                    if droppedCount > 0 {
+                        status += " (\(droppedCount) dropped)"
+                    }
+                    findModelsStatus?.stringValue = status
                     findModelsStatus?.textColor = .systemGreen
                 }
                 findModelsButton?.isEnabled = true
