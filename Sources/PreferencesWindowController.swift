@@ -16,7 +16,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     // Provider tab
     private var providerPopUp: NSPopUpButton!
     private var apiKeyField: NSSecureTextField!
-    private var apiKeyPlainField: NSTextField!
     private var apiKeyRevealed = false
     private var apiKeyToggleBtn: NSButton!
     private var apiKeyPreviewLabel: NSTextField!
@@ -302,11 +301,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(apiKeyLabel)
         y -= 28
 
-        // API key field container — holds either a secure or plain field
+        // API key input (secure field — dots)
         let fieldW = contentW - 100  // leave room for buttons
-        let fieldFrame = NSRect(x: pad, y: y, width: fieldW, height: 24)
-
-        apiKeyField = NSSecureTextField(frame: fieldFrame)
+        apiKeyField = NSSecureTextField(frame: NSRect(x: pad, y: y, width: fieldW, height: 24))
         apiKeyField.placeholderString = "Paste your API key here"
         apiKeyField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         apiKeyField.controlSize = .large
@@ -314,22 +311,13 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         apiKeyField.action = #selector(apiKeyFieldChanged)
         view.addSubview(apiKeyField)
 
-        // Plain field — NOT added to view initially; swapped in on Show
-        apiKeyPlainField = NSTextField(frame: fieldFrame)
-        apiKeyPlainField.placeholderString = "Paste your API key here"
-        apiKeyPlainField.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        apiKeyPlainField.controlSize = .large
-        apiKeyPlainField.target = self
-        apiKeyPlainField.action = #selector(apiKeyFieldChanged)
-
-        // Show/Hide toggle
+        // Show/Hide toggle + Paste button
         apiKeyToggleBtn = NSButton(title: "Show", target: self, action: #selector(toggleAPIKeyVisibility))
         apiKeyToggleBtn.bezelStyle = .rounded
         apiKeyToggleBtn.controlSize = .small
         apiKeyToggleBtn.frame = NSRect(x: pad + fieldW + 4, y: y, width: 48, height: 24)
         view.addSubview(apiKeyToggleBtn)
 
-        // Paste button
         let pasteBtn = NSButton(title: "Paste", target: self, action: #selector(pasteAPIKey))
         pasteBtn.bezelStyle = .rounded
         pasteBtn.controlSize = .small
@@ -337,16 +325,19 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(pasteBtn)
 
         loadAPIKeyForCurrentProvider()
-        y -= 6
+        y -= 4
 
-        // Key preview label (shows "sk-ant-api0...xY4z  (51 chars)" when key is entered)
-        apiKeyPreviewLabel = NSTextField(labelWithString: "")
-        apiKeyPreviewLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 16)
-        apiKeyPreviewLabel.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
-        apiKeyPreviewLabel.textColor = .tertiaryLabelColor
+        // Key preview — masked summary ("sk-or-v1…Y4z  52 chars") or full key when revealed
+        apiKeyPreviewLabel = NSTextField(wrappingLabelWithString: "")
+        apiKeyPreviewLabel.frame = NSRect(x: pad, y: y - 32, width: contentW, height: 36)
+        apiKeyPreviewLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        apiKeyPreviewLabel.textColor = .secondaryLabelColor
+        apiKeyPreviewLabel.isSelectable = true  // allow copy from preview
+        apiKeyPreviewLabel.lineBreakMode = .byCharWrapping
+        apiKeyPreviewLabel.maximumNumberOfLines = 3
         view.addSubview(apiKeyPreviewLabel)
         updateAPIKeyPreview()
-        y -= 24
+        y -= 40
 
         // Test button
         testButton = NSButton(title: "Test Connection", target: self, action: #selector(testConnection))
@@ -414,7 +405,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let needsKey = providerNeedsAPIKey(provider)
 
         apiKeyField.isEnabled = needsKey
-        apiKeyPlainField.isEnabled = needsKey
         apiKeyToggleBtn.isEnabled = needsKey
         apiKeyLabel.textColor = needsKey ? .labelColor : .tertiaryLabelColor
         testButton.isEnabled = needsKey
@@ -454,16 +444,12 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     /// Get the current API key value from whichever field is active.
     private func currentAPIKeyValue() -> String {
-        if apiKeyRevealed {
-            return apiKeyPlainField?.stringValue ?? ""
-        }
         return apiKeyField?.stringValue ?? ""
     }
 
-    /// Set the API key value on both fields (keeps them in sync).
+    /// Set the API key value.
     private func setAPIKeyValue(_ value: String) {
         apiKeyField?.stringValue = value
-        apiKeyPlainField?.stringValue = value
     }
 
     /// Show a masked preview: "sk-ant-a...xY4z  (51 chars)" so the user
@@ -476,37 +462,29 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             return
         }
         let count = key.count
-        let preview: String
-        if count <= 10 {
-            preview = String(repeating: "•", count: count)
+
+        if apiKeyRevealed {
+            // Show full key — readable, selectable, word-wrapped
+            label.stringValue = key
+            label.textColor = .labelColor
+            label.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         } else {
-            let prefix = String(key.prefix(8))
-            let suffix = String(key.suffix(4))
-            preview = "\(prefix)…\(suffix)"
+            // Masked preview: "sk-or-v1…Y4z  (52 chars)"
+            let preview: String
+            if count <= 10 {
+                preview = String(repeating: "•", count: count)
+            } else {
+                preview = "\(String(key.prefix(8)))…\(String(key.suffix(4)))"
+            }
+            label.stringValue = "\(preview)  (\(count) chars)"
+            label.textColor = .secondaryLabelColor
+            label.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         }
-        label.stringValue = "\(preview)   (\(count) chars)"
     }
 
     @objc private func toggleAPIKeyVisibility() {
         apiKeyRevealed.toggle()
-        if apiKeyRevealed {
-            // Swap: remove secure field, add plain field in its place
-            let value = apiKeyField.stringValue
-            let parent = apiKeyField.superview!
-            apiKeyField.removeFromSuperview()
-            apiKeyPlainField.stringValue = value
-            parent.addSubview(apiKeyPlainField)
-            apiKeyToggleBtn.title = "Hide"
-            apiKeyPlainField.selectText(nil)
-        } else {
-            // Swap back: remove plain field, add secure field
-            let value = apiKeyPlainField.stringValue
-            let parent = apiKeyPlainField.superview!
-            apiKeyPlainField.removeFromSuperview()
-            apiKeyField.stringValue = value
-            parent.addSubview(apiKeyField)
-            apiKeyToggleBtn.title = "Show"
-        }
+        apiKeyToggleBtn.title = apiKeyRevealed ? "Hide" : "Show"
         updateAPIKeyPreview()
     }
 
@@ -524,12 +502,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 
     @objc private func apiKeyFieldChanged() {
-        // Sync values between fields
-        if apiKeyRevealed {
-            apiKeyField.stringValue = apiKeyPlainField.stringValue
-        } else {
-            apiKeyPlainField.stringValue = apiKeyField.stringValue
-        }
         updateAPIKeyPreview()
     }
 
