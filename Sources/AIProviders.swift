@@ -585,7 +585,20 @@ class OpenRouterProvider: AIProvider {
     /// Maximum number of models to benchmark (each model = 2 API calls).
     private static let maxModelsToBenchmark = 10
 
-    /// Fetch free models from OpenRouter, pre-filtered to known-good families.
+    /// Context length sweet spot for text correction tasks.
+    /// Too small (<4K) = model is too weak. Too large (>65K) = likely a huge slow model.
+    private static let minContextLength = 4_096
+    private static let maxContextLength = 65_536
+
+    /// Model ID patterns that indicate oversized/slow models (70B+, MoE giants, etc.).
+    private static let oversizedPatterns = [
+        "405b", "403b", "236b", "180b", "141b",  // giant dense models
+        "120b", "110b", "104b", "72b", "70b",     // large models
+        "65b", "48b",                               // still very large
+    ]
+
+    /// Fetch free models from OpenRouter, pre-filtered to known-good families
+    /// and right-sized for text correction (fast, not too big, not too small).
     /// Returns (allFreeCount, candidateModels) — allFreeCount is for display only.
     static func fetchFreeModels(apiKey: String) async -> (totalFree: Int, candidates: [(id: String, name: String)]) {
         guard let url = URL(string: "https://openrouter.ai/api/v1/models") else { return (0, []) }
@@ -608,15 +621,21 @@ class OpenRouterProvider: AIProvider {
             return (id, name, ctx)
         }
 
-        // Pre-filter: only keep models from known-good families
-        let idLower = { (id: String) -> String in id.lowercased() }
-        var candidates = allFree.filter { model in
-            let lower = idLower(model.id)
-            return preferredModelFamilies.contains { lower.contains($0) }
-        }
-
-        // Prefer larger context models (proxy for quality), sort descending
-        candidates.sort { $0.contextLength > $1.contextLength }
+        let candidates = allFree
+            // 1. Only known-good families
+            .filter { model in
+                let lower = model.id.lowercased()
+                return preferredModelFamilies.contains { lower.contains($0) }
+            }
+            // 2. Context length in sweet spot (not too small, not too large)
+            .filter { $0.contextLength >= minContextLength && $0.contextLength <= maxContextLength }
+            // 3. Drop oversized models (70B+ params) — too slow for text correction
+            .filter { model in
+                let lower = model.id.lowercased()
+                return !oversizedPatterns.contains { lower.contains($0) }
+            }
+            // 4. Sort by context length descending (prefer capable models within the size cap)
+            .sorted { $0.contextLength > $1.contextLength }
 
         // Cap at maxModelsToBenchmark
         let capped = Array(candidates.prefix(maxModelsToBenchmark))
