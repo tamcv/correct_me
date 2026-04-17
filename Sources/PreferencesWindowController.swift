@@ -623,11 +623,14 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         findModelsStatus?.textColor = .secondaryLabelColor
 
         Task {
-            // 1. Fetch all free models
-            let freeModels = await OpenRouterProvider.fetchFreeModels(apiKey: key)
-            guard !freeModels.isEmpty else {
+            // 1. Fetch free models (pre-filtered to known-good families, capped at ~10)
+            let (totalFree, candidates) = await OpenRouterProvider.fetchFreeModels(apiKey: key)
+            guard !candidates.isEmpty else {
                 await MainActor.run {
-                    findModelsStatus?.stringValue = "No free models found"
+                    let msg = totalFree == 0
+                        ? "No free models found"
+                        : "No suitable free models found (from \(totalFree) available)"
+                    findModelsStatus?.stringValue = msg
                     findModelsStatus?.textColor = .systemRed
                     findModelsButton?.isEnabled = true
                 }
@@ -635,14 +638,14 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             }
 
             await MainActor.run {
-                findModelsStatus?.stringValue = "Testing \(freeModels.count) models..."
+                findModelsStatus?.stringValue = "Testing \(candidates.count) of \(totalFree) free models..."
             }
 
-            // 2. Benchmark each model (in parallel, max 8 concurrent)
+            // 2. Benchmark candidates (in parallel)
             var results: [(id: String, latencyMs: Int, quality: Double)] = []
             var tested = 0
             await withTaskGroup(of: (String, Int, Double)?.self) { group in
-                for model in freeModels {
+                for model in candidates {
                     group.addTask {
                         await OpenRouterProvider.benchmarkModel(apiKey: key, modelId: model.id)
                     }
@@ -653,7 +656,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
                         results.append(r)
                     }
                     await MainActor.run {
-                        findModelsStatus?.stringValue = "Tested \(tested)/\(freeModels.count)..."
+                        findModelsStatus?.stringValue = "Tested \(tested)/\(candidates.count)..."
                     }
                 }
             }

@@ -573,9 +573,22 @@ class OpenRouterProvider: AIProvider {
 
     // MARK: - Static: discover and benchmark free models
 
-    /// Fetch all free models from OpenRouter API.
-    static func fetchFreeModels(apiKey: String) async -> [(id: String, name: String)] {
-        guard let url = URL(string: "https://openrouter.ai/api/v1/models") else { return [] }
+    /// Known-good model families that typically produce quality text corrections.
+    /// Used to pre-filter before expensive benchmarking.
+    private static let preferredModelFamilies = [
+        "llama", "mistral", "gemma", "qwen", "phi",
+        "deepseek", "wizardlm", "openchat", "hermes",
+        "zephyr", "nous", "yi", "command", "dbrx",
+        "internlm", "glm", "nemotron", "aya",
+    ]
+
+    /// Maximum number of models to benchmark (each model = 2 API calls).
+    private static let maxModelsToBenchmark = 10
+
+    /// Fetch free models from OpenRouter, pre-filtered to known-good families.
+    /// Returns (allFreeCount, candidateModels) — allFreeCount is for display only.
+    static func fetchFreeModels(apiKey: String) async -> (totalFree: Int, candidates: [(id: String, name: String)]) {
+        guard let url = URL(string: "https://openrouter.ai/api/v1/models") else { return (0, []) }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 10
@@ -583,15 +596,32 @@ class OpenRouterProvider: AIProvider {
         guard let (data, _) = try? await URLSession.shared.data(for: request),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let models = json["data"] as? [[String: Any]] else {
-            return []
+            return (0, [])
         }
 
-        return models.compactMap { m -> (String, String)? in
+        // Collect all free models
+        let allFree = models.compactMap { m -> (id: String, name: String, contextLength: Int)? in
             guard let id = m["id"] as? String,
                   id.hasSuffix(":free"),
                   let name = m["name"] as? String else { return nil }
-            return (id, name)
-        }.sorted { $0.1 < $1.1 }
+            let ctx = m["context_length"] as? Int ?? 0
+            return (id, name, ctx)
+        }
+
+        // Pre-filter: only keep models from known-good families
+        let idLower = { (id: String) -> String in id.lowercased() }
+        var candidates = allFree.filter { model in
+            let lower = idLower(model.id)
+            return preferredModelFamilies.contains { lower.contains($0) }
+        }
+
+        // Prefer larger context models (proxy for quality), sort descending
+        candidates.sort { $0.contextLength > $1.contextLength }
+
+        // Cap at maxModelsToBenchmark
+        let capped = Array(candidates.prefix(maxModelsToBenchmark))
+
+        return (allFree.count, capped.map { ($0.id, $0.name) })
     }
 
     /// Quality test cases: input text with known errors → expected keywords in correct output.
