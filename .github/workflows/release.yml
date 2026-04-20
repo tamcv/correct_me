@@ -74,13 +74,9 @@ jobs:
         VERSION="${{ steps.version.outputs.VERSION }}"
         DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
         SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
-        GENERATE_KEYS=".build/artifacts/sparkle/Sparkle/bin/generate_keys"
 
-        # Import private key into CI keychain (Sparkle 2.x removed -s flag)
-        echo "$SPARKLE_PRIVATE_KEY" | "$GENERATE_KEYS" --import
-
-        # Sign — sign_update now reads key from keychain
-        SIG_OUTPUT=$("$SIGN_UPDATE" "$DMG_PATH")
+        # Pass private key via stdin using --ed-key-file - (Sparkle 2.x, tested locally)
+        SIG_OUTPUT=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - "$DMG_PATH")
         echo "sig_output=$SIG_OUTPUT"
 
         ED_SIG=$(echo "$SIG_OUTPUT" | grep -o 'edSignature="[^"]*"' | cut -d'"' -f2)
