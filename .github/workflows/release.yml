@@ -86,9 +86,8 @@ jobs:
           SIGN_UPDATE="/tmp/sparkle/bin/sign_update"
         fi
 
-        # Sign and capture output: "edSignature=... length=..."
-        SIG_OUTPUT=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" "$DMG_PATH" --account correctme 2>/dev/null \
-          || "$SIGN_UPDATE" "$DMG_PATH" -s "$SPARKLE_PRIVATE_KEY")
+        # sign_update reads SPARKLE_PRIVATE_KEY from environment automatically (Sparkle 2.x)
+        SIG_OUTPUT=$("$SIGN_UPDATE" "$DMG_PATH")
         echo "sig_output=$SIG_OUTPUT"
 
         ED_SIG=$(echo "$SIG_OUTPUT" | grep -o 'edSignature="[^"]*"' | cut -d'"' -f2)
