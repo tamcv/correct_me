@@ -136,127 +136,165 @@ class MenuBarManager: NSObject {
     func updateMenuPublic() { updateMenu() }
 
     private func updateMenu() {
-        guard let menu = menu else {
-            debugLog("Menu is nil in updateMenu()")
-            return
-        }
-        debugLog("updateMenu() called")
+        guard let menu = menu else { return }
         menu.removeAllItems()
 
+        let cfg = Config.load()
+        let status = StatusManager.shared.currentStatus
+
         // ── Header ──────────────────────────────────────────────
-        let headerItem = NSMenuItem(title: "CorrectMe  v\(AppVersion.current)", action: nil, keyEquivalent: "")
+        let headerAttr = NSMutableAttributedString(
+            string: "CorrectMe",
+            attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                         .foregroundColor: NSColor.labelColor]
+        )
+        headerAttr.append(NSAttributedString(
+            string: "  \(AppVersion.current)",
+            attributes: [.font: NSFont.systemFont(ofSize: 11),
+                         .foregroundColor: NSColor.tertiaryLabelColor]
+        ))
+        let headerItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        headerItem.attributedTitle = headerAttr
         headerItem.isEnabled = false
         menu.addItem(headerItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // ── Status + provider (single compact line) ──────────────
-        let cfg = Config.load()
-        let status = StatusManager.shared.currentStatus
-        let statusDot: String
+        // ── Status ───────────────────────────────────────────────
+        let statusColor: NSColor
         switch status {
-        case .idle:       statusDot = "●"
-        case .processing: statusDot = "◌"
-        case .success:    statusDot = "●"
-        case .error:      statusDot = "●"
+        case .idle:       statusColor = .tertiaryLabelColor
+        case .processing: statusColor = .systemYellow
+        case .success:    statusColor = .systemGreen
+        case .error:      statusColor = .systemRed
         }
 
-        // Truncate model name so it fits nicely
-        let modelRaw = cfg.model ?? ""
-        let modelShort: String
-        if modelRaw.count > 28 {
-            modelShort = String(modelRaw.prefix(26)) + "…"
-        } else {
-            modelShort = modelRaw.isEmpty ? "(default)" : modelRaw
-        }
-        let providerLine = "\(cfg.aiProvider.rawValue) · \(modelShort)"
-        let statusLine = "\(statusDot)  \(status.rawValue.capitalized)    \(providerLine)"
-        let statusItem = NSMenuItem(title: statusLine, action: nil, keyEquivalent: "")
+        let statusAttr = NSMutableAttributedString(
+            string: "● ",
+            attributes: [.foregroundColor: statusColor,
+                         .font: NSFont.systemFont(ofSize: 12)]
+        )
+        statusAttr.append(NSAttributedString(
+            string: status.rawValue.capitalized,
+            attributes: [.font: NSFont.systemFont(ofSize: 12),
+                         .foregroundColor: NSColor.labelColor]
+        ))
+        let statusItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        statusItem.attributedTitle = statusAttr
         statusItem.isEnabled = false
         menu.addItem(statusItem)
 
-        // Last correction time (only when relevant)
+        // Provider · Model (indented secondary line)
+        let modelRaw = cfg.model ?? ""
+        let modelShort = modelRaw.isEmpty ? "default"
+            : modelRaw.count > 26 ? String(modelRaw.prefix(24)) + "…"
+            : modelRaw
+        let providerAttr = NSAttributedString(
+            string: "\(cfg.aiProvider.rawValue)  ·  \(modelShort)",
+            attributes: [.font: NSFont.systemFont(ofSize: 11),
+                         .foregroundColor: NSColor.secondaryLabelColor]
+        )
+        let providerItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        providerItem.attributedTitle = providerAttr
+        providerItem.isEnabled = false
+        providerItem.indentationLevel = 1
+        menu.addItem(providerItem)
+
+        // Last correction time
         if let timeAgo = StatusManager.shared.lastCorrectionTimeAgo {
-            let timeItem = NSMenuItem(title: "   Last correction: \(timeAgo)", action: nil, keyEquivalent: "")
+            let timeAttr = NSAttributedString(
+                string: "Last corrected \(timeAgo)",
+                attributes: [.font: NSFont.systemFont(ofSize: 11),
+                             .foregroundColor: NSColor.tertiaryLabelColor]
+            )
+            let timeItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+            timeItem.attributedTitle = timeAttr
             timeItem.isEnabled = false
+            timeItem.indentationLevel = 1
             menu.addItem(timeItem)
         }
 
-        // Recent error (show just the latest one, inline, if any)
+        // Latest error (clickable for details)
         let errors = ErrorLog.shared.getErrors()
         if let latestError = errors.first {
-            let snippet = String(latestError.message.prefix(50))
-            let errItem = NSMenuItem(title: "   ⚠ \(snippet)", action: #selector(showErrorDetail(_:)), keyEquivalent: "")
+            let snippet = String(latestError.message.prefix(44))
+            let errAttr = NSMutableAttributedString(
+                string: "⚠  \(snippet)",
+                attributes: [.font: NSFont.systemFont(ofSize: 11),
+                             .foregroundColor: NSColor.systemOrange]
+            )
+            let errItem = NSMenuItem(title: "", action: #selector(showErrorDetail(_:)), keyEquivalent: "")
+            errItem.attributedTitle = errAttr
             errItem.tag = 0
             errItem.target = self
+            errItem.indentationLevel = 1
             menu.addItem(errItem)
         }
 
         menu.addItem(NSMenuItem.separator())
 
-        // ── Core actions ─────────────────────────────────────────
+        // ── Actions ──────────────────────────────────────────────
         let historyCount = CorrectionHistory.shared.getEntries().count
         let historyTitle = historyCount > 0 ? "Correction History  (\(historyCount))" : "Correction History"
-        let historyItem = NSMenuItem(
-            title: historyTitle,
-            action: #selector(openHistory),
-            keyEquivalent: ""
-        )
+        let historyItem = NSMenuItem(title: historyTitle, action: #selector(openHistory), keyEquivalent: "")
+        if #available(macOS 11.0, *) {
+            historyItem.image = NSImage(systemSymbolName: "clock.arrow.circlepath", accessibilityDescription: nil)
+        }
         historyItem.target = self
         menu.addItem(historyItem)
 
-        let prefsItem = NSMenuItem(
-            title: "⚙️  Preferences...",
-            action: #selector(openPreferences),
-            keyEquivalent: ","
-        )
+        let prefsItem = NSMenuItem(title: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
+        if #available(macOS 11.0, *) {
+            prefsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
+        }
         prefsItem.target = self
         menu.addItem(prefsItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // ── App management ────────────────────────────────────────
-        let updatesItem = NSMenuItem(
-            title: "Check for Updates…",
-            action: #selector(checkForUpdates),
-            keyEquivalent: ""
-        )
+        // ── License / Updates ────────────────────────────────────
+        let updatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        if #available(macOS 11.0, *) {
+            updatesItem.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+        }
         updatesItem.target = self
         menu.addItem(updatesItem)
 
-        let licenseTitle: String
+        let licenseItem: NSMenuItem
         if LicenseManager.shared.isActivated {
-            licenseTitle = "✓ License Activated"
+            licenseItem = NSMenuItem(title: "Licensed", action: nil, keyEquivalent: "")
+            if #available(macOS 11.0, *) {
+                licenseItem.image = NSImage(systemSymbolName: "checkmark.seal.fill", accessibilityDescription: nil)
+            }
+            licenseItem.isEnabled = false
         } else if let days = LicenseManager.shared.trialDaysRemaining, days > 0 {
-            licenseTitle = "Trial: \(days) day\(days == 1 ? "" : "s") remaining — Activate…"
+            licenseItem = NSMenuItem(
+                title: "\(days) day\(days == 1 ? "" : "s") left in trial  ·  Activate…",
+                action: #selector(openLicense), keyEquivalent: "")
+            if #available(macOS 11.0, *) {
+                licenseItem.image = NSImage(systemSymbolName: "key", accessibilityDescription: nil)
+            }
+            licenseItem.target = self
         } else {
-            licenseTitle = "⚠ Trial Expired — Activate License…"
+            licenseItem = NSMenuItem(title: "Trial Expired  ·  Activate…", action: #selector(openLicense), keyEquivalent: "")
+            if #available(macOS 11.0, *) {
+                licenseItem.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
+            }
+            licenseItem.target = self
         }
-        let licenseItem = NSMenuItem(
-            title: licenseTitle,
-            action: LicenseManager.shared.isActivated ? nil : #selector(openLicense),
-            keyEquivalent: ""
-        )
-        licenseItem.target = self
-        licenseItem.isEnabled = !LicenseManager.shared.isActivated
         menu.addItem(licenseItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // ── System ────────────────────────────────────────────────
-        let restartItem = NSMenuItem(
-            title: "Restart Daemon",
-            action: #selector(restartDaemon),
-            keyEquivalent: "r"
-        )
+        // ── System ───────────────────────────────────────────────
+        let restartItem = NSMenuItem(title: "Restart", action: #selector(restartDaemon), keyEquivalent: "r")
+        if #available(macOS 11.0, *) {
+            restartItem.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil)
+        }
         restartItem.target = self
         menu.addItem(restartItem)
 
-        let quitItem = NSMenuItem(
-            title: "Quit CorrectMe",
-            action: #selector(quitApp),
-            keyEquivalent: "q"
-        )
+        let quitItem = NSMenuItem(title: "Quit CorrectMe", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
