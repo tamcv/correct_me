@@ -570,6 +570,13 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         hint.autoresizingMask = [.width]
         contentView.addSubview(hint)
 
+        let keychainWarning = NSTextField(wrappingLabelWithString: "ℹ️  macOS will ask for your login password once to securely store your API key in Keychain. This is normal — click \"Always Allow\" to avoid being asked again.")
+        keychainWarning.font = .systemFont(ofSize: 11)
+        keychainWarning.textColor = .secondaryLabelColor
+        keychainWarning.frame = NSRect(x: contentPad, y: bounds.height - 332, width: bounds.width - contentPad * 2, height: 40)
+        keychainWarning.autoresizingMask = [.width]
+        contentView.addSubview(keychainWarning)
+
         addModelField(at: bounds.height - 350, in: bounds)
         addNavigationButtons(showBack: true)
     }
