@@ -1360,15 +1360,42 @@ struct CorrectMeApp {
         """)
 
         // Check accessibility permissions
-        if !AccessibilityHelper.checkAccessibilityPermissions() {
+        let hasAccessibility = AccessibilityHelper.checkAccessibilityPermissions()
+        if !hasAccessibility {
             logPrint("⚠️  Accessibility permission required!")
             logPrint("   Go to: System Settings → Privacy & Security → Accessibility")
-            logPrint("   Add and enable Terminal (or your terminal app)")
             logPrint("")
         }
 
         // Initialize menu bar manager first (before checking permissions)
         _ = MenuBarManager.shared
+
+        // Detect permission loss after an auto-update (signature changed → TCC revoked)
+        let accessibilityWasGrantedKey = "correctme_accessibility_was_granted"
+        let wasGranted = UserDefaults.standard.bool(forKey: accessibilityWasGrantedKey)
+        if hasAccessibility {
+            UserDefaults.standard.set(true, forKey: accessibilityWasGrantedKey)
+        } else if wasGranted {
+            // Was granted before but lost now → likely caused by a Sparkle update
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                NSApp.activate(ignoringOtherApps: true)
+                let alert = NSAlert()
+                alert.messageText = "Accessibility Permission Required"
+                alert.informativeText = """
+                    CorrectMe was just updated and macOS revoked its Accessibility permission (this is normal after updates).
+
+                    Please re-grant it to restore hotkey functionality:
+                    1. Open System Settings → Privacy & Security → Accessibility
+                    2. Find CorrectMe and toggle it off, then back on
+                    """
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "Open System Settings")
+                alert.addButton(withTitle: "Later")
+                if alert.runModal() == .alertFirstButtonReturn {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                }
+            }
+        }
 
         // Set initial status
         StatusManager.shared.setStatus(.idle)

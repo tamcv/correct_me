@@ -33,10 +33,9 @@ jobs:
       continue-on-error: true
 
     - name: Import signing certificate
-      if: ${{ env.CERT_BASE64 != '' }}
       env:
-        CERT_BASE64: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
-        CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        CERT_BASE64: ${{ secrets.DEV_CERT_BASE64 }}
+        CERT_PASSWORD: ${{ secrets.DEV_CERT_PASSWORD }}
       run: |
         KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
         KEYCHAIN_PASSWORD="$(openssl rand -hex 20)"
@@ -50,10 +49,10 @@ jobs:
         security import "$CERT_PATH" \
           -k "$KEYCHAIN_PATH" \
           -P "$CERT_PASSWORD" \
-          -T /usr/bin/codesign \
-          -T /usr/bin/productsign
+          -T /usr/bin/codesign
 
         security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        # Include both the temp keychain and the system default so codesign can find the cert
         security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
         echo "✅ Certificate imported"
 
