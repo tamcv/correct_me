@@ -38,6 +38,11 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var perAppStylesContainer: NSView!
     private var perAppEntries: [(bundleId: String, style: String)] = []
 
+    // Add-app panel references
+    private var addAppPanel: NSPanel?
+    private var addAppPopUpRef: NSPopUpButton?
+    private var addAppStyleFieldRef: NSTextField?
+
     // General tab
     private var autoStartCheckbox: NSButton!
     private var forceApplyCheckbox: NSButton!
@@ -990,18 +995,12 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         y -= containerH + 6
 
-        // Add / Remove buttons
+        // Add App button only — remove is done via inline × per row
         let addBtn = NSButton(title: "Add App…", target: self, action: #selector(addPerAppStyle))
         addBtn.bezelStyle = .rounded
         addBtn.font = .systemFont(ofSize: 11)
         addBtn.frame = NSRect(x: pad, y: y, width: 90, height: 22)
         view.addSubview(addBtn)
-
-        let removeBtn = NSButton(title: "Remove", target: self, action: #selector(removePerAppStyle))
-        removeBtn.bezelStyle = .rounded
-        removeBtn.font = .systemFont(ofSize: 11)
-        removeBtn.frame = NSRect(x: pad + 96, y: y, width: 70, height: 22)
-        view.addSubview(removeBtn)
 
         item.view = view
         return item
@@ -1056,13 +1055,31 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             nameLabel.lineBreakMode = .byTruncatingTail
             container.addSubview(nameLabel)
 
-            // Style text
+            // Style text (leave 28px on right for × button)
             let styleLabel = NSTextField(labelWithString: entry.style)
-            styleLabel.frame = NSRect(x: 210, y: y + 11, width: cw - 214, height: 16)
+            styleLabel.frame = NSRect(x: 210, y: y + 11, width: cw - 242, height: 16)
             styleLabel.font = .systemFont(ofSize: 11)
             styleLabel.textColor = .secondaryLabelColor
             styleLabel.lineBreakMode = .byTruncatingTail
             container.addSubview(styleLabel)
+
+            // × remove button
+            let xBtn = NSButton(frame: NSRect(x: cw - 28, y: y + 8, width: 20, height: 20))
+            if #available(macOS 11.0, *),
+               let xImg = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove") {
+                xBtn.image = xImg
+                xBtn.imagePosition = .imageOnly
+                xBtn.isBordered = false
+                xBtn.contentTintColor = .tertiaryLabelColor
+            } else {
+                xBtn.title = "×"
+                xBtn.bezelStyle = .inline
+                xBtn.font = .systemFont(ofSize: 13)
+            }
+            xBtn.tag = i
+            xBtn.target = self
+            xBtn.action = #selector(removePerAppRowAtTag(_:))
+            container.addSubview(xBtn)
 
             // Row separator
             if i < perAppEntries.count - 1 {
@@ -1083,48 +1100,107 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    @objc private func removePerAppRowAtTag(_ sender: NSButton) {
+        let idx = sender.tag
+        guard idx >= 0, idx < perAppEntries.count else { return }
+        perAppEntries.remove(at: idx)
+        rebuildPerAppList()
+    }
+
     @objc private func addPerAppStyle() {
-        let alert = NSAlert()
-        alert.messageText = "Add Per-App Style"
-        alert.informativeText = "Select a running app or enter a bundle ID, then set the writing style for that app."
-        alert.addButton(withTitle: "Add")
-        alert.addButton(withTitle: "Cancel")
+        if let existing = addAppPanel, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
 
-        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 100))
+        let W: CGFloat = 400
+        let H: CGFloat = 188
+        let pad: CGFloat = 20
 
-        let appPopUp = NSPopUpButton(frame: NSRect(x: 0, y: 72, width: 340, height: 26), pullsDown: false)
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: W, height: H),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Add Per-App Style"
+        panel.isReleasedWhenClosed = false
+        panel.level = .floating
+
+        let cv = panel.contentView!
+
+        // App picker
+        let appLabel = NSTextField(labelWithString: "App")
+        appLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        appLabel.frame = NSRect(x: pad, y: H - 42, width: W - pad * 2, height: 16)
+        cv.addSubview(appLabel)
+
+        let appPopUp = NSPopUpButton(frame: NSRect(x: pad, y: H - 70, width: W - pad * 2, height: 26))
         let runningApps = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != nil }
             .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
 
-        appPopUp.addItem(withTitle: "Choose from running apps…")
+        appPopUp.addItem(withTitle: "Select a running app…")
         for app in runningApps {
-            let name = app.localizedName ?? app.bundleIdentifier ?? "Unknown"
-            let bundleId = app.bundleIdentifier ?? ""
-            appPopUp.addItem(withTitle: "\(name)  (\(bundleId))")
-            appPopUp.lastItem?.representedObject = bundleId
+            let name = app.localizedName ?? "Unknown"
+            appPopUp.addItem(withTitle: name)
+            appPopUp.lastItem?.representedObject = app.bundleIdentifier
+            if let icon = app.icon {
+                let thumb = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in
+                    icon.draw(in: NSRect(x: 0, y: 0, width: 16, height: 16))
+                    return true
+                }
+                appPopUp.lastItem?.image = thumb
+            }
         }
-        accessory.addSubview(appPopUp)
+        cv.addSubview(appPopUp)
+        addAppPopUpRef = appPopUp
 
-        let styleField = NSTextField(frame: NSRect(x: 0, y: 6, width: 340, height: 60))
-        styleField.placeholderString = "Writing style for this app (e.g. \"casual tone\")"
+        // Style field
+        let styleLabel = NSTextField(labelWithString: "Writing Style")
+        styleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        styleLabel.frame = NSRect(x: pad, y: H - 108, width: W - pad * 2, height: 16)
+        cv.addSubview(styleLabel)
+
+        let styleField = NSTextField(frame: NSRect(x: pad, y: H - 136, width: W - pad * 2, height: 26))
+        styleField.placeholderString = "e.g. casual tone, professional, no jargon"
         styleField.font = .systemFont(ofSize: 12)
-        accessory.addSubview(styleField)
+        cv.addSubview(styleField)
+        addAppStyleFieldRef = styleField
 
-        alert.accessoryView = accessory
+        // Buttons
+        let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancelAddPerAppStyle))
+        cancelBtn.bezelStyle = .rounded
+        cancelBtn.frame = NSRect(x: W - pad - 160, y: pad - 4, width: 72, height: 28)
+        cv.addSubview(cancelBtn)
 
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let addBtn = NSButton(title: "Add", target: self, action: #selector(confirmAddPerAppStyle))
+        addBtn.bezelStyle = .rounded
+        addBtn.keyEquivalent = "\r"
+        addBtn.frame = NSRect(x: W - pad - 80, y: pad - 4, width: 80, height: 28)
+        cv.addSubview(addBtn)
 
-        let bundleId: String
-        if appPopUp.indexOfSelectedItem > 0,
-           let selected = appPopUp.selectedItem?.representedObject as? String {
-            bundleId = selected
-        } else {
+        addAppPanel = panel
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func confirmAddPerAppStyle() {
+        guard let popup = addAppPopUpRef, let field = addAppStyleFieldRef else { return }
+
+        guard popup.indexOfSelectedItem > 0,
+              let bundleId = popup.selectedItem?.representedObject as? String else {
+            // Briefly highlight the popup to indicate selection is required
+            popup.layer?.borderColor = NSColor.systemRed.cgColor
             return
         }
 
-        let style = styleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !style.isEmpty else { return }
+        let style = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !style.isEmpty else {
+            field.layer?.borderColor = NSColor.systemRed.cgColor
+            return
+        }
 
         if let idx = perAppEntries.firstIndex(where: { $0.bundleId == bundleId }) {
             perAppEntries[idx].style = style
@@ -1132,32 +1208,18 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             perAppEntries.append((bundleId: bundleId, style: style))
         }
 
+        addAppPanel?.close()
+        addAppPanel = nil
+        addAppPopUpRef = nil
+        addAppStyleFieldRef = nil
         rebuildPerAppList()
     }
 
-    @objc private func removePerAppStyle() {
-        guard !perAppEntries.isEmpty else { return }
-
-        let alert = NSAlert()
-        alert.messageText = "Remove Per-App Style"
-        alert.informativeText = "Select an app to remove its custom style:"
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
-
-        let popUp = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 300, height: 26), pullsDown: false)
-        for entry in perAppEntries {
-            let name = appDisplayInfo(for: entry.bundleId).name
-            popUp.addItem(withTitle: name)
-            popUp.lastItem?.representedObject = entry.bundleId
-        }
-        alert.accessoryView = popUp
-
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-
-        guard let bundleId = popUp.selectedItem?.representedObject as? String,
-              let idx = perAppEntries.firstIndex(where: { $0.bundleId == bundleId }) else { return }
-        perAppEntries.remove(at: idx)
-        rebuildPerAppList()
+    @objc private func cancelAddPerAppStyle() {
+        addAppPanel?.close()
+        addAppPanel = nil
+        addAppPopUpRef = nil
+        addAppStyleFieldRef = nil
     }
 
     @objc private func stylePresetTapped(_ sender: NSButton) {
