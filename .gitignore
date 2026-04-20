@@ -10,3 +10,4 @@ license-server/node_modules/
 license-server/.env.local
 license-server/.env
 license-server/.vercel/
+Sources/LicenseSecret.swift

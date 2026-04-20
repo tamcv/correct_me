@@ -20,7 +20,8 @@ import CryptoKit
 //
 // ⚠️  IMPORTANT: Change LICENSE_SECRET before shipping. Generate a random
 //     32-byte hex string and keep it in sync with the backend.
-private let LICENSE_SECRET = "CHANGE_ME_BEFORE_SHIPPING_32BYTE_SECRET_KEY_HERE"
+// LICENSE_SECRET is defined in Sources/LicenseSecret.swift (gitignored).
+// See Sources/LicenseSecret.swift.example for the template.
 
 // MARK: - LicenseInfo
 
