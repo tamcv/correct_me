@@ -74,19 +74,12 @@ jobs:
         VERSION="${{ steps.version.outputs.VERSION }}"
         DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
         SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+        GENERATE_KEYS=".build/artifacts/sparkle/Sparkle/bin/generate_keys"
 
-        # Download sign_update if not cached (CI has no .build/artifacts)
-        if [ ! -f "$SIGN_UPDATE" ]; then
-          SPARKLE_VERSION=$(swift package show-dependencies --format json 2>/dev/null | \
-            python3 -c "import sys,json; pkgs=json.load(sys.stdin)['dependencies']; print(next(p['version'] for p in pkgs if 'sparkle' in p['url'].lower()))" 2>/dev/null || echo "2.6.4")
-          curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
-            -o /tmp/sparkle.tar.xz
-          mkdir -p /tmp/sparkle
-          tar -xf /tmp/sparkle.tar.xz -C /tmp/sparkle
-          SIGN_UPDATE="/tmp/sparkle/bin/sign_update"
-        fi
+        # Import private key into CI keychain (Sparkle 2.x removed -s flag)
+        echo "$SPARKLE_PRIVATE_KEY" | "$GENERATE_KEYS" --import
 
-        # sign_update reads SPARKLE_PRIVATE_KEY from environment automatically (Sparkle 2.x)
+        # Sign — sign_update now reads key from keychain
         SIG_OUTPUT=$("$SIGN_UPDATE" "$DMG_PATH")
         echo "sig_output=$SIG_OUTPUT"
 
