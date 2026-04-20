@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>CorrectMe</title>
+    <link>https://raw.githubusercontent.com/tamcv/correct_me/main/dist/appcast.xml</link>
+    <description>CorrectMe release feed</description>
+    <language>en</language>
+
+  </channel>
+</rss>

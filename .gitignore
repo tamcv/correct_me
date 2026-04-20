@@ -1,6 +1,7 @@
 .build/
 dist/
 !dist/latest.json
+!dist/appcast.xml
 *.bak
 .vscode/settings.json
 plan.md

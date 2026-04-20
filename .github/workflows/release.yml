@@ -67,6 +67,36 @@ jobs:
         chmod +x scripts/build-release.sh
         ./scripts/build-release.sh
 
+    - name: Sign DMG for Sparkle
+      env:
+        SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
+        SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+
+        # Download sign_update if not cached (CI has no .build/artifacts)
+        if [ ! -f "$SIGN_UPDATE" ]; then
+          SPARKLE_VERSION=$(swift package show-dependencies --format json 2>/dev/null | \
+            python3 -c "import sys,json; pkgs=json.load(sys.stdin)['dependencies']; print(next(p['version'] for p in pkgs if 'sparkle' in p['url'].lower()))" 2>/dev/null || echo "2.6.4")
+          curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
+            -o /tmp/sparkle.tar.xz
+          mkdir -p /tmp/sparkle
+          tar -xf /tmp/sparkle.tar.xz -C /tmp/sparkle
+          SIGN_UPDATE="/tmp/sparkle/bin/sign_update"
+        fi
+
+        # Sign and capture output: "edSignature=... length=..."
+        SIG_OUTPUT=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" "$DMG_PATH" --account correctme 2>/dev/null \
+          || "$SIGN_UPDATE" "$DMG_PATH" -s "$SPARKLE_PRIVATE_KEY")
+        echo "sig_output=$SIG_OUTPUT"
+
+        ED_SIG=$(echo "$SIG_OUTPUT" | grep -o 'edSignature="[^"]*"' | cut -d'"' -f2)
+        DMG_LENGTH=$(stat -f%z "$DMG_PATH")
+
+        echo "ED_SIG=$ED_SIG" >> $GITHUB_ENV
+        echo "DMG_LENGTH=$DMG_LENGTH" >> $GITHUB_ENV
+
     - name: Publish GitHub Release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -98,32 +128,41 @@ jobs:
           --title "CorrectMe $TAG" \
           --notes-file /tmp/release-notes.md
 
-    - name: Update dist/latest.json
+    - name: Update appcast.xml and latest.json
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
         TAG="${{ steps.version.outputs.TAG }}"
         SHA256=$(cat .build/release-dmg/sha256.txt)
+        ED_SIG="${{ env.ED_SIG }}"
+        DMG_LENGTH="${{ env.DMG_LENGTH }}"
+        REPO="${{ github.repository }}"
+
+        MAJOR=$(echo "$VERSION" | cut -d. -f1)
+        MINOR=$(echo "$VERSION" | cut -d. -f2)
+        PATCH=$(echo "$VERSION" | cut -d. -f3)
+        BUNDLE_VERSION=$((MAJOR * 100 + MINOR * 10 + PATCH))
 
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git fetch origin main
         git checkout main
 
-        mkdir -p dist
-        cat > dist/latest.json << EOF
-        {
-          "tag": "$TAG",
-          "version": "$VERSION",
-          "asset": "CorrectMe-${TAG}-macos.dmg",
-          "sha256": "$SHA256",
-          "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        }
-        EOF
+        python3 scripts/update-appcast.py \
+          --version "$VERSION" \
+          --tag "$TAG" \
+          --bundle-version "$BUNDLE_VERSION" \
+          --dmg-url "https://github.com/${REPO}/releases/download/${TAG}/CorrectMe-${TAG}-macos.dmg" \
+          --length "$DMG_LENGTH" \
+          --signature "$ED_SIG" \
+          --pub-date "$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
 
-        git add dist/latest.json
-        git diff --staged --quiet || git commit -m "chore: update latest.json for $TAG" && git push origin main
+        printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "CorrectMe-%s-macos.dmg",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
+          "$TAG" "$VERSION" "$TAG" "$SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
+
+        git add dist/appcast.xml dist/latest.json
+        git diff --staged --quiet || (git commit -m "release: update appcast.xml and latest.json for $TAG" && git push origin main)
 
     - name: Cleanup keychain
       if: always()
