@@ -133,6 +133,8 @@ class MenuBarManager: NSObject {
         return nil
     }
 
+    func updateMenuPublic() { updateMenu() }
+
     private func updateMenu() {
         guard let menu = menu else {
             debugLog("Menu is nil in updateMenu()")
@@ -222,7 +224,14 @@ class MenuBarManager: NSObject {
         updatesItem.target = self
         menu.addItem(updatesItem)
 
-        let licenseTitle = LicenseManager.shared.isActivated ? "✓ License Activated" : "Activate License…"
+        let licenseTitle: String
+        if LicenseManager.shared.isActivated {
+            licenseTitle = "✓ License Activated"
+        } else if let days = LicenseManager.shared.trialDaysRemaining, days > 0 {
+            licenseTitle = "Trial: \(days) day\(days == 1 ? "" : "s") remaining — Activate…"
+        } else {
+            licenseTitle = "⚠ Trial Expired — Activate License…"
+        }
         let licenseItem = NSMenuItem(
             title: licenseTitle,
             action: LicenseManager.shared.isActivated ? nil : #selector(openLicense),
@@ -320,7 +329,8 @@ class MenuBarManager: NSObject {
     }
 
     @objc private func openLicense() {
-        LicenseWindowController.shared.showWindow()
+        NSApp.activate(ignoringOtherApps: true)
+        LicenseWindowController.shared.showWindow(trialExpired: false)
     }
 
     @objc private func openFeedback() {

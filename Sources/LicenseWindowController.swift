@@ -5,6 +5,8 @@ class LicenseWindowController: NSObject, NSWindowDelegate {
     static let shared = LicenseWindowController()
 
     private var window: NSPanel?
+    private var trialBanner: NSTextField?
+    private var isTrialExpired = false
 
     private var emailField: NSTextField!
     private var licenseField: NSTextField!
@@ -13,25 +15,31 @@ class LicenseWindowController: NSObject, NSWindowDelegate {
     private var buyButton: NSButton!
 
     private let W: CGFloat = 480
-    private let H: CGFloat = 340
+    private let H: CGFloat = 380
     private let pad: CGFloat = 28
 
     private override init() { super.init() }
 
-    func showWindow() {
+    func showWindow(trialExpired: Bool = false) {
+        isTrialExpired = trialExpired
+
         if let existing = window, existing.isVisible {
             existing.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
+        let styleMask: NSWindow.StyleMask = trialExpired
+            ? [.titled]
+            : [.titled, .closable]
+
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: W, height: H),
-            styleMask: [.titled, .closable],
+            styleMask: styleMask,
             backing: .buffered,
             defer: false
         )
-        panel.title = "Activate CorrectMe"
+        panel.title = trialExpired ? "Trial Expired — Activate CorrectMe" : "Activate CorrectMe"
         panel.delegate = self
         panel.isReleasedWhenClosed = false
         panel.level = .floating
@@ -56,6 +64,40 @@ class LicenseWindowController: NSObject, NSWindowDelegate {
 
     private func buildUI(in root: NSView) {
         var y: CGFloat = H - pad
+
+        // Trial banner (shown when trial is running or expired)
+        if !LicenseManager.shared.isActivated {
+            let bannerText: String
+            let bannerColor: NSColor
+            if isTrialExpired {
+                bannerText = "Your 14-day trial has expired. Activate a license to continue using CorrectMe."
+                bannerColor = NSColor.systemRed.withAlphaComponent(0.12)
+            } else if let days = LicenseManager.shared.trialDaysRemaining {
+                bannerText = "Trial: \(days) day\(days == 1 ? "" : "s") remaining out of 14. Activate to unlock permanently."
+                bannerColor = NSColor.systemOrange.withAlphaComponent(0.12)
+            } else {
+                bannerText = ""
+                bannerColor = .clear
+            }
+
+            if !bannerText.isEmpty {
+                let banner = NSBox()
+                banner.boxType = .custom
+                banner.fillColor = bannerColor
+                banner.borderColor = .clear
+                banner.cornerRadius = 6
+                banner.frame = NSRect(x: pad, y: y - 44, width: W - pad * 2, height: 44)
+                root.addSubview(banner)
+
+                let bannerLabel = NSTextField(wrappingLabelWithString: bannerText)
+                bannerLabel.font = .systemFont(ofSize: 11)
+                bannerLabel.textColor = isTrialExpired ? .systemRed : .systemOrange
+                bannerLabel.frame = NSRect(x: 10, y: 8, width: W - pad * 2 - 20, height: 28)
+                banner.addSubview(bannerLabel)
+                trialBanner = bannerLabel
+                y -= 56
+            }
+        }
 
         // Title
         let title = NSTextField(labelWithString: "Activate Your License")
@@ -170,6 +212,18 @@ class LicenseWindowController: NSObject, NSWindowDelegate {
         statusLabel.textColor = .systemGreen
         activateButton.title = "Activated"
         activateButton.isEnabled = false
+
+        // Hide trial banner on successful activation
+        trialBanner?.isHidden = true
+
+        // Refresh the menu bar to reflect new license state
+        MenuBarManager.shared.updateMenuPublic()
+
+        // Restore accessory policy and close window after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            NSApp.setActivationPolicy(.accessory)
+            self?.window?.close()
+        }
     }
 
     @objc private func buyTapped() {

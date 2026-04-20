@@ -50,15 +50,41 @@ final class LicenseManager {
     static let shared = LicenseManager()
 
     private let keychainAccount = "correctme_license"
+    private let firstLaunchKey = "correctme_first_launch_date"
+    private let trialDurationDays = 14
 
     private var _cachedInfo: LicenseInfo?
 
-    private init() {}
+    private init() {
+        // Record first launch date if not already set
+        if UserDefaults.standard.object(forKey: firstLaunchKey) == nil {
+            UserDefaults.standard.set(Date(), forKey: firstLaunchKey)
+        }
+    }
 
     // MARK: - Public API
 
     /// Whether the app is activated with a valid license.
     var isActivated: Bool { licenseInfo != nil }
+
+    /// Number of days remaining in the trial (0 when expired, nil when activated).
+    var trialDaysRemaining: Int? {
+        guard !isActivated else { return nil }
+        guard let firstLaunch = UserDefaults.standard.object(forKey: firstLaunchKey) as? Date else {
+            return trialDurationDays
+        }
+        let elapsed = Calendar.current.dateComponents([.day], from: firstLaunch, to: Date()).day ?? 0
+        return max(0, trialDurationDays - elapsed)
+    }
+
+    /// Whether the trial is still active (not yet expired).
+    var isTrialActive: Bool {
+        guard let days = trialDaysRemaining else { return false }
+        return days > 0
+    }
+
+    /// Whether corrections are allowed (activated OR trial still active).
+    var isAllowed: Bool { isActivated || isTrialActive }
 
     /// The current license info (email + key), nil if not activated.
     var licenseInfo: LicenseInfo? {
