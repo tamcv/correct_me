@@ -150,7 +150,8 @@ jobs:
         printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "CorrectMe-%s-macos.dmg",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
           "$TAG" "$VERSION" "$TAG" "$SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
 
-        git add license-server/appcast.xml dist/latest.json
+        git add license-server/appcast.xml
+        git add -f dist/latest.json
         git diff --staged --quiet || (git commit -m "release: update appcast.xml and latest.json for $TAG" && git push origin main)
 
     - name: Cleanup keychain
