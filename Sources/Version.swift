@@ -1,7 +1,7 @@
 import Foundation
 
 enum AppVersion {
-    static let current = "0.3.6"
+    static let current = "0.3.7"
 
     // Build timestamp - updated during compilation
     static let buildDate: String = {
