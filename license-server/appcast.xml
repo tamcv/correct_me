@@ -58,5 +58,20 @@
         sparkle:edSignature="9eFXcsUpjE8FQXuTUAr17eMAltNSWTZNxh8bHNeoptiViIuMIvO9rgJ33pfAfVQg7a5XxnlUFgY2aQUlkL6BBw=="
       />
     </item>
+
+    <item>
+      <title>CorrectMe 0.4.2</title>
+      <sparkle:version>42</sparkle:version>
+      <sparkle:shortVersionString>0.4.2</sparkle:shortVersionString>
+      <pubDate>Mon, 20 Apr 2026 09:19:56 +0000</pubDate>
+      <enclosure
+        url="https://license-server-liard.vercel.app/downloads/CorrectMe-v0.4.2-macos.dmg"
+        sparkle:version="42"
+        sparkle:shortVersionString="0.4.2"
+        length="1709734"
+        type="application/octet-stream"
+        sparkle:edSignature="z7xOoaE1o8FVKPS8OCTYop68fV5CHlDHvXpEyt/7gzKPCSqS6hJf7KQWJ6eSXipCveGog3dS+gzjjH729ih+CA=="
+      />
+    </item>
   </channel>
 </rss>
