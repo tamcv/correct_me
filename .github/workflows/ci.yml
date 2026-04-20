@@ -17,6 +17,10 @@ jobs:
     - name: Check Swift version
       run: swift --version
 
+    - name: Inject LICENSE_SECRET
+      run: |
+        echo 'let LICENSE_SECRET = "${{ secrets.LICENSE_SECRET }}"' > Sources/LicenseSecret.swift
+
     - name: Build debug
       run: |
         echo "Building CorrectMe (debug)..."

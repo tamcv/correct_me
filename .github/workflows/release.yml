@@ -68,6 +68,10 @@ jobs:
 
         echo "✅ Certificate imported"
 
+    - name: Inject LICENSE_SECRET
+      run: |
+        echo 'let LICENSE_SECRET = "${{ secrets.LICENSE_SECRET }}"' > Sources/LicenseSecret.swift
+
     - name: Build release DMG
       env:
         DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
