@@ -2,59 +2,37 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-
-    <key>CFBundleExecutable</key>
-    <string>correctme</string>
-
-    <key>CFBundleIdentifier</key>
-    <string>com.correctme.app</string>
-
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-
-    <key>CFBundleName</key>
-    <string>CorrectMe</string>
-
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-
-    <key>CFBundleShortVersionString</key>
-    <string>0.3.4</string>
-
-    <key>CFBundleVersion</key>
-    <string>34</string>
-
-    <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
-
-    <key>LSUIElement</key>
-    <true/>
-
-    <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2024. All rights reserved.</string>
-
-    <key>NSSupportsAutomaticGraphicsSwitching</key>
-    <true/>
-
-    <!-- Sparkle auto-update configuration -->
-    <!-- SUFeedURL: host your appcast.xml at this URL (e.g. GitHub Pages).
-         Generate the ed25519 key pair once with Sparkle's generate_keys tool,
-         then put the public key here and keep the private key secret. -->
-    <key>SUFeedURL</key>
-    <string>https://license-server-liard.vercel.app/appcast.xml</string>
-
-    <!-- Run: .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/.../generate_keys -->
-    <!-- Then paste the public key (EdDSA, base64) here: -->
-    <key>SUPublicEDKey</key>
-    <string>53e9sD/N+IQe0noAQdIRrEds+/BjZPi4L2mgke2iEyc=</string>
-
-    <key>SUEnableAutomaticChecks</key>
-    <true/>
-
-    <!-- Check every 24 hours (in seconds) -->
-    <key>SUScheduledCheckInterval</key>
-    <integer>86400</integer>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>correctme</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.correctme.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>CorrectMe</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.3.5</string>
+	<key>CFBundleVersion</key>
+	<string>35</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2024. All rights reserved.</string>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://license-server-liard.vercel.app/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>53e9sD/N+IQe0noAQdIRrEds+/BjZPi4L2mgke2iEyc=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>
