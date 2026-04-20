@@ -137,22 +137,31 @@ jobs:
         git fetch origin main
         git checkout main
 
+        # Copy DMG to license-server/downloads/ for Vercel hosting
+        DMG_FILENAME="CorrectMe-${TAG}-macos.dmg"
+        cp ".build/release-dmg/${DMG_FILENAME}" "license-server/downloads/${DMG_FILENAME}"
+
+        # Keep only the 5 most recent DMGs (delete older ones)
+        ls -t license-server/downloads/*.dmg 2>/dev/null | tail -n +6 | xargs rm -f || true
+
+        VERCEL_DMG_URL="https://license-server-liard.vercel.app/downloads/${DMG_FILENAME}"
+
         python3 scripts/update-appcast.py \
           --version "$VERSION" \
           --tag "$TAG" \
           --bundle-version "$BUNDLE_VERSION" \
-          --dmg-url "https://github.com/${REPO}/releases/download/${TAG}/CorrectMe-${TAG}-macos.dmg" \
+          --dmg-url "$VERCEL_DMG_URL" \
           --length "$DMG_LENGTH" \
           --signature "$ED_SIG" \
           --pub-date "$(date -u '+%a, %d %b %Y %H:%M:%S +0000')" \
           --appcast "license-server/appcast.xml"
 
-        printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "CorrectMe-%s-macos.dmg",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
-          "$TAG" "$VERSION" "$TAG" "$SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
+        printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "%s",\n  "url": "%s",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
+          "$TAG" "$VERSION" "$DMG_FILENAME" "$VERCEL_DMG_URL" "$SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
 
-        git add license-server/appcast.xml
+        git add license-server/appcast.xml license-server/downloads/
         git add -f dist/latest.json
-        git diff --staged --quiet || (git commit -m "release: update appcast.xml and latest.json for $TAG" && git push origin main)
+        git diff --staged --quiet || (git commit -m "release: upload DMG and update appcast.xml for $TAG" && git push origin main)
 
     - name: Deploy to Vercel
       env:

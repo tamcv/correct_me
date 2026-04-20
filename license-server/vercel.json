@@ -10,6 +10,7 @@
       "dest": "/appcast.xml",
       "headers": { "Content-Type": "application/rss+xml; charset=utf-8" }
     },
+    { "src": "/downloads/(.*)", "dest": "/downloads/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
