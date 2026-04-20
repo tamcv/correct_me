@@ -43,5 +43,20 @@
       />
     </item>
 
+
+    <item>
+      <title>CorrectMe 0.4.1</title>
+      <sparkle:version>41</sparkle:version>
+      <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
+      <pubDate>Mon, 20 Apr 2026 09:02:04 +0000</pubDate>
+      <enclosure
+        url="https://github.com/tamcv/correct_me/releases/download/v0.4.1/CorrectMe-v0.4.1-macos.dmg"
+        sparkle:version="41"
+        sparkle:shortVersionString="0.4.1"
+        length="1710171"
+        type="application/octet-stream"
+        sparkle:edSignature="9eFXcsUpjE8FQXuTUAr17eMAltNSWTZNxh8bHNeoptiViIuMIvO9rgJ33pfAfVQg7a5XxnlUFgY2aQUlkL6BBw=="
+      />
+    </item>
   </channel>
 </rss>

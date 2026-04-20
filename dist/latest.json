@@ -1,6 +1,7 @@
 {
-  "version": "0.3.3",
-  "tag": "v0.3.3",
-  "asset": "CorrectMe-v0.3.3-macos.zip",
-  "sha256": "d49f502ccef5fa8bb2ad01a46ce1682f852099bcead93c93e9b81c9c93cc2cea"
+  "tag": "v0.4.1",
+  "version": "0.4.1",
+  "asset": "CorrectMe-v0.4.1-macos.dmg",
+  "sha256": "dfcbd1369fdc29c2b34bb1c6f58059aab31c4bf56bd34c8b4cd778bd9d7c39d0",
+  "published_at": "2026-04-20T09:02:04Z"
 }
