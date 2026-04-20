@@ -643,104 +643,70 @@ class OpenRouterProvider: AIProvider {
         return (allFree.count, capped.map { ($0.id, $0.name) })
     }
 
-    /// Quality test cases: input text with known errors → expected keywords in correct output.
-    private static let qualityTests: [(input: String, prompt: String, mustContain: [String], mustNotContain: [String])] = [
-        // English grammar test
-        (
-            input: "She dont goes to school yesterday",
-            prompt: "Detect the language of the following text and correct its spelling and grammar in that same language.\nRules:\n- Return ONLY the corrected text — no explanations, no markdown, no quotes.\n- Preserve the original language exactly.\n- If the text is already correct, return it unchanged.\n\nText to correct:\nShe dont goes to school yesterday",
-            mustContain: ["didn't", "go", "school", "yesterday"],
-            mustNotContain: ["```", "here is", "sure", "corrected"]
-        ),
-        // Vietnamese test
-        (
-            input: "toi di hoc ngay hom wa",
-            prompt: "Detect the language of the following text and correct its spelling and grammar in that same language.\nRules:\n- Return ONLY the corrected text — no explanations, no markdown, no quotes.\n- Preserve the original language exactly.\n- For Vietnamese text: fix tone marks (dấu), diacritics, and common lỗi chính tả while keeping the meaning intact.\n- If the text is already correct, return it unchanged.\n\nText to correct:\ntoi di hoc ngay hom wa",
-            mustContain: ["tôi", "đi", "học"],
-            mustNotContain: ["```", "here is", "sure"]
-        ),
-    ]
+    /// Single quality test — only 1 API call per model to minimize rate limit usage.
+    /// Uses English grammar test which is universally understood by all models.
+    private static let benchmarkPrompt = "Detect the language of the following text and correct its spelling and grammar in that same language.\nRules:\n- Return ONLY the corrected text — no explanations, no markdown, no quotes.\n- If the text is already correct, return it unchanged.\n\nText to correct:\nShe dont goes to school yesterday"
+    private static let benchmarkInput = "She dont goes to school yesterday"
+    private static let benchmarkMustContain = ["didn't", "go", "school", "yesterday"]
+    private static let benchmarkMustNotContain = ["```", "here is", "sure", "corrected", "note", "explanation"]
 
-    /// Evaluate quality of a model response.
+    /// Evaluate quality of a benchmark response.
     /// Returns a score 0.0–1.0 (1.0 = perfect).
-    private static func evaluateQuality(_ response: String, testIndex: Int) -> Double {
-        let test = qualityTests[testIndex]
+    private static func evaluateQuality(_ response: String) -> Double {
         let lower = response.lowercased()
 
         // Check must-contain keywords
-        let containHits = test.mustContain.filter { lower.contains($0.lowercased()) }
-        let containScore = Double(containHits.count) / Double(test.mustContain.count)
+        let containHits = benchmarkMustContain.filter { lower.contains($0) }
+        let containScore = Double(containHits.count) / Double(benchmarkMustContain.count)
 
         // Penalize if response contains unwanted commentary
-        let hasUnwanted = test.mustNotContain.contains { lower.contains($0.lowercased()) }
+        let hasUnwanted = benchmarkMustNotContain.contains { lower.contains($0) }
         let cleanScore: Double = hasUnwanted ? 0.0 : 1.0
 
         // Penalize overly long responses (likely includes explanation)
-        let lengthRatio = Double(response.count) / Double(test.input.count)
+        let lengthRatio = Double(response.count) / Double(benchmarkInput.count)
         let lengthScore: Double = lengthRatio > 3.0 ? 0.3 : 1.0
 
         // Weighted: 50% keyword accuracy, 30% clean output, 20% length
         return containScore * 0.5 + cleanScore * 0.3 + lengthScore * 0.2
     }
 
-    /// Benchmark a single model: send correction prompts, measure latency and quality.
-    /// Returns (model_id, latency_ms, quality_score) on success, nil on failure.
-    /// Quality score is 0.0–1.0; models below 0.5 are considered low quality.
+    /// Benchmark a single model with ONE API call: measure latency and quality.
+    /// Returns (model_id, latency_ms, quality_score) on success, nil on failure (429, timeout, etc.).
     static func benchmarkModel(apiKey: String, modelId: String) async -> (id: String, latencyMs: Int, quality: Double)? {
-        let url = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
+        guard let url = URL(string: "https://openrouter.ai/api/v1/chat/completions") else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
-        var totalLatency = 0
-        var totalQuality = 0.0
-        var testsRun = 0
-
-        for (index, test) in qualityTests.enumerated() {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 15
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-
-            let body: [String: Any] = [
-                "model": modelId,
-                "messages": [
-                    ["role": "user", "content": test.prompt]
-                ]
+        let body: [String: Any] = [
+            "model": modelId,
+            "messages": [
+                ["role": "user", "content": benchmarkPrompt]
             ]
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
-            let start = CFAbsoluteTimeGetCurrent()
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
-                  let http = response as? HTTPURLResponse,
-                  http.statusCode == 200 else {
-                // If any test fails (rate limit, timeout), skip this model
-                return nil
-            }
-
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let choices = json["choices"] as? [[String: Any]],
-                  let first = choices.first,
-                  let msg = first["message"] as? [String: Any],
-                  let content = msg["content"] as? String,
-                  !content.isEmpty else {
-                return nil
-            }
-
-            let elapsed = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-            let quality = evaluateQuality(content, testIndex: index)
-
-            totalLatency += elapsed
-            totalQuality += quality
-            testsRun += 1
-
-            // Early exit: if first test quality is terrible, skip the rest
-            if index == 0 && quality < 0.3 {
-                return (modelId, elapsed, quality)
-            }
+        let start = CFAbsoluteTimeGetCurrent()
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              http.statusCode == 200 else {
+            return nil
         }
 
-        guard testsRun > 0 else { return nil }
-        let avgLatency = totalLatency / testsRun
-        let avgQuality = totalQuality / Double(testsRun)
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let first = choices.first,
+              let msg = first["message"] as? [String: Any],
+              let content = msg["content"] as? String,
+              !content.isEmpty else {
+            return nil
+        }
+
+        let avgLatency = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        let avgQuality = evaluateQuality(content)
         return (modelId, avgLatency, avgQuality)
     }
 }

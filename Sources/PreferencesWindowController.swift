@@ -641,23 +641,21 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
                 findModelsStatus?.stringValue = "Testing \(candidates.count) of \(totalFree) free models..."
             }
 
-            // 2. Benchmark candidates (in parallel)
+            // 2. Benchmark candidates sequentially with delay to avoid burning rate limit.
+            //    Running in parallel would fire ~20 calls at once → 429 for all subsequent usage.
             var results: [(id: String, latencyMs: Int, quality: Double)] = []
-            var tested = 0
-            await withTaskGroup(of: (String, Int, Double)?.self) { group in
-                for model in candidates {
-                    group.addTask {
-                        await OpenRouterProvider.benchmarkModel(apiKey: key, modelId: model.id)
-                    }
+            for (index, model) in candidates.enumerated() {
+                await MainActor.run {
+                    findModelsStatus?.stringValue = "Testing \(index + 1)/\(candidates.count): \(model.name)..."
                 }
-                for await result in group {
-                    tested += 1
-                    if let r = result {
-                        results.append(r)
-                    }
-                    await MainActor.run {
-                        findModelsStatus?.stringValue = "Tested \(tested)/\(candidates.count)..."
-                    }
+
+                if let result = await OpenRouterProvider.benchmarkModel(apiKey: key, modelId: model.id) {
+                    results.append(result)
+                }
+
+                // Small delay between models to spread rate limit usage
+                if index < candidates.count - 1 {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                 }
             }
 
