@@ -37,7 +37,7 @@
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "USD",
-      "description": "14-day free trial, then one-time license"
+      "description": "Free and open source macOS menu bar app"
     },
     "url": "https://github.com/tamcv/correct_me",
     "downloadUrl": "https://github.com/tamcv/correct_me/releases",
@@ -274,7 +274,7 @@
       box-shadow: 0 1px 0 rgba(255,255,255,0.08);
     }
 
-    /* Pricing card */
+    /* Contribute card */
     .pricing-card {
       background: var(--ink-800);
       border: 1px solid rgba(255,255,255,0.07);
@@ -387,7 +387,7 @@
       <div class="nav-links flex items-center gap-6">
         <a href="#features" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">Features</a>
         <a href="#how-it-works" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">How it works</a>
-        <a href="#pricing" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">Pricing</a>
+        <a href="#contribute" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">Contribute</a>
         <a href="#llms" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">For Agents</a>
         <a href="https://github.com/tamcv/correct_me" target="_blank" rel="noopener" class="flex items-center gap-1.5 text-xs text-silver-400 hover:text-silver-100 transition-colors">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
@@ -405,7 +405,7 @@
       <!-- Badge -->
       <div class="reveal inline-flex items-center gap-2 bg-ink-800 border border-white/6 rounded-full px-3 py-1.5 mb-8 text-xs text-silver-400">
         <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-        macOS 13+ &nbsp;·&nbsp; Menu Bar App &nbsp;·&nbsp; No subscription
+        macOS 13+ &nbsp;·&nbsp; Menu Bar App &nbsp;·&nbsp; Free &amp; Open Source
       </div>
 
       <!-- Headline -->
@@ -649,58 +649,67 @@
     <div class="border-t border-white/5"></div>
   </div>
 
-  <!-- Pricing Section -->
-  <section id="pricing" class="py-20 px-6">
+  <!-- Contribute Section -->
+  <section id="contribute" class="py-20 px-6">
     <div class="max-w-5xl mx-auto">
       <div class="text-center mb-14">
         <div class="reveal section-divider mx-auto mb-4"></div>
-        <p class="reveal font-mono text-xs text-cyan-400 tracking-widest uppercase mb-2">Pricing</p>
-        <h2 class="reveal delay-1 font-display text-3xl md:text-4xl font-light">One-time payment.<br/><em class="text-silver-400 font-light not-italic">Yours forever.</em></h2>
-        <p class="reveal delay-2 text-xs text-silver-400 mt-3">No subscription. No seats. No annual renewal.</p>
+        <p class="reveal font-mono text-xs text-cyan-400 tracking-widest uppercase mb-2">Open Source</p>
+        <h2 class="reveal delay-1 font-display text-3xl md:text-4xl font-light">Free forever.<br/><em class="text-silver-400 font-light not-italic">Built with the community.</em></h2>
+        <p class="reveal delay-2 text-xs text-silver-400 mt-3">MIT licensed. No paywalls. No telemetry. Your keys, your data.</p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl mx-auto">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-3xl mx-auto mb-12">
 
-        <!-- Free trial -->
-        <div class="pricing-card reveal">
-          <p class="font-mono text-xs text-silver-500 uppercase tracking-widest mb-4">Free Trial</p>
-          <div class="flex items-end gap-1 mb-1">
-            <span class="font-display text-5xl font-light">$0</span>
-          </div>
-          <p class="text-xs text-silver-400 mb-6">14 days, all features</p>
-          <ul class="space-y-2 mb-6 text-xs text-silver-300">
-            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> All 7 AI providers</li>
-            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Per-app writing styles</li>
-            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Correction history</li>
-            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> No credit card required</li>
-          </ul>
+        <!-- Star -->
+        <div class="pricing-card reveal text-center">
+          <div class="text-3xl mb-3">⭐</div>
+          <p class="font-mono text-xs text-silver-200 font-medium mb-2">Star the repo</p>
+          <p class="text-xs text-silver-400 mb-5">Help others discover CorrectMe</p>
+          <a href="https://github.com/tamcv/correct_me" target="_blank" rel="noopener"
+             class="block text-center bg-ink-600 border border-white/8 text-silver-200 font-mono text-xs px-4 py-2.5 rounded-lg hover:bg-ink-500 transition-colors">
+            Star on GitHub →
+          </a>
+        </div>
+
+        <!-- Issues / PRs -->
+        <div class="pricing-card featured reveal delay-1 text-center">
+          <div class="text-3xl mb-3">🛠️</div>
+          <p class="font-mono text-xs text-silver-200 font-medium mb-2">Contribute code</p>
+          <p class="text-xs text-silver-400 mb-5">Bug fixes, new AI providers, features — PRs welcome</p>
+          <a href="https://github.com/tamcv/correct_me/issues" target="_blank" rel="noopener"
+             class="block text-center bg-cyan-400 text-ink-950 font-mono font-semibold text-xs px-4 py-2.5 rounded-lg hover:bg-cyan-300 transition-colors">
+            Browse issues →
+          </a>
+        </div>
+
+        <!-- Share -->
+        <div class="pricing-card reveal delay-2 text-center">
+          <div class="text-3xl mb-3">📣</div>
+          <p class="font-mono text-xs text-silver-200 font-medium mb-2">Spread the word</p>
+          <p class="text-xs text-silver-400 mb-5">Share with your team, write a blog post, mention it</p>
           <a href="https://github.com/tamcv/correct_me/releases" target="_blank" rel="noopener"
              class="block text-center bg-ink-600 border border-white/8 text-silver-200 font-mono text-xs px-4 py-2.5 rounded-lg hover:bg-ink-500 transition-colors">
-            Start free trial →
-          </a>
-        </div>
-
-        <!-- License -->
-        <div class="pricing-card featured reveal delay-1">
-          <p class="font-mono text-xs text-silver-500 uppercase tracking-widest mb-4">License</p>
-          <div class="flex items-end gap-1 mb-1">
-            <span class="font-display text-5xl font-light">$19</span>
-            <span class="text-xs text-silver-400 mb-2">one-time</span>
-          </div>
-          <p class="text-xs text-silver-400 mb-6">Pay once, use forever</p>
-          <ul class="space-y-2 mb-6 text-xs text-silver-300">
-            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Everything in Free Trial</li>
-            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Lifetime updates</li>
-            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Private use on your Macs</li>
-            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Email support</li>
-          </ul>
-          <a href="https://github.com/tamcv/correct_me" target="_blank" rel="noopener"
-             class="block text-center bg-cyan-400 text-ink-950 font-mono font-semibold text-xs px-4 py-2.5 rounded-lg hover:bg-cyan-500 transition-colors">
-            Get a license →
+            Download latest →
           </a>
         </div>
 
       </div>
+
+      <!-- Contributing quick-start -->
+      <div class="pricing-card reveal max-w-2xl mx-auto">
+        <p class="font-mono text-xs text-silver-500 uppercase tracking-widest mb-4">Quick contributing guide</p>
+        <div class="space-y-2 text-xs font-mono text-silver-300">
+          <div class="flex gap-3"><span class="text-cyan-400">1.</span><span>Fork &amp; clone the repo</span></div>
+          <div class="flex gap-3"><span class="text-cyan-400">2.</span><code class="text-silver-200">swift build &amp;&amp; swift test</code></div>
+          <div class="flex gap-3"><span class="text-cyan-400">3.</span><span>Pick an open issue or add a new AI provider</span></div>
+          <div class="flex gap-3"><span class="text-cyan-400">4.</span><span>Open a PR — CI runs tests automatically</span></div>
+        </div>
+        <div class="mt-5 pt-4 border-t border-white/5 flex flex-wrap gap-3 text-xs text-silver-400">
+          <span>Swift 5.9+</span><span>·</span><span>macOS 13+</span><span>·</span><span>No third-party deps</span><span>·</span><span>Pure Apple frameworks</span>
+        </div>
+      </div>
+
     </div>
   </section>
 
