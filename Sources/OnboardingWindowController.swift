@@ -18,6 +18,85 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     private var selectedHotkey: Config.HotkeyConfig = .default
     private var selectedModel: String?
 
+    // Provider step views
+    private var providerInfoBox: NSBox?
+
+    // API key step views
+    private var modelTextField: NSTextField?
+
+    // MARK: - Provider Metadata
+
+    private struct ProviderMeta {
+        let description: String
+        let recommendedModel: String
+        let cost: String
+        let badge: String?
+    }
+
+    private func providerMeta(for provider: Config.AIProvider) -> ProviderMeta {
+        switch provider {
+        case .claudeCode:
+            let ok = findExecutable("claude") != nil
+            return ProviderMeta(
+                description: "Uses your installed Claude Code CLI — no API costs, works with your Claude subscription.",
+                recommendedModel: Config.DefaultModels.claudeCode,
+                cost: "Free (Claude subscription)",
+                badge: ok ? "Installed ✓" : "CLI not found"
+            )
+        case .codexCode:
+            let ok = findExecutable("codex") != nil
+            return ProviderMeta(
+                description: "Uses your installed Codex CLI — no API costs.",
+                recommendedModel: Config.DefaultModels.openaiCodex,
+                cost: "Free (local CLI)",
+                badge: ok ? "Installed ✓" : "CLI not found"
+            )
+        case .copilot:
+            let ok = findExecutable("gh") != nil
+            return ProviderMeta(
+                description: "Uses GitHub Copilot via the gh CLI. Requires a GitHub Copilot subscription.",
+                recommendedModel: Config.DefaultModels.copilot,
+                cost: "Free with Copilot subscription",
+                badge: ok ? "Installed ✓" : "CLI not found"
+            )
+        case .claude:
+            return ProviderMeta(
+                description: "Direct Anthropic API. Excellent quality, very fast. claude-haiku is cheap and reliable for corrections.",
+                recommendedModel: Config.DefaultModels.anthropic,
+                cost: "~$0.001–0.01 / correction",
+                badge: "Best Quality"
+            )
+        case .gemini:
+            return ProviderMeta(
+                description: "Google Gemini API. Good quality with a generous free tier — great for getting started.",
+                recommendedModel: Config.DefaultModels.gemini,
+                cost: "Free tier available",
+                badge: "Free Tier"
+            )
+        case .codex:
+            return ProviderMeta(
+                description: "OpenAI API (GPT-based models). Fast and reliable for text corrections.",
+                recommendedModel: Config.DefaultModels.openaiCodex,
+                cost: "~$0.001 / correction",
+                badge: nil
+            )
+        case .openrouter:
+            return ProviderMeta(
+                description: "Access 100+ models via OpenRouter — including free options. Great for experimenting.",
+                recommendedModel: Config.DefaultModels.openrouter,
+                cost: "Free models available",
+                badge: "100+ Models"
+            )
+        }
+    }
+
+    private func bestAvailableProvider() -> Config.AIProvider {
+        if findExecutable("claude") != nil { return .claudeCode }
+        if findExecutable("codex") != nil { return .codexCode }
+        if findExecutable("gh") != nil { return .copilot }
+        return .claude
+    }
+
     private var currentStep = 0
     private let totalSteps = 6 // 0..5
 
@@ -271,91 +350,119 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         title.autoresizingMask = [.width]
         contentView.addSubview(title)
 
-        let desc = makeSubtitle("CLI-based providers require no API key. API providers need a key from the provider.")
-        desc.frame = NSRect(x: contentPad, y: bounds.height - 192, width: bounds.width - contentPad * 2, height: 36)
-        desc.autoresizingMask = [.width]
-        contentView.addSubview(desc)
-
         let providerLabel = makeSectionLabel("Provider")
-        providerLabel.frame = NSRect(x: contentPad, y: bounds.height - 230, width: 100, height: 18)
+        providerLabel.frame = NSRect(x: contentPad, y: bounds.height - 185, width: 100, height: 18)
         contentView.addSubview(providerLabel)
 
-        let popup = NSPopUpButton(frame: NSRect(x: contentPad, y: bounds.height - 260, width: bounds.width - contentPad * 2, height: 26))
-        popup.autoresizingMask = [.width]
-        popup.controlSize = .large
+        // Auto-select best available provider on first render of this step
+        if selectedProvider == .claudeCode {
+            selectedProvider = bestAvailableProvider()
+        }
 
-        let providers: [(Config.AIProvider, String)] = [
-            (.claudeCode, "Claude Code (local CLI)"),
-            (.codexCode, "Codex Code (local CLI)"),
-            (.copilot, "GitHub Copilot (local CLI)"),
-            (.claude, "Claude API (key required)"),
-            (.gemini, "Gemini API (key required)"),
-            (.codex, "OpenAI / Codex API (key required)"),
-            (.openrouter, "OpenRouter API (key required)"),
+        let allProviders: [(Config.AIProvider, String)] = [
+            (.claudeCode, "Claude Code  —  local CLI"),
+            (.codexCode,  "Codex Code  —  local CLI"),
+            (.copilot,    "GitHub Copilot  —  local CLI"),
+            (.claude,     "Claude API  —  key required"),
+            (.gemini,     "Gemini API  —  key required"),
+            (.codex,      "OpenAI / Codex API  —  key required"),
+            (.openrouter, "OpenRouter API  —  key required"),
         ]
 
-        for (_, label) in providers {
-            popup.addItem(withTitle: label)
-        }
-
-        if let idx = providers.firstIndex(where: { $0.0 == selectedProvider }) {
+        let popup = NSPopUpButton(frame: NSRect(x: contentPad, y: bounds.height - 215, width: bounds.width - contentPad * 2, height: 26))
+        popup.autoresizingMask = [.width]
+        popup.controlSize = .large
+        for (_, label) in allProviders { popup.addItem(withTitle: label) }
+        if let idx = allProviders.firstIndex(where: { $0.0 == selectedProvider }) {
             popup.selectItem(at: idx)
         }
-
         popup.target = self
         popup.action = #selector(providerChanged(_:))
         providerPopup = popup
         contentView.addSubview(popup)
 
-        // Status label
-        let statusLabel = NSTextField(labelWithString: "")
-        statusLabel.tag = 100
-        statusLabel.font = .systemFont(ofSize: 12)
-        statusLabel.textColor = .secondaryLabelColor
-        statusLabel.alignment = .left
-        statusLabel.frame = NSRect(x: contentPad, y: bounds.height - 290, width: bounds.width - contentPad * 2, height: 20)
-        statusLabel.autoresizingMask = [.width]
-        contentView.addSubview(statusLabel)
-        updateProviderStatus()
+        // Info card — shows description, recommended model, cost
+        let infoBox = NSBox()
+        infoBox.boxType = .custom
+        infoBox.fillColor = NSColor.controlBackgroundColor
+        infoBox.borderColor = .separatorColor
+        infoBox.borderWidth = 1
+        infoBox.cornerRadius = 8
+        infoBox.frame = NSRect(x: contentPad, y: bounds.height - 370, width: bounds.width - contentPad * 2, height: 130)
+        infoBox.autoresizingMask = [.width]
+        contentView.addSubview(infoBox)
+        providerInfoBox = infoBox
 
+        updateProviderInfoCard()
         addNavigationButtons(showBack: true)
     }
 
     @objc private func providerChanged(_ sender: NSPopUpButton) {
         let providers: [Config.AIProvider] = [.claudeCode, .codexCode, .copilot, .claude, .gemini, .codex, .openrouter]
         selectedProvider = providers[sender.indexOfSelectedItem]
-        updateProviderStatus()
+        // Reset selected model so the new provider's default is picked up
+        selectedModel = nil
+        updateProviderInfoCard()
     }
 
-    private func updateProviderStatus() {
-        guard let label = contentView.viewWithTag(100) as? NSTextField else { return }
+    private func updateProviderInfoCard() {
+        guard let box = providerInfoBox else { return }
+        box.subviews.forEach { $0.removeFromSuperview() }
 
-        switch selectedProvider {
-        case .claudeCode:
-            let found = findExecutable("claude") != nil
-            label.stringValue = found ? "✓ claude CLI found" : "⚠ claude CLI not found — install Claude Code first"
-            label.textColor = found ? .systemGreen : .systemOrange
-        case .codexCode:
-            let found = findExecutable("codex") != nil
-            label.stringValue = found ? "✓ codex CLI found" : "⚠ codex CLI not found — install Codex first"
-            label.textColor = found ? .systemGreen : .systemOrange
-        case .copilot:
-            let found = findExecutable("gh") != nil
-            label.stringValue = found ? "✓ gh CLI found" : "⚠ gh CLI not found — install with: brew install gh"
-            label.textColor = found ? .systemGreen : .systemOrange
-        case .claude:
-            label.stringValue = "Requires an Anthropic API key"
-            label.textColor = .secondaryLabelColor
-        case .gemini:
-            label.stringValue = "Requires a Google Gemini API key"
-            label.textColor = .secondaryLabelColor
-        case .codex:
-            label.stringValue = "Requires an OpenAI API key"
-            label.textColor = .secondaryLabelColor
-        case .openrouter:
-            label.stringValue = "Requires an OpenRouter API key"
-            label.textColor = .secondaryLabelColor
+        let meta = providerMeta(for: selectedProvider)
+        let bw = box.frame.width
+
+        // Badge (top-right)
+        if let badge = meta.badge {
+            let isCLIWarning = badge.contains("not found")
+            let badgeLabel = NSTextField(labelWithString: badge)
+            badgeLabel.font = .systemFont(ofSize: 10, weight: .medium)
+            badgeLabel.textColor = isCLIWarning ? .systemOrange : .systemGreen
+            badgeLabel.alignment = .right
+            badgeLabel.frame = NSRect(x: bw - 150, y: 102, width: 138, height: 16)
+            box.addSubview(badgeLabel)
         }
+
+        // Description
+        let desc = NSTextField(wrappingLabelWithString: meta.description)
+        desc.font = .systemFont(ofSize: 12)
+        desc.textColor = .secondaryLabelColor
+        desc.frame = NSRect(x: 12, y: 54, width: bw - 24, height: 62)
+        box.addSubview(desc)
+
+        // Divider
+        let sep = NSBox()
+        sep.boxType = .separator
+        sep.frame = NSRect(x: 12, y: 48, width: bw - 24, height: 1)
+        box.addSubview(sep)
+
+        // Model row
+        let modelKeyLabel = NSTextField(labelWithString: "Recommended model:")
+        modelKeyLabel.font = .systemFont(ofSize: 11)
+        modelKeyLabel.textColor = .tertiaryLabelColor
+        modelKeyLabel.frame = NSRect(x: 12, y: 26, width: 140, height: 16)
+        box.addSubview(modelKeyLabel)
+
+        let modelVal = NSTextField(labelWithString: meta.recommendedModel)
+        modelVal.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        modelVal.textColor = .controlAccentColor
+        modelVal.frame = NSRect(x: 156, y: 26, width: bw - 260, height: 16)
+        box.addSubview(modelVal)
+
+        // Cost (right-aligned on model row)
+        let costLabel = NSTextField(labelWithString: meta.cost)
+        costLabel.font = .systemFont(ofSize: 10)
+        costLabel.textColor = .tertiaryLabelColor
+        costLabel.alignment = .right
+        costLabel.frame = NSRect(x: bw - 160, y: 26, width: 148, height: 16)
+        box.addSubview(costLabel)
+
+        // Model note
+        let modelNote = NSTextField(labelWithString: "You can change the model after setup in Preferences.")
+        modelNote.font = .systemFont(ofSize: 10)
+        modelNote.textColor = .tertiaryLabelColor
+        modelNote.frame = NSRect(x: 12, y: 8, width: bw - 24, height: 14)
+        box.addSubview(modelNote)
     }
 
     // MARK: - Step 3: API Key
@@ -368,10 +475,9 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         let bounds = contentView.bounds
         let cx = bounds.width / 2
 
-        // Check if this provider needs an API key
         let needsKey: Bool
         switch selectedProvider {
-        case .claude, .gemini, .codex: needsKey = true
+        case .claude, .gemini, .codex, .openrouter: needsKey = true
         default: needsKey = false
         }
 
@@ -395,11 +501,13 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             default: providerName = selectedProvider.rawValue
             }
 
-            let desc = makeSubtitle("\(providerName) uses a local CLI tool. No API key is needed.\n\nClick Next to continue.")
-            desc.frame = NSRect(x: contentPad + 20, y: bounds.height - 240, width: bounds.width - contentPad * 2 - 40, height: 60)
+            let desc = makeSubtitle("\(providerName) uses a local CLI — no API key needed.")
+            desc.frame = NSRect(x: contentPad + 20, y: bounds.height - 190, width: bounds.width - contentPad * 2 - 40, height: 24)
             desc.autoresizingMask = [.width]
             contentView.addSubview(desc)
 
+            // Still show model field for CLI providers
+            addModelField(at: bounds.height - 250, in: bounds)
             addNavigationButtons(showBack: true)
             return
         }
@@ -417,55 +525,76 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
 
         let keyLabel: String
         switch selectedProvider {
-        case .claude: keyLabel = "Anthropic API Key"
-        case .gemini: keyLabel = "Gemini API Key"
-        case .codex: keyLabel = "OpenAI API Key"
-        case .openrouter: keyLabel = "OpenRouter API Key"
-        default: keyLabel = "API Key"
+        case .claude:      keyLabel = "Anthropic API Key"
+        case .gemini:      keyLabel = "Google Gemini API Key"
+        case .codex:       keyLabel = "OpenAI API Key"
+        case .openrouter:  keyLabel = "OpenRouter API Key"
+        default:           keyLabel = "API Key"
         }
 
         let label = makeSectionLabel(keyLabel)
-        label.frame = NSRect(x: contentPad, y: bounds.height - 195, width: bounds.width - contentPad * 2, height: 18)
+        label.frame = NSRect(x: contentPad, y: bounds.height - 190, width: bounds.width - contentPad * 2, height: 18)
         label.autoresizingMask = [.width]
         contentView.addSubview(label)
 
-        let field = NSSecureTextField(frame: NSRect(x: contentPad, y: bounds.height - 225, width: bounds.width - contentPad * 2, height: 28))
+        let field = NSSecureTextField(frame: NSRect(x: contentPad, y: bounds.height - 220, width: bounds.width - contentPad * 2, height: 28))
         field.placeholderString = "sk-ant-... / AIzaSy... / sk-..."
         field.autoresizingMask = [.width]
         field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         field.controlSize = .large
-        if !apiKey.isEmpty {
-            field.stringValue = apiKey
-        }
+        if !apiKey.isEmpty { field.stringValue = apiKey }
         apiKeyField = field
         contentView.addSubview(field)
 
         let testBtn = NSButton(title: "Test Connection", target: self, action: #selector(testConnection))
         testBtn.bezelStyle = .rounded
-        testBtn.frame = NSRect(x: contentPad, y: bounds.height - 268, width: 140, height: 28)
+        testBtn.frame = NSRect(x: contentPad, y: bounds.height - 258, width: 140, height: 28)
         testButton = testBtn
         contentView.addSubview(testBtn)
 
         let resultLabel = NSTextField(labelWithString: "")
         resultLabel.font = .systemFont(ofSize: 12)
-        resultLabel.frame = NSRect(x: contentPad + 148, y: bounds.height - 268, width: bounds.width - contentPad * 2 - 148, height: 28)
+        resultLabel.frame = NSRect(x: contentPad + 148, y: bounds.height - 258, width: bounds.width - contentPad * 2 - 148, height: 28)
         resultLabel.autoresizingMask = [.width]
         testResultLabel = resultLabel
         contentView.addSubview(resultLabel)
 
-        // Keychain hint with SF Symbol
         let keychainIcon = makeSFSymbol("lock.fill", size: 11, color: .tertiaryLabelColor)
-        keychainIcon.frame = NSRect(x: contentPad, y: bounds.height - 310, width: 16, height: 16)
+        keychainIcon.frame = NSRect(x: contentPad, y: bounds.height - 286, width: 16, height: 16)
         contentView.addSubview(keychainIcon)
 
-        let hint = NSTextField(labelWithString: "Your API key is stored securely in the macOS Keychain — not in plaintext.")
+        let hint = NSTextField(labelWithString: "Stored securely in the macOS Keychain — never in plaintext.")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .tertiaryLabelColor
-        hint.frame = NSRect(x: contentPad + 20, y: bounds.height - 310, width: bounds.width - contentPad * 2 - 20, height: 16)
+        hint.frame = NSRect(x: contentPad + 20, y: bounds.height - 286, width: bounds.width - contentPad * 2 - 20, height: 16)
         hint.autoresizingMask = [.width]
         contentView.addSubview(hint)
 
+        addModelField(at: bounds.height - 350, in: bounds)
         addNavigationButtons(showBack: true)
+    }
+
+    private func addModelField(at y: CGFloat, in bounds: NSRect) {
+        let modelLabel = makeSectionLabel("Model")
+        modelLabel.frame = NSRect(x: contentPad, y: y, width: 80, height: 18)
+        contentView.addSubview(modelLabel)
+
+        let recommended = providerMeta(for: selectedProvider).recommendedModel
+
+        let field = NSTextField(frame: NSRect(x: contentPad, y: y - 30, width: bounds.width - contentPad * 2, height: 26))
+        field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        field.stringValue = selectedModel ?? recommended
+        field.placeholderString = recommended
+        field.controlSize = .regular
+        modelTextField = field
+        contentView.addSubview(field)
+
+        let hint = NSTextField(labelWithString: "Pre-filled with the recommended model. Change if needed.")
+        hint.font = .systemFont(ofSize: 10)
+        hint.textColor = .tertiaryLabelColor
+        hint.frame = NSRect(x: contentPad, y: y - 48, width: bounds.width - contentPad * 2, height: 14)
+        hint.autoresizingMask = [.width]
+        contentView.addSubview(hint)
     }
 
     @objc private func testConnection() {
@@ -758,18 +887,22 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     @objc private func nextStep() {
         // Validate current step before proceeding
         if currentStep == 3 {
-            // API key step — capture the key value
+            // Capture API key
             if let field = apiKeyField {
                 let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !key.isEmpty {
-                    apiKey = key
-                }
+                if !key.isEmpty { apiKey = key }
+            }
+
+            // Capture model override
+            if let field = modelTextField {
+                let val = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                selectedModel = val.isEmpty ? nil : val
             }
 
             // Validate key is provided for API providers
             let needsKey: Bool
             switch selectedProvider {
-            case .claude, .gemini, .codex: needsKey = true
+            case .claude, .gemini, .codex, .openrouter: needsKey = true
             default: needsKey = false
             }
             if needsKey && apiKey.isEmpty {
@@ -794,11 +927,14 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     @objc private func prevStep() {
-        // Capture API key when going back from step 3
-        if currentStep == 3, let field = apiKeyField {
-            let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !key.isEmpty {
-                apiKey = key
+        if currentStep == 3 {
+            if let field = apiKeyField {
+                let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !key.isEmpty { apiKey = key }
+            }
+            if let field = modelTextField {
+                let val = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                selectedModel = val.isEmpty ? nil : val
             }
         }
         if currentStep > 0 {
@@ -867,16 +1003,8 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         config.aiProvider = selectedProvider
         config.hotkey = selectedHotkey
 
-        // Set default model
-        switch selectedProvider {
-        case .claudeCode: config.model = Config.DefaultModels.claudeCode
-        case .codexCode: config.model = Config.DefaultModels.openaiCodex
-        case .copilot: config.model = Config.DefaultModels.copilot
-        case .claude: config.model = Config.DefaultModels.anthropic
-        case .gemini: config.model = Config.DefaultModels.gemini
-        case .codex: config.model = Config.DefaultModels.openaiCodex
-        case .openrouter: config.model = Config.DefaultModels.openrouter
-        }
+        // Use model chosen by user in step 3, or fall back to the recommended default
+        config.model = selectedModel ?? providerMeta(for: selectedProvider).recommendedModel
 
         // Set API key
         switch selectedProvider {
