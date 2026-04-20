@@ -970,8 +970,25 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(perAppLabel)
 
         let perAppDesc = makeDescriptionLabel("Override the global style for specific apps:")
-        perAppDesc.frame = NSRect(x: pad + 124, y: y, width: contentW - 124, height: 18)
+        perAppDesc.frame = NSRect(x: pad + 124, y: y, width: contentW - 200, height: 18)
         view.addSubview(perAppDesc)
+
+        // "+" button in the header row (avoids z-order issues with views below)
+        let addBtn = NSButton(frame: NSRect(x: contentW + pad - 26, y: y - 1, width: 22, height: 22))
+        if #available(macOS 11.0, *),
+           let plusImg = NSImage(systemSymbolName: "plus.circle", accessibilityDescription: "Add app") {
+            addBtn.image = plusImg
+            addBtn.imagePosition = .imageOnly
+            addBtn.isBordered = false
+        } else {
+            addBtn.title = "+"
+            addBtn.bezelStyle = .rounded
+            addBtn.font = .systemFont(ofSize: 14, weight: .medium)
+        }
+        addBtn.target = self
+        addBtn.action = #selector(addPerAppStyle)
+        view.addSubview(addBtn)
+
         y -= 24
 
         // Container for per-app entries (scrollable)
@@ -981,10 +998,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         containerScroll.borderType = .bezelBorder
         containerScroll.drawsBackground = true
 
-        let clipView = containerScroll.contentView
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: containerScroll.contentSize.width, height: containerH))
         containerScroll.documentView = containerView
-        _ = clipView
         view.addSubview(containerScroll)
         perAppStylesContainer = containerView
 
@@ -994,13 +1009,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         rebuildPerAppList()
 
         y -= containerH + 6
-
-        // Add App button only — remove is done via inline × per row
-        let addBtn = NSButton(title: "Add App…", target: self, action: #selector(addPerAppStyle))
-        addBtn.bezelStyle = .rounded
-        addBtn.font = .systemFont(ofSize: 11)
-        addBtn.frame = NSRect(x: pad, y: y, width: 90, height: 22)
-        view.addSubview(addBtn)
 
         item.view = view
         return item
@@ -1103,6 +1111,17 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     @objc private func removePerAppRowAtTag(_ sender: NSButton) {
         let idx = sender.tag
         guard idx >= 0, idx < perAppEntries.count else { return }
+        let entry = perAppEntries[idx]
+        let appName = appDisplayInfo(for: entry.bundleId).name
+
+        let alert = NSAlert()
+        alert.messageText = "Remove style for \"\(appName)\"?"
+        alert.informativeText = "The custom writing style for this app will be removed. The global style will be used instead."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
         perAppEntries.remove(at: idx)
         rebuildPerAppList()
     }
