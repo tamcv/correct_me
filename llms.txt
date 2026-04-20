@@ -1,0 +1,115 @@
+# CorrectMe
+
+CorrectMe is a macOS menu bar app that corrects selected text using AI when the user triggers a global hotkey (default: Cmd+Shift+E). It runs as a background daemon on macOS 13+ and supports 7 AI providers including local CLI tools and API-based services.
+
+## Installation
+
+```
+curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/install.sh | sh
+```
+
+After installation, launch CorrectMe from /Applications or run `correctme start` from a terminal.
+
+## Quick Setup
+
+One-command setup — configures provider, stores API key securely in Keychain, and starts the daemon:
+
+```
+# Claude Code CLI (no API key needed — uses your existing Claude Code auth)
+correctme quicksetup --provider claude-code
+
+# Anthropic API key
+correctme quicksetup --provider claude --api-key sk-ant-xxx
+
+# Gemini API
+correctme quicksetup --provider gemini --api-key AIzaSy-xxx
+correctme quicksetup --provider gemini --api-key AIzaSy-xxx --model gemini-2.0-flash
+
+# OpenAI / Codex via API
+correctme quicksetup --provider codex --api-key sk-xxx
+
+# Codex CLI (no API key needed)
+correctme quicksetup --provider codex-code
+
+# GitHub Copilot CLI (no API key needed — uses gh auth)
+correctme quicksetup --provider copilot
+
+# OpenRouter
+correctme quicksetup --provider openrouter --api-key sk-or-xxx
+correctme quicksetup --provider openrouter --api-key sk-or-xxx --model meta-llama/llama-3.1-8b-instruct:free
+```
+
+## Manual Config
+
+Set individual config values without the wizard:
+
+```
+# Choose provider
+correctme config provider <claude-code|claude|gemini|codex|codex-code|copilot|openrouter>
+
+# Set API keys (stored in macOS Keychain, not in config file)
+correctme config claude-key sk-ant-xxx
+correctme config gemini-key AIzaSy-xxx
+correctme config openai-key sk-xxx
+correctme config openrouter-key sk-or-xxx
+
+# Override model
+correctme config model <model-name>
+
+# Show current config
+correctme config
+```
+
+## Verification
+
+```
+# Check all dependencies (API key, accessibility permissions, hotkey, CLI tools)
+correctme doctor
+
+# Show daemon status, provider, and model in use
+correctme status
+```
+
+## Daemon Management
+
+```
+correctme start       # Start daemon (enables auto-start at login)
+correctme stop        # Stop daemon
+correctme restart     # Restart daemon
+correctme enable      # Enable auto-start at login
+correctme disable     # Disable auto-start at login
+```
+
+## Providers
+
+| Provider     | Type        | Requirement                                    |
+|--------------|-------------|------------------------------------------------|
+| claude-code  | CLI         | Claude Code CLI installed (`claude` in PATH)   |
+| claude       | API key     | Anthropic API key (sk-ant-...)                 |
+| gemini       | API key     | Google AI API key (AIzaSy...)                  |
+| codex        | API key     | OpenAI API key (sk-...) + model selection      |
+| codex-code   | CLI         | Codex CLI installed (`codex` in PATH)          |
+| copilot      | CLI         | GitHub CLI (`gh`) + gh-copilot extension       |
+| openrouter   | API key     | OpenRouter API key (sk-or-...)                 |
+
+## Default Models
+
+| Provider     | Default Model                              |
+|--------------|--------------------------------------------|
+| claude-code  | claude-haiku-4-5                           |
+| claude       | claude-haiku-4-5-20251001                  |
+| gemini       | gemini-2.0-flash                           |
+| codex        | gpt-5.1-codex-mini                         |
+| codex-code   | gpt-5.1-codex-mini                         |
+| copilot      | gpt-5-mini                                 |
+| openrouter   | meta-llama/llama-3.1-8b-instruct:free      |
+
+## Config File
+
+Stored at `~/.correctme/config.json`. API keys are never written to disk — they are stored in the macOS Keychain automatically.
+
+## Notes
+
+- Requires macOS Accessibility permissions (prompted on first run)
+- Default hotkey: Cmd+Shift+E (configurable in Preferences)
+- Writing style, per-app styles, and correction history accessible from the menu bar icon

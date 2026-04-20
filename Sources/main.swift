@@ -179,6 +179,10 @@ struct CorrectMeApp {
             runDoctor()
             exit(0)
 
+        case "quicksetup":
+            runQuickSetup(Array(args.dropFirst(2)))
+            exit(0)
+
         default:
             print("Unknown command: \(command)")
             print("Use 'correctme help' for usage information.")
@@ -186,6 +190,137 @@ struct CorrectMeApp {
         }
     }
     
+    // MARK: - Quick Setup (non-interactive)
+
+    static func runQuickSetup(_ args: [String]) {
+        // Parse flags
+        var providerRaw: String? = nil
+        var apiKey: String? = nil
+        var modelArg: String? = nil
+        var hotkeyArg: String? = nil
+
+        var i = 0
+        while i < args.count {
+            switch args[i] {
+            case "--provider":
+                i += 1
+                if i < args.count { providerRaw = args[i] }
+            case "--api-key":
+                i += 1
+                if i < args.count { apiKey = args[i] }
+            case "--model":
+                i += 1
+                if i < args.count { modelArg = args[i] }
+            case "--hotkey":
+                i += 1
+                if i < args.count { hotkeyArg = args[i] }
+            default:
+                break
+            }
+            i += 1
+        }
+
+        // Validate --provider
+        guard let rawProvider = providerRaw else {
+            print("Error: --provider is required.")
+            print("Usage: correctme quicksetup --provider <provider> [--api-key <key>] [--model <model>] [--hotkey <hotkey>]")
+            print("Providers: claude, gemini, codex, openrouter, claude-code, codex-code, copilot")
+            exit(1)
+        }
+
+        guard let provider = Config.AIProvider(rawValue: rawProvider) else {
+            print("Error: unknown provider '\(rawProvider)'.")
+            print("Valid providers: claude, gemini, codex, openrouter, claude-code, codex-code, copilot")
+            exit(1)
+        }
+
+        // Validate --api-key for providers that need it
+        let requiresAPIKey: Set<Config.AIProvider> = [.claude, .gemini, .codex, .openrouter]
+        if requiresAPIKey.contains(provider) && (apiKey == nil || apiKey!.isEmpty) {
+            print("Error: --api-key is required for provider '\(rawProvider)'.")
+            exit(1)
+        }
+
+        // Resolve default model
+        let resolvedModel: String = modelArg ?? {
+            switch provider {
+            case .claudeCode: return Config.DefaultModels.claudeCode
+            case .codexCode:  return Config.DefaultModels.openaiCodex
+            case .copilot:    return Config.DefaultModels.copilot
+            case .claude:     return Config.DefaultModels.anthropic
+            case .gemini:     return Config.DefaultModels.gemini
+            case .codex:      return Config.DefaultModels.openaiCodex
+            case .openrouter: return Config.DefaultModels.openrouter
+            }
+        }()
+
+        // Resolve hotkey
+        let resolvedHotkey: Config.HotkeyConfig
+        if let hotkeyStr = hotkeyArg, !hotkeyStr.isEmpty {
+            guard let parsed = parseHotkey(hotkeyStr) else {
+                print("Error: could not parse hotkey '\(hotkeyStr)'. Example: cmd+shift+e")
+                exit(1)
+            }
+            resolvedHotkey = Config.HotkeyConfig(
+                keyCode: parsed.keyCode,
+                modifiers: parsed.modifiers,
+                displayName: parsed.displayName
+            )
+        } else {
+            resolvedHotkey = .default
+        }
+
+        // Build and save config
+        config.aiProvider = provider
+        config.model = resolvedModel
+        config.hotkey = resolvedHotkey
+
+        switch provider {
+        case .claude:     config.anthropicAPIKey = apiKey
+        case .gemini:     config.geminiAPIKey = apiKey
+        case .codex:      config.openaiAPIKey = apiKey
+        case .openrouter: config.openrouterAPIKey = apiKey
+        default: break
+        }
+
+        do {
+            try config.save()
+        } catch {
+            print("Error: failed to save config: \(error)")
+            exit(1)
+        }
+
+        // Start daemon if not already running
+        let daemonAlreadyRunning = DaemonManager.getDaemonPID() != nil
+        if !daemonAlreadyRunning {
+            if DaemonManager.isLaunchAgentInstalled {
+                DaemonManager.startViaLaunchAgent()
+            } else {
+                enableAutoStart()
+            }
+            usleep(800_000)
+        }
+
+        let daemonRunning = DaemonManager.getDaemonPID() != nil
+
+        print("")
+        print("CorrectMe configured successfully!")
+        print("─────────────────────────────────")
+        print("  Provider: \(provider.rawValue)")
+        print("  Model:    \(resolvedModel)")
+        print("  Hotkey:   \(resolvedHotkey.displayName)")
+        if requiresAPIKey.contains(provider), let key = apiKey {
+            print("  API key:  \(key.prefix(8))...")
+        }
+        print("")
+        if daemonRunning {
+            print("Daemon: running (PID: \(DaemonManager.getDaemonPID()?.description ?? "?"))")
+        } else {
+            print("Daemon: started")
+        }
+        print("")
+    }
+
     static func runDoctor() {
         print("""
 
@@ -307,6 +442,7 @@ struct CorrectMeApp {
             correctme enable              Enable auto-start at login
             correctme disable             Disable auto-start at login
             correctme setup               Interactive setup (choose provider + keys)
+            correctme quicksetup          Non-interactive setup (for scripts/agents)
             correctme config              Show current configuration
             correctme test                Test AI correction with sample text
             correctme version             Show version
@@ -332,6 +468,12 @@ struct CorrectMeApp {
             config openai-key <key>       Set OpenAI API key
             config model <name>           Set model name
             config hotkey                 Configure hotkey
+
+        QUICK SETUP (non-interactive):
+            quicksetup --provider <name>  Configure and start in one shot
+              --api-key <key>             API key (required for claude/gemini/codex/openrouter)
+              --model <name>              Model override (optional, defaults per provider)
+              --hotkey <hotkey>           Hotkey (optional, e.g. cmd+shift+e)
 
         SETUP GUIDE:
             1. Grant Accessibility permissions:
