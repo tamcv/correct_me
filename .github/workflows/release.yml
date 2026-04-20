@@ -16,37 +16,28 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Check Swift version
-      run: swift --version
-
     - name: Get version from tag
-      id: get_version
+      id: version
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
+        TAG=${GITHUB_REF#refs/tags/}
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
-    - name: Update version in Info.plist
+    - name: Inject LICENSE_SECRET
       run: |
-        sed -i '' "s/0.2.1/${{ steps.get_version.outputs.VERSION }}/g" Resources/Info.plist
+        echo 'let LICENSE_SECRET = "${{ secrets.LICENSE_SECRET }}"' > Sources/LicenseSecret.swift
 
     - name: Run tests
-      run: |
-        if swift test --list-tests 2>/dev/null | grep -q "Test"; then
-          echo "Running tests..."
-          swift test
-        else
-          echo "No tests found, skipping..."
-        fi
+      run: swift test
       continue-on-error: true
 
     - name: Import signing certificate
-      if: ${{ secrets.DEVELOPER_ID_CERT_BASE64 != '' }}
+      if: ${{ env.CERT_BASE64 != '' }}
       env:
         CERT_BASE64: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
         CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
       run: |
-        # Create temporary keychain
         KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
         KEYCHAIN_PASSWORD="$(openssl rand -hex 20)"
 
@@ -54,7 +45,6 @@ jobs:
         security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-        # Import certificate
         CERT_PATH="$RUNNER_TEMP/cert.p12"
         echo "$CERT_BASE64" | base64 --decode > "$CERT_PATH"
         security import "$CERT_PATH" \
@@ -65,12 +55,7 @@ jobs:
 
         security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
-
         echo "✅ Certificate imported"
-
-    - name: Inject LICENSE_SECRET
-      run: |
-        echo 'let LICENSE_SECRET = "${{ secrets.LICENSE_SECRET }}"' > Sources/LicenseSecret.swift
 
     - name: Build release DMG
       env:
@@ -79,122 +64,64 @@ jobs:
         APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       run: |
-        echo "Building CorrectMe v${{ steps.get_version.outputs.VERSION }}..."
         chmod +x scripts/build-release.sh
         ./scripts/build-release.sh
 
-    - name: Determine release asset
-      id: asset
+    - name: Publish GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        VERSION="${{ steps.get_version.outputs.VERSION }}"
-        TAG="${{ steps.get_version.outputs.TAG }}"
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        TAG="${{ steps.version.outputs.TAG }}"
         DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
-
-        if [ -f "$DMG_PATH" ]; then
-          ASSET_PATH="$DMG_PATH"
-          ASSET_NAME="CorrectMe-${TAG}-macos.dmg"
-          ASSET_TYPE="application/x-apple-diskimage"
-          FORMAT="dmg"
-        else
-          echo "❌ DMG not found at $DMG_PATH"
-          exit 1
-        fi
-
         SHA256=$(cat .build/release-dmg/sha256.txt)
 
-        echo "ASSET_PATH=$ASSET_PATH" >> $GITHUB_OUTPUT
-        echo "ASSET_NAME=$ASSET_NAME" >> $GITHUB_OUTPUT
-        echo "ASSET_TYPE=$ASSET_TYPE" >> $GITHUB_OUTPUT
-        echo "FORMAT=$FORMAT" >> $GITHUB_OUTPUT
-        echo "SHA256=$SHA256" >> $GITHUB_ENV
+        gh release create "$TAG" "$DMG_PATH" \
+          --title "CorrectMe $TAG" \
+          --notes "## CorrectMe $TAG
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+### Install
+
+\`\`\`bash
+curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh
+\`\`\`
+
+Or download the DMG below and drag CorrectMe.app into Applications.
+
+### SHA256
+\`\`\`
+$SHA256  CorrectMe-${TAG}-macos.dmg
+\`\`\`"
+
+    - name: Update dist/latest.json
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.get_version.outputs.TAG }}
-        release_name: CorrectMe ${{ steps.get_version.outputs.TAG }}
-        body: |
-          ## CorrectMe ${{ steps.get_version.outputs.TAG }}
-
-          ### Installation
-
-          **Option 1: One-command install (Recommended)**
-          ```bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh
-          ```
-
-          **Option 2: Download DMG and install manually**
-          1. Download `${{ steps.asset.outputs.ASSET_NAME }}` below
-          2. Open the DMG
-          3. Drag **CorrectMe.app** into the **Applications** folder
-          4. Launch CorrectMe from Applications
-          5. Grant Accessibility permission when prompted
-
-          ### What's Changed
-
-          See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
-
-          ### SHA256 Checksum
-
-          ```
-          ${{ env.SHA256 }}  ${{ steps.asset.outputs.ASSET_NAME }}
-          ```
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ steps.asset.outputs.ASSET_PATH }}
-        asset_name: ${{ steps.asset.outputs.ASSET_NAME }}
-        asset_content_type: ${{ steps.asset.outputs.ASSET_TYPE }}
-
-    - name: Commit latest.json to main
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        VERSION="${{ steps.get_version.outputs.VERSION }}"
-        TAG="${{ steps.get_version.outputs.TAG }}"
-        FORMAT="${{ steps.asset.outputs.FORMAT }}"
-        ASSET_NAME="${{ steps.asset.outputs.ASSET_NAME }}"
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        TAG="${{ steps.version.outputs.TAG }}"
+        SHA256=$(cat .build/release-dmg/sha256.txt)
 
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-
         git fetch origin main
         git checkout main
 
         mkdir -p dist
-        cat > dist/latest.json <<EOF
+        cat > dist/latest.json << EOF
         {
           "tag": "$TAG",
           "version": "$VERSION",
-          "asset": "$ASSET_NAME",
-          "format": "$FORMAT",
-          "sha256": "${{ env.SHA256 }}",
+          "asset": "CorrectMe-${TAG}-macos.dmg",
+          "sha256": "$SHA256",
           "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         }
         EOF
 
-        git add -f dist/latest.json
-
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-        else
-          git commit -m "chore: Update latest.json for $TAG"
-          git push origin main
-        fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        git add dist/latest.json
+        git diff --staged --quiet || git commit -m "chore: update latest.json for $TAG" && git push origin main
 
     - name: Cleanup keychain
       if: always()
       run: |
         KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
-        if [ -f "$KEYCHAIN_PATH" ]; then
-          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
-        fi
+        [ -f "$KEYCHAIN_PATH" ] && security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true

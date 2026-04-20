@@ -48,7 +48,8 @@ echo "🏷  Tagging v$VERSION..."
 git tag "v$VERSION"
 
 echo "⬆️  Pushing..."
-git push origin main --tags
+git push origin main
+git push origin "v$VERSION"
 
 echo ""
 echo "✅ v$VERSION pushed — GitHub Actions is building the release."
