@@ -970,26 +970,24 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(perAppLabel)
 
         let perAppDesc = makeDescriptionLabel("Override the global style for specific apps:")
-        perAppDesc.frame = NSRect(x: pad + 124, y: y, width: contentW - 200, height: 18)
+        perAppDesc.frame = NSRect(x: pad + 124, y: y, width: contentW - 260, height: 18)
         view.addSubview(perAppDesc)
 
-        // "+" button in the header row (avoids z-order issues with views below)
-        let addBtn = NSButton(frame: NSRect(x: contentW + pad - 26, y: y - 1, width: 22, height: 22))
+        // "Add App…" button in header row — text + icon so it's clearly visible
+        let addBtn = NSButton(title: " Add App…", target: self, action: #selector(addPerAppStyle))
+        addBtn.bezelStyle = .rounded
+        addBtn.font = .systemFont(ofSize: 11)
         if #available(macOS 11.0, *),
-           let plusImg = NSImage(systemSymbolName: "plus.circle", accessibilityDescription: "Add app") {
-            addBtn.image = plusImg
-            addBtn.imagePosition = .imageOnly
-            addBtn.isBordered = false
-        } else {
-            addBtn.title = "+"
-            addBtn.bezelStyle = .rounded
-            addBtn.font = .systemFont(ofSize: 14, weight: .medium)
+           let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil) {
+            let cfg = NSImage.SymbolConfiguration(pointSize: 9, weight: .medium)
+            addBtn.image = img.withSymbolConfiguration(cfg)
+            addBtn.imagePosition = .imageLeft
         }
-        addBtn.target = self
-        addBtn.action = #selector(addPerAppStyle)
+        let btnW: CGFloat = 90
+        addBtn.frame = NSRect(x: contentW + pad - btnW, y: y - 3, width: btnW, height: 22)
         view.addSubview(addBtn)
 
-        y -= 24
+        y -= 26
 
         // Container for per-app entries (scrollable)
         let containerH: CGFloat = 110
