@@ -970,7 +970,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         y -= 24
 
         // Container for per-app entries (scrollable)
-        let containerH: CGFloat = 80
+        let containerH: CGFloat = 110
         let containerScroll = NSScrollView(frame: NSRect(x: pad, y: y - containerH, width: contentW, height: containerH))
         containerScroll.hasVerticalScroller = true
         containerScroll.borderType = .bezelBorder
@@ -1009,34 +1009,73 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Per-App Styles Helpers
 
+    /// Resolves a bundle ID to a human-readable app name and icon.
+    private func appDisplayInfo(for bundleId: String) -> (name: String, icon: NSImage?) {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+            var name = FileManager.default.displayName(atPath: url.path)
+            if name.lowercased().hasSuffix(".app") { name = String(name.dropLast(4)) }
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            return (name, icon)
+        }
+        // Fallback: use last bundle ID component as name
+        let fallback = bundleId.split(separator: ".").last.map(String.init) ?? bundleId
+        return (fallback, nil)
+    }
+
     private func rebuildPerAppList() {
         guard let container = perAppStylesContainer else { return }
         container.subviews.forEach { $0.removeFromSuperview() }
 
-        let rowH: CGFloat = 24
+        let rowH: CGFloat = 36
         let totalH = max(CGFloat(perAppEntries.count) * rowH, container.superview?.frame.height ?? 80)
         container.frame = NSRect(x: 0, y: 0, width: container.frame.width, height: totalH)
+        let cw = container.frame.width
 
         for (i, entry) in perAppEntries.enumerated() {
             let y = totalH - CGFloat(i + 1) * rowH
+            let info = appDisplayInfo(for: entry.bundleId)
 
-            let appLabel = NSTextField(labelWithString: entry.bundleId)
-            appLabel.frame = NSRect(x: 4, y: y, width: 180, height: rowH)
-            appLabel.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
-            appLabel.lineBreakMode = .byTruncatingMiddle
-            container.addSubview(appLabel)
+            // App icon
+            let iconView = NSImageView(frame: NSRect(x: 8, y: y + 8, width: 20, height: 20))
+            if let icon = info.icon {
+                iconView.image = icon
+            } else {
+                // Placeholder gear icon when app not found
+                if #available(macOS 11.0, *) {
+                    iconView.image = NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil)
+                }
+            }
+            iconView.imageScaling = .scaleProportionallyUpOrDown
+            container.addSubview(iconView)
 
+            // App name
+            let nameLabel = NSTextField(labelWithString: info.name)
+            nameLabel.frame = NSRect(x: 34, y: y + 11, width: 170, height: 16)
+            nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
+            nameLabel.textColor = .labelColor
+            nameLabel.lineBreakMode = .byTruncatingTail
+            container.addSubview(nameLabel)
+
+            // Style text
             let styleLabel = NSTextField(labelWithString: entry.style)
-            styleLabel.frame = NSRect(x: 188, y: y, width: container.frame.width - 192, height: rowH)
+            styleLabel.frame = NSRect(x: 210, y: y + 11, width: cw - 214, height: 16)
             styleLabel.font = .systemFont(ofSize: 11)
             styleLabel.textColor = .secondaryLabelColor
             styleLabel.lineBreakMode = .byTruncatingTail
             container.addSubview(styleLabel)
+
+            // Row separator
+            if i < perAppEntries.count - 1 {
+                let sep = NSView(frame: NSRect(x: 8, y: y, width: cw - 16, height: 1))
+                sep.wantsLayer = true
+                sep.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
+                container.addSubview(sep)
+            }
         }
 
         if perAppEntries.isEmpty {
             let placeholder = NSTextField(labelWithString: "No per-app styles configured")
-            placeholder.frame = NSRect(x: 4, y: (totalH - 20) / 2, width: container.frame.width - 8, height: 20)
+            placeholder.frame = NSRect(x: 4, y: (totalH - 20) / 2, width: cw - 8, height: 20)
             placeholder.font = .systemFont(ofSize: 11)
             placeholder.textColor = .tertiaryLabelColor
             placeholder.alignment = .center
@@ -1107,14 +1146,16 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         let popUp = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 300, height: 26), pullsDown: false)
         for entry in perAppEntries {
-            popUp.addItem(withTitle: entry.bundleId)
+            let name = appDisplayInfo(for: entry.bundleId).name
+            popUp.addItem(withTitle: name)
+            popUp.lastItem?.representedObject = entry.bundleId
         }
         alert.accessoryView = popUp
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
-        let idx = popUp.indexOfSelectedItem
-        guard idx >= 0, idx < perAppEntries.count else { return }
+        guard let bundleId = popUp.selectedItem?.representedObject as? String,
+              let idx = perAppEntries.firstIndex(where: { $0.bundleId == bundleId }) else { return }
         perAppEntries.remove(at: idx)
         rebuildPerAppList()
     }
