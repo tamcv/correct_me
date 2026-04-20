@@ -52,7 +52,6 @@ jobs:
           -T /usr/bin/codesign
 
         security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-        # Include both the temp keychain and the system default so codesign can find the cert
         security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
         echo "✅ Certificate imported"
 
@@ -74,10 +73,7 @@ jobs:
         DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
         SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
 
-        # Pass private key via stdin using --ed-key-file - (Sparkle 2.x, tested locally)
         SIG_OUTPUT=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - "$DMG_PATH")
-        echo "sig_output=$SIG_OUTPUT"
-
         ED_SIG=$(echo "$SIG_OUTPUT" | grep -o 'edSignature="[^"]*"' | cut -d'"' -f2)
         DMG_LENGTH=$(stat -f%z "$DMG_PATH")
 
@@ -131,47 +127,30 @@ jobs:
         PATCH=$(echo "$VERSION" | cut -d. -f3)
         BUNDLE_VERSION=$((MAJOR * 100 + MINOR * 10 + PATCH))
 
+        # Public repo: DMG served directly from GitHub releases
+        DMG_URL="https://github.com/${REPO}/releases/download/${TAG}/CorrectMe-${TAG}-macos.dmg"
+
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git fetch origin main
         git checkout main
 
-        # Copy DMG to license-server/downloads/ for Vercel hosting
-        DMG_FILENAME="CorrectMe-${TAG}-macos.dmg"
-        cp ".build/release-dmg/${DMG_FILENAME}" "license-server/downloads/${DMG_FILENAME}"
-
-        # Keep only the 5 most recent DMGs (delete older ones)
-        ls -t license-server/downloads/*.dmg 2>/dev/null | tail -n +6 | xargs rm -f || true
-
-        VERCEL_DMG_URL="https://license-server-liard.vercel.app/downloads/${DMG_FILENAME}"
-
         python3 scripts/update-appcast.py \
           --version "$VERSION" \
           --tag "$TAG" \
           --bundle-version "$BUNDLE_VERSION" \
-          --dmg-url "$VERCEL_DMG_URL" \
+          --dmg-url "$DMG_URL" \
           --length "$DMG_LENGTH" \
           --signature "$ED_SIG" \
           --pub-date "$(date -u '+%a, %d %b %Y %H:%M:%S +0000')" \
-          --appcast "license-server/appcast.xml"
+          --appcast "dist/appcast.xml"
 
-        printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "%s",\n  "url": "%s",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
-          "$TAG" "$VERSION" "$DMG_FILENAME" "$VERCEL_DMG_URL" "$SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
+        printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "CorrectMe-%s-macos.dmg",\n  "url": "%s",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
+          "$TAG" "$VERSION" "$TAG" "$DMG_URL" "$SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
 
-        git add license-server/appcast.xml license-server/downloads/
+        git add dist/appcast.xml
         git add -f dist/latest.json
-        git diff --staged --quiet || (git commit -m "release: upload DMG and update appcast.xml for $TAG" && git push origin main)
-
-    - name: Deploy to Vercel
-      env:
-        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      run: |
-        npm install -g vercel --silent
-        vercel deploy --prod --yes \
-          --cwd license-server \
-          --token "$VERCEL_TOKEN" 2>&1
+        git diff --staged --quiet || (git commit -m "release: update appcast.xml and latest.json for $TAG" && git push origin main)
 
     - name: Cleanup keychain
       if: always()

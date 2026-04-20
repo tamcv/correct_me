@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CorrectMe — AI Text Correction for macOS</title>
+
+  <!-- SEO -->
+  <meta name="description" content="CorrectMe is a macOS menu bar app that corrects selected text using AI with a global hotkey. Works in any app. Supports Claude, GPT-4, Gemini, Ollama, and more." />
+  <meta name="keywords" content="macOS text correction, AI writing tool, menu bar app, spell check, grammar correction, Claude, GPT-4, Ollama, hotkey" />
+  <meta name="author" content="tamcv" />
+  <link rel="canonical" href="https://tamcv.github.io/correct_me/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="CorrectMe — AI Text Correction for macOS" />
+  <meta property="og:description" content="Press ⌃⇧Space. Your selected text is corrected instantly by AI. Works in any app." />
+  <meta property="og:url" content="https://tamcv.github.io/correct_me/" />
+  <meta property="og:image" content="https://raw.githubusercontent.com/tamcv/correct_me/main/docs/og-image.png" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="CorrectMe — AI Text Correction for macOS" />
+  <meta name="twitter:description" content="Press ⌃⇧Space. Your selected text is corrected instantly by AI. Works in any app." />
+  <meta name="twitter:image" content="https://raw.githubusercontent.com/tamcv/correct_me/main/docs/og-image.png" />
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CorrectMe",
+    "operatingSystem": "macOS 13+",
+    "applicationCategory": "ProductivityApplication",
+    "description": "A macOS menu bar app that corrects selected text using AI with a global hotkey. Supports Claude, GPT-4, Gemini, Groq, Ollama, OpenRouter, and Codex.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "description": "14-day free trial, then one-time license"
+    },
+    "url": "https://github.com/tamcv/correct_me",
+    "downloadUrl": "https://github.com/tamcv/correct_me/releases",
+    "softwareVersion": "0.3.3",
+    "author": {
+      "@type": "Person",
+      "name": "tamcv"
+    }
+  }
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,700;1,9..144,300;1,9..144,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Fraunces', 'Georgia', 'serif'],
+            mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+          },
+          colors: {
+            ink: {
+              950: '#080A0C',
+              900: '#0D0F12',
+              800: '#131619',
+              700: '#1A1D22',
+              600: '#232830',
+              500: '#2E3440',
+            },
+            cyan: {
+              400: '#00E5FF',
+              500: '#00C8E0',
+              600: '#00AABD',
+            },
+            silver: {
+              100: '#F0F2F5',
+              200: '#D8DCE3',
+              300: '#B0B8C4',
+              400: '#8891A0',
+              500: '#5C6572',
+            }
+          },
+          animation: {
+            'fade-up': 'fadeUp 0.6s ease forwards',
+            'cursor-blink': 'cursorBlink 1.1s step-end infinite',
+            'correction': 'correction 0.4s ease forwards',
+            'slide-in': 'slideIn 0.5s cubic-bezier(0.16,1,0.3,1) forwards',
+          },
+          keyframes: {
+            fadeUp: {
+              from: { opacity: '0', transform: 'translateY(16px)' },
+              to: { opacity: '1', transform: 'translateY(0)' },
+            },
+            cursorBlink: {
+              '0%, 100%': { opacity: '1' },
+              '50%': { opacity: '0' },
+            },
+            correction: {
+              from: { opacity: '0', transform: 'translateY(-4px) scale(0.98)' },
+              to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+            },
+            slideIn: {
+              from: { opacity: '0', transform: 'translateX(-12px)' },
+              to: { opacity: '1', transform: 'translateX(0)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --ink-950: #080A0C;
+      --ink-900: #0D0F12;
+      --ink-800: #131619;
+      --ink-700: #1A1D22;
+      --ink-600: #232830;
+      --ink-500: #2E3440;
+      --cyan: #00E5FF;
+      --silver-100: #F0F2F5;
+      --silver-300: #B0B8C4;
+      --silver-400: #8891A0;
+      --silver-500: #5C6572;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background-color: var(--ink-950);
+      color: var(--silver-100);
+      font-family: 'JetBrains Mono', monospace;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    /* Radial glow behind hero */
+    .hero-glow {
+      position: absolute;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 600px;
+      background: radial-gradient(ellipse at center, rgba(0,229,255,0.055) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Animated before/after demo */
+    .demo-wrap {
+      position: relative;
+    }
+    .demo-before {
+      color: var(--silver-500);
+      text-decoration: line-through;
+      text-decoration-color: rgba(255,100,100,0.5);
+    }
+    .demo-after {
+      color: var(--cyan);
+    }
+    .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1.1em;
+      background: var(--cyan);
+      vertical-align: text-bottom;
+      animation: cursorBlink 1.1s step-end infinite;
+      margin-left: 1px;
+    }
+
+    /* Section reveal */
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.65s ease, transform 0.65s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Stagger delays */
+    .delay-1 { transition-delay: 0.08s; }
+    .delay-2 { transition-delay: 0.16s; }
+    .delay-3 { transition-delay: 0.24s; }
+    .delay-4 { transition-delay: 0.32s; }
+    .delay-5 { transition-delay: 0.40s; }
+
+    /* Code block */
+    .code-block {
+      background: var(--ink-700);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--silver-200);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      position: relative;
+    }
+    .code-block code { flex: 1; overflow-x: auto; white-space: nowrap; }
+
+    /* Copy button */
+    .copy-btn {
+      flex-shrink: 0;
+      background: var(--ink-600);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.7rem;
+      color: var(--silver-400);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .copy-btn:hover { background: var(--ink-500); color: var(--cyan); }
+    .copy-btn.copied { color: #4ade80; border-color: rgba(74,222,128,0.3); }
+
+    /* Feature card */
+    .feature-card {
+      background: var(--ink-800);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 14px;
+      padding: 1.75rem;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+    .feature-card:hover {
+      border-color: rgba(0,229,255,0.18);
+      transform: translateY(-2px);
+    }
+
+    /* Step connector */
+    .step-line {
+      width: 1px;
+      flex: 1;
+      background: linear-gradient(to bottom, rgba(0,229,255,0.3), transparent);
+      margin: 0.5rem auto;
+    }
+
+    /* Hotkey pill */
+    .key {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      background: var(--ink-700);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      padding: 0.2rem 0.45rem;
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--silver-200);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    /* Pricing card */
+    .pricing-card {
+      background: var(--ink-800);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px;
+      padding: 2rem;
+      position: relative;
+      transition: border-color 0.3s;
+    }
+    .pricing-card.featured {
+      border-color: rgba(0,229,255,0.35);
+      background: linear-gradient(135deg, var(--ink-800), rgba(0,229,255,0.03));
+    }
+    .pricing-card.featured::before {
+      content: 'RECOMMENDED';
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--cyan);
+      color: var(--ink-950);
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Provider logos */
+    .provider-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--ink-700);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 0.35rem 0.7rem;
+      font-size: 0.72rem;
+      color: var(--silver-300);
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .provider-chip:hover {
+      border-color: rgba(0,229,255,0.2);
+      color: var(--silver-100);
+    }
+
+    /* Section divider */
+    .section-divider {
+      width: 40px;
+      height: 1px;
+      background: var(--cyan);
+      opacity: 0.5;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--ink-900); }
+    ::-webkit-scrollbar-thumb { background: var(--ink-500); border-radius: 3px; }
+
+    /* Nav */
+    nav {
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      background: rgba(8,10,12,0.8);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+
+    /* Animated text shimmer on headline accent */
+    .shimmer-text {
+      background: linear-gradient(90deg, var(--cyan) 0%, #60efff 40%, var(--cyan) 80%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 3s linear infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 0% center; }
+      100% { background-position: 200% center; }
+    }
+
+    /* Agent section */
+    #llms {
+      background: linear-gradient(135deg, var(--ink-800), rgba(0,229,255,0.025));
+      border-top: 1px solid rgba(0,229,255,0.1);
+      border-bottom: 1px solid rgba(0,229,255,0.1);
+    }
+
+    /* Responsive nav links */
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+    }
+
+    /* Hero demo animation states */
+    #demo-state-before { transition: opacity 0.3s; }
+    #demo-state-after { transition: opacity 0.3s; }
+  </style>
+</head>
+
+<body class="relative">
+
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50">
+    <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <span class="text-lg">✏️</span>
+        <span class="font-mono text-sm font-medium text-silver-100 tracking-tight">CorrectMe</span>
+        <span class="font-mono text-xs text-silver-500 ml-1">v0.3.3</span>
+      </div>
+      <div class="nav-links flex items-center gap-6">
+        <a href="#features" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">Features</a>
+        <a href="#how-it-works" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">How it works</a>
+        <a href="#pricing" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">Pricing</a>
+        <a href="#llms" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">For Agents</a>
+        <a href="https://github.com/tamcv/correct_me" target="_blank" rel="noopener" class="flex items-center gap-1.5 text-xs text-silver-400 hover:text-silver-100 transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="relative pt-32 pb-24 px-6 overflow-hidden">
+    <div class="hero-glow"></div>
+    <div class="max-w-4xl mx-auto relative z-10 text-center">
+
+      <!-- Badge -->
+      <div class="reveal inline-flex items-center gap-2 bg-ink-800 border border-white/6 rounded-full px-3 py-1.5 mb-8 text-xs text-silver-400">
+        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+        macOS 13+ &nbsp;·&nbsp; Menu Bar App &nbsp;·&nbsp; No subscription
+      </div>
+
+      <!-- Headline -->
+      <h1 class="reveal delay-1 font-display text-5xl md:text-7xl font-light leading-none tracking-tight mb-6">
+        Write faster.<br/>
+        <em class="shimmer-text not-italic">Correct&nbsp;smarter.</em>
+      </h1>
+
+      <!-- Subheadline -->
+      <p class="reveal delay-2 font-mono text-sm md:text-base text-silver-400 max-w-xl mx-auto mb-4 leading-relaxed">
+        Select any text. Press <span class="key">⌃</span><span class="key">⇧</span><span class="key">Space</span>. Watch AI rewrite it instantly — in any app, with your chosen model and style.
+      </p>
+
+      <!-- Animated demo -->
+      <div class="reveal delay-3 flex items-center justify-center gap-3 mb-10 font-mono text-sm">
+        <div id="demo-wrap" class="bg-ink-800 border border-white/6 rounded-lg px-4 py-2.5 text-left">
+          <span id="demo-state-before" class="demo-before">"i recieved you're message and will look in to it"</span>
+          <span id="demo-state-after" class="demo-after hidden">"I received your message and will look into it"</span>
+          <span class="cursor"></span>
+        </div>
+      </div>
+
+      <!-- Install command -->
+      <div class="reveal delay-3 max-w-xl mx-auto mb-6">
+        <div class="code-block">
+          <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/install.sh | sh</code>
+          <button class="copy-btn" onclick="copyInstall(this)" title="Copy install command">copy</button>
+        </div>
+        <p class="text-xs text-silver-500 mt-2">One-line install · No Homebrew required</p>
+      </div>
+
+      <!-- CTA buttons -->
+      <div class="reveal delay-4 flex items-center justify-center gap-3 flex-wrap">
+        <a href="https://github.com/tamcv/correct_me/releases" target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 bg-cyan-400 text-ink-950 font-mono font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-cyan-500 transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Download for macOS
+        </a>
+        <a href="https://github.com/tamcv/correct_me" target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 bg-ink-700 border border-white/8 text-silver-200 font-mono text-sm px-5 py-2.5 rounded-lg hover:bg-ink-600 transition-colors">
+          View on GitHub →
+        </a>
+      </div>
+
+      <!-- macOS requirement note -->
+      <p class="reveal delay-5 text-xs text-silver-500 mt-5">Requires macOS 13 Ventura or later · Free 14-day trial</p>
+    </div>
+  </section>
+
+  <!-- Thin separator -->
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="border-t border-white/5"></div>
+  </div>
+
+  <!-- How it Works -->
+  <section id="how-it-works" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-14">
+        <div class="reveal section-divider mx-auto mb-4"></div>
+        <p class="reveal font-mono text-xs text-cyan-400 tracking-widest uppercase mb-2">How it works</p>
+        <h2 class="reveal delay-1 font-display text-3xl md:text-4xl font-light">Three seconds to polished text.</h2>
+      </div>
+
+      <div class="flex flex-col md:flex-row items-start gap-0 md:gap-6 max-w-3xl mx-auto">
+
+        <!-- Step 1 -->
+        <div class="reveal flex flex-col items-center text-center flex-1">
+          <div class="w-10 h-10 rounded-xl bg-ink-700 border border-white/8 flex items-center justify-center mb-4 font-mono text-xs text-cyan-400 font-semibold">01</div>
+          <h3 class="font-display text-lg font-light mb-2">Select text</h3>
+          <p class="text-xs text-silver-400 leading-relaxed">Highlight any text in any macOS app — Messages, Slack, Xcode, Notes, email — anywhere.</p>
+        </div>
+
+        <!-- Arrow md -->
+        <div class="hidden md:flex items-center pt-5 text-silver-600">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <!-- Arrow sm -->
+        <div class="md:hidden flex justify-center w-full py-2 text-silver-600">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="reveal delay-1 flex flex-col items-center text-center flex-1">
+          <div class="w-10 h-10 rounded-xl bg-ink-700 border border-cyan-400/20 flex items-center justify-center mb-4 font-mono text-xs text-cyan-400 font-semibold">02</div>
+          <h3 class="font-display text-lg font-light mb-2">Press the hotkey</h3>
+          <p class="text-xs text-silver-400 leading-relaxed">Hit <span class="key">⌃</span><span class="key">⇧</span><span class="key">Space</span>. A floating HUD confirms the AI is working. Fully customizable shortcut.</p>
+        </div>
+
+        <!-- Arrow md -->
+        <div class="hidden md:flex items-center pt-5 text-silver-600">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <!-- Arrow sm -->
+        <div class="md:hidden flex justify-center w-full py-2 text-silver-600">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="reveal delay-2 flex flex-col items-center text-center flex-1">
+          <div class="w-10 h-10 rounded-xl bg-ink-700 border border-white/8 flex items-center justify-center mb-4 font-mono text-xs text-cyan-400 font-semibold">03</div>
+          <h3 class="font-display text-lg font-light mb-2">Text is corrected</h3>
+          <p class="text-xs text-silver-400 leading-relaxed">Your original text is replaced with the corrected version. Preview the diff first. Undo anytime.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Thin separator -->
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="border-t border-white/5"></div>
+  </div>
+
+  <!-- Features Section -->
+  <section id="features" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-14">
+        <div class="reveal section-divider mx-auto mb-4"></div>
+        <p class="reveal font-mono text-xs text-cyan-400 tracking-widest uppercase mb-2">Features</p>
+        <h2 class="reveal delay-1 font-display text-3xl md:text-4xl font-light">Everything you need.<br/><em class="text-silver-400 font-light not-italic">Nothing you don't.</em></h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        <!-- Feature: Global Hotkey -->
+        <div class="feature-card reveal">
+          <div class="text-2xl mb-3">⌨️</div>
+          <h3 class="font-display text-base font-medium mb-2">Global hotkey</h3>
+          <p class="text-xs text-silver-400 leading-relaxed">Works system-wide. No switching apps, no copy-pasting. One shortcut and you're done — <span class="key">⌃</span><span class="key">⇧</span><span class="key">Space</span> by default, fully remappable.</p>
+        </div>
+
+        <!-- Feature: Multi-provider -->
+        <div class="feature-card reveal delay-1 md:col-span-1">
+          <div class="text-2xl mb-3">🔌</div>
+          <h3 class="font-display text-base font-medium mb-2">7 AI providers</h3>
+          <p class="text-xs text-silver-400 leading-relaxed mb-3">Choose your model. Swap anytime from the menu bar.</p>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="provider-chip">Claude</span>
+            <span class="provider-chip">GPT-4</span>
+            <span class="provider-chip">Gemini</span>
+            <span class="provider-chip">Groq</span>
+            <span class="provider-chip">Ollama</span>
+            <span class="provider-chip">OpenRouter</span>
+            <span class="provider-chip">Codex</span>
+          </div>
+        </div>
+
+        <!-- Feature: Per-app styles -->
+        <div class="feature-card reveal delay-2">
+          <div class="text-2xl mb-3">🎨</div>
+          <h3 class="font-display text-base font-medium mb-2">Per-app writing styles</h3>
+          <p class="text-xs text-silver-400 leading-relaxed">Casual in Slack. Formal in Mail. Technical in Xcode. Set a style per app and CorrectMe automatically adapts.</p>
+        </div>
+
+        <!-- Feature: Privacy / Ollama -->
+        <div class="feature-card reveal delay-1">
+          <div class="text-2xl mb-3">🔒</div>
+          <h3 class="font-display text-base font-medium mb-2">100% private with Ollama</h3>
+          <p class="text-xs text-silver-400 leading-relaxed">Run corrections entirely on your Mac with Ollama. Your text never leaves your machine. No API keys, no cloud, no logs.</p>
+        </div>
+
+        <!-- Feature: Diff preview -->
+        <div class="feature-card reveal delay-2">
+          <div class="text-2xl mb-3">👁</div>
+          <h3 class="font-display text-base font-medium mb-2">Diff preview</h3>
+          <p class="text-xs text-silver-400 leading-relaxed">See exactly what changed before accepting. Accept or reject each correction with a keyboard shortcut. No surprises.</p>
+        </div>
+
+        <!-- Feature: History & Undo -->
+        <div class="feature-card reveal delay-3">
+          <div class="text-2xl mb-3">↩️</div>
+          <h3 class="font-display text-base font-medium mb-2">History &amp; undo</h3>
+          <p class="text-xs text-silver-400 leading-relaxed">Last 10 corrections accessible from the menu bar. Made a mistake? Press the undo shortcut to restore original text instantly.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Thin separator -->
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="border-t border-white/5"></div>
+  </div>
+
+  <!-- For AI Agents Section -->
+  <section id="llms" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-12">
+        <div class="reveal section-divider mx-auto mb-4"></div>
+        <p class="reveal font-mono text-xs text-cyan-400 tracking-widest uppercase mb-2">For AI Agents</p>
+        <h2 class="reveal delay-1 font-display text-3xl md:text-4xl font-light">
+          Built for humans<br/>
+          <em class="text-silver-400 font-light not-italic">and AI agents alike.</em>
+        </h2>
+        <p class="reveal delay-2 text-xs text-silver-400 max-w-lg mx-auto mt-4 leading-relaxed">
+          CorrectMe ships with full CLI support and a machine-readable <code class="text-cyan-400">llms.txt</code> manifest. AI coding agents can set it up in a single command — no GUI required.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+
+        <div class="reveal feature-card">
+          <p class="font-mono text-xs text-silver-500 mb-2 uppercase tracking-widest">Quick setup via CLI</p>
+          <div class="code-block mb-2">
+            <code id="agent-cmd">correctme quicksetup --provider claude --api-key $KEY</code>
+            <button class="copy-btn" onclick="copyAgent(this)" title="Copy agent command">copy</button>
+          </div>
+          <p class="text-xs text-silver-500 leading-relaxed">One command configures the provider, API key, and starts the daemon. Swap <code class="text-cyan-400">claude</code> for any of the 7 supported providers.</p>
+        </div>
+
+        <div class="reveal delay-1 feature-card">
+          <p class="font-mono text-xs text-silver-500 mb-2 uppercase tracking-widest">Machine-readable manifest</p>
+          <div class="code-block mb-2">
+            <code class="text-cyan-400/80">llms.txt</code>
+          </div>
+          <p class="text-xs text-silver-400 leading-relaxed mb-3">Full capability manifest, CLI reference, config schema, and integration guide — formatted for LLM consumption.</p>
+          <a href="https://raw.githubusercontent.com/tamcv/correct_me/main/llms.txt" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-500 transition-colors font-mono">
+            View llms.txt →
+          </a>
+        </div>
+
+      </div>
+
+      <div class="reveal delay-2 max-w-3xl mx-auto mt-6 bg-ink-700 border border-cyan-400/10 rounded-xl p-5">
+        <p class="font-mono text-xs text-silver-500 uppercase tracking-widest mb-3">Available CLI commands</p>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 font-mono text-xs">
+          <span class="text-silver-300"><span class="text-cyan-400">correctme</span> start</span>
+          <span class="text-silver-300"><span class="text-cyan-400">correctme</span> stop</span>
+          <span class="text-silver-300"><span class="text-cyan-400">correctme</span> status</span>
+          <span class="text-silver-300"><span class="text-cyan-400">correctme</span> setup</span>
+          <span class="text-silver-300"><span class="text-cyan-400">correctme</span> doctor</span>
+          <span class="text-silver-300"><span class="text-cyan-400">correctme</span> quicksetup</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Thin separator -->
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="border-t border-white/5"></div>
+  </div>
+
+  <!-- Pricing Section -->
+  <section id="pricing" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-14">
+        <div class="reveal section-divider mx-auto mb-4"></div>
+        <p class="reveal font-mono text-xs text-cyan-400 tracking-widest uppercase mb-2">Pricing</p>
+        <h2 class="reveal delay-1 font-display text-3xl md:text-4xl font-light">One-time payment.<br/><em class="text-silver-400 font-light not-italic">Yours forever.</em></h2>
+        <p class="reveal delay-2 text-xs text-silver-400 mt-3">No subscription. No seats. No annual renewal.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl mx-auto">
+
+        <!-- Free trial -->
+        <div class="pricing-card reveal">
+          <p class="font-mono text-xs text-silver-500 uppercase tracking-widest mb-4">Free Trial</p>
+          <div class="flex items-end gap-1 mb-1">
+            <span class="font-display text-5xl font-light">$0</span>
+          </div>
+          <p class="text-xs text-silver-400 mb-6">14 days, all features</p>
+          <ul class="space-y-2 mb-6 text-xs text-silver-300">
+            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> All 7 AI providers</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Per-app writing styles</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Correction history</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> No credit card required</li>
+          </ul>
+          <a href="https://github.com/tamcv/correct_me/releases" target="_blank" rel="noopener"
+             class="block text-center bg-ink-600 border border-white/8 text-silver-200 font-mono text-xs px-4 py-2.5 rounded-lg hover:bg-ink-500 transition-colors">
+            Start free trial →
+          </a>
+        </div>
+
+        <!-- License -->
+        <div class="pricing-card featured reveal delay-1">
+          <p class="font-mono text-xs text-silver-500 uppercase tracking-widest mb-4">License</p>
+          <div class="flex items-end gap-1 mb-1">
+            <span class="font-display text-5xl font-light">$19</span>
+            <span class="text-xs text-silver-400 mb-2">one-time</span>
+          </div>
+          <p class="text-xs text-silver-400 mb-6">Pay once, use forever</p>
+          <ul class="space-y-2 mb-6 text-xs text-silver-300">
+            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Everything in Free Trial</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Lifetime updates</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Private use on your Macs</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-400">✓</span> Email support</li>
+          </ul>
+          <a href="https://github.com/tamcv/correct_me" target="_blank" rel="noopener"
+             class="block text-center bg-cyan-400 text-ink-950 font-mono font-semibold text-xs px-4 py-2.5 rounded-lg hover:bg-cyan-500 transition-colors">
+            Get a license →
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/5 py-12 px-6">
+    <div class="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+
+      <div class="flex items-center gap-2.5">
+        <span class="text-lg">✏️</span>
+        <span class="font-mono text-sm font-medium text-silver-300 tracking-tight">CorrectMe</span>
+        <span class="font-mono text-xs text-silver-600">v0.3.3</span>
+      </div>
+
+      <div class="flex items-center gap-6 text-xs text-silver-500">
+        <a href="https://github.com/tamcv/correct_me" target="_blank" rel="noopener" class="hover:text-silver-200 transition-colors flex items-center gap-1.5">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          GitHub
+        </a>
+        <a href="https://raw.githubusercontent.com/tamcv/correct_me/main/llms.txt" target="_blank" rel="noopener" class="hover:text-silver-200 transition-colors">llms.txt</a>
+        <a href="https://github.com/tamcv/correct_me/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-silver-200 transition-colors">MIT License</a>
+      </div>
+
+      <p class="font-mono text-xs text-silver-600">
+        Built with Swift · Pure Apple frameworks
+      </p>
+    </div>
+  </footer>
+
+  <!-- Vanilla JS -->
+  <script>
+    // ─── Copy to clipboard ───────────────────────────────────────────────────
+    function copyInstall(btn) {
+      const text = document.getElementById('install-cmd').textContent;
+      copyToClipboard(text, btn);
+    }
+    function copyAgent(btn) {
+      const text = document.getElementById('agent-cmd').textContent;
+      copyToClipboard(text, btn);
+    }
+    function copyToClipboard(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('copied');
+        }, 2000);
+      }).catch(() => {
+        // Fallback for older browsers
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        const original = btn.textContent;
+        btn.textContent = 'copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // ─── Demo animation ──────────────────────────────────────────────────────
+    const demoBefore = document.getElementById('demo-state-before');
+    const demoAfter  = document.getElementById('demo-state-after');
+
+    function runDemoAnimation() {
+      // Show before
+      demoBefore.classList.remove('hidden');
+      demoAfter.classList.add('hidden');
+
+      setTimeout(() => {
+        // Flash transition
+        demoBefore.style.opacity = '0';
+        setTimeout(() => {
+          demoBefore.classList.add('hidden');
+          demoBefore.style.opacity = '1';
+          demoAfter.classList.remove('hidden');
+          demoAfter.style.opacity = '0';
+          setTimeout(() => {
+            demoAfter.style.opacity = '1';
+          }, 20);
+        }, 250);
+      }, 2500);
+    }
+
+    // Run on load, then loop every 6s
+    runDemoAnimation();
+    setInterval(runDemoAnimation, 6000);
+
+    // ─── Scroll reveal ───────────────────────────────────────────────────────
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.12 });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+
+</body>
+</html>
