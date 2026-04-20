@@ -156,12 +156,13 @@ jobs:
           --dmg-url "https://github.com/${REPO}/releases/download/${TAG}/CorrectMe-${TAG}-macos.dmg" \
           --length "$DMG_LENGTH" \
           --signature "$ED_SIG" \
-          --pub-date "$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+          --pub-date "$(date -u '+%a, %d %b %Y %H:%M:%S +0000')" \
+          --appcast "license-server/appcast.xml"
 
         printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "CorrectMe-%s-macos.dmg",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
           "$TAG" "$VERSION" "$TAG" "$SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
 
-        git add dist/appcast.xml dist/latest.json
+        git add license-server/appcast.xml dist/latest.json
         git diff --staged --quiet || (git commit -m "release: update appcast.xml and latest.json for $TAG" && git push origin main)
 
     - name: Cleanup keychain
