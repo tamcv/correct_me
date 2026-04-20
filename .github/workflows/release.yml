@@ -75,23 +75,28 @@ jobs:
         TAG="${{ steps.version.outputs.TAG }}"
         DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
         SHA256=$(cat .build/release-dmg/sha256.txt)
+        REPO="${{ github.repository }}"
+
+        cat > /tmp/release-notes.md << EOF
+        ## CorrectMe ${TAG}
+
+        ### Install
+
+        \`\`\`bash
+        curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | sh
+        \`\`\`
+
+        Or download the DMG below and drag **CorrectMe.app** into Applications.
+
+        ### SHA256
+        \`\`\`
+        ${SHA256}  CorrectMe-${TAG}-macos.dmg
+        \`\`\`
+        EOF
 
         gh release create "$TAG" "$DMG_PATH" \
           --title "CorrectMe $TAG" \
-          --notes "## CorrectMe $TAG
-
-### Install
-
-\`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh
-\`\`\`
-
-Or download the DMG below and drag CorrectMe.app into Applications.
-
-### SHA256
-\`\`\`
-$SHA256  CorrectMe-${TAG}-macos.dmg
-\`\`\`"
+          --notes-file /tmp/release-notes.md
 
     - name: Update dist/latest.json
       env:
