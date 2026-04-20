@@ -258,6 +258,7 @@ class MenuBarManager: NSObject {
             updatesItem.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
         }
         updatesItem.target = self
+        updatesItem.tag = 9001
         menu.addItem(updatesItem)
 
         let licenseItem: NSMenuItem
@@ -363,6 +364,20 @@ class MenuBarManager: NSObject {
     }
 
     @objc private func checkForUpdates() {
+        if let item = menu?.item(withTag: 9001) {
+            item.title = "Checking for Updates…"
+            item.isEnabled = false
+            if #available(macOS 11.0, *) {
+                item.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak item] in
+                item?.title = "Check for Updates…"
+                item?.isEnabled = true
+                if #available(macOS 11.0, *) {
+                    item?.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+                }
+            }
+        }
         AppUpdater.shared.checkForUpdates()
     }
 
