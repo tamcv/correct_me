@@ -1,8 +1,8 @@
 {
-  "tag": "v0.4.2",
-  "version": "0.4.2",
-  "asset": "CorrectMe-v0.4.2-macos.dmg",
-  "url": "https://license-server-liard.vercel.app/downloads/CorrectMe-v0.4.2-macos.dmg",
-  "sha256": "37e3bf2baa2d78bd60e7e4c7cc37858d752d202bf9cc59ec60d7e8d5a355e302",
-  "published_at": "2026-04-20T09:19:56Z"
+  "tag": "v0.4.3",
+  "version": "0.4.3",
+  "asset": "CorrectMe-v0.4.3-macos.dmg",
+  "url": "https://license-server-liard.vercel.app/downloads/CorrectMe-v0.4.3-macos.dmg",
+  "sha256": "81d30c3af6a4fc81cb6e27d54a600b5e8663e9b8e5fe22358a3f96360bec7a9e",
+  "published_at": "2026-04-20T09:30:38Z"
 }
