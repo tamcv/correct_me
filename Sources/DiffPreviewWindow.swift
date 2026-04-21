@@ -26,14 +26,12 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         dismissSilently()
 
         let p = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 360),
-            styleMask: [.titled, .closable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 430),
+            styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         p.title = "Review Correction"
-        p.titlebarAppearsTransparent = true
-        p.titleVisibility = .visible
         p.level = .floating
         p.isReleasedWhenClosed = false
         p.delegate = self
@@ -192,84 +190,100 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         let W = root.bounds.width
         let H = root.bounds.height
         let pad: CGFloat = 20
-        let scrollH: CGFloat = 100
+        let scrollH: CGFloat = 120
 
         let diff = computeDiff(original: original, corrected: corrected)
 
-        var y = H - 16
+        // ── Bottom bar (buttons + checkbox) ──────────────────────────────
+        let bottomBarH: CGFloat = 60
+        let bottomBar = NSView(frame: NSRect(x: 0, y: 0, width: W, height: bottomBarH))
+        bottomBar.wantsLayer = true
+        bottomBar.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        root.addSubview(bottomBar)
 
-        // ── Original section
+        // Separator above bottom bar
+        let sep = NSBox()
+        sep.boxType = .separator
+        sep.frame = NSRect(x: 0, y: bottomBarH, width: W, height: 1)
+        root.addSubview(sep)
+
+        // "Always apply" checkbox
+        let alwaysApply = NSButton(checkboxWithTitle: "Always apply without review", target: nil, action: nil)
+        alwaysApply.frame = NSRect(x: pad, y: (bottomBarH - 20) / 2, width: 240, height: 20)
+        alwaysApply.font = .systemFont(ofSize: 12)
+        bottomBar.addSubview(alwaysApply)
+        self.alwaysApplyCheckbox = alwaysApply
+
+        // Apply button (primary — filled blue)
+        let acceptBtn = NSButton(title: "Apply", target: self, action: #selector(acceptPressed))
+        acceptBtn.bezelStyle = .rounded
+        acceptBtn.controlSize = .large
+        acceptBtn.keyEquivalent = "\r"
+        acceptBtn.keyEquivalentModifierMask = .command
+        acceptBtn.frame = NSRect(x: W - pad - 100, y: (bottomBarH - 32) / 2, width: 100, height: 32)
+        if #available(macOS 14.0, *) {
+            acceptBtn.hasDestructiveAction = false
+        }
+        bottomBar.addSubview(acceptBtn)
+
+        // Discard button
+        let rejectBtn = NSButton(title: "Discard", target: self, action: #selector(rejectPressed))
+        rejectBtn.bezelStyle = .rounded
+        rejectBtn.controlSize = .large
+        rejectBtn.keyEquivalent = "\u{1b}"
+        rejectBtn.keyEquivalentModifierMask = []
+        rejectBtn.frame = NSRect(x: W - pad - 210, y: (bottomBarH - 32) / 2, width: 100, height: 32)
+        bottomBar.addSubview(rejectBtn)
+
+        // ── Content area (above bottom bar) ──────────────────────────────
+        let contentTop = H  // content view height (standard titled window, no fullSizeContentView)
+        var y = contentTop - pad
+
+        // ── Original section ──
         y -= 18
-        let origLabel = makeSectionLabel("Original", icon: "doc.text", color: .secondaryLabelColor)
-        origLabel.frame = NSRect(x: pad, y: y, width: W - pad * 2, height: 18)
-        root.addSubview(origLabel)
+        let origHeader = makeSectionLabel("Original", icon: "doc.text", color: .secondaryLabelColor)
+        origHeader.frame = NSRect(x: pad, y: y, width: W - pad * 2, height: 18)
+        root.addSubview(origHeader)
 
-        y -= scrollH + 6
+        y -= 6
+        y -= scrollH
         let origScroll = makeScrollView(frame: NSRect(x: pad, y: y, width: W - pad * 2, height: scrollH))
         makeTextView(in: origScroll, attributedText: diff.origAttr)
         root.addSubview(origScroll)
 
-        y -= 28
+        y -= 20
 
-        // ── Corrected section with change count badge
+        // ── Corrected section ──
+        let corrHeaderY = y - 18
         let corrLabel = makeSectionLabel("Corrected", icon: "doc.text.fill", color: .systemGreen)
-        corrLabel.frame = NSRect(x: pad, y: y, width: 120, height: 18)
+        corrLabel.frame = NSRect(x: pad, y: corrHeaderY, width: 120, height: 18)
         root.addSubview(corrLabel)
 
-        // Change count badge
+        // Change count badge (right-aligned)
         let countText: String
         switch diff.changedWordCount {
         case 0:  countText = "no changes"
         case 1:  countText = "1 word changed"
         default: countText = "\(diff.changedWordCount) words changed"
         }
-
         let badge = makeChangeBadge(countText)
-        badge.frame = NSRect(x: W - pad - 130, y: y - 1, width: 130, height: 20)
+        badge.frame = NSRect(x: W - pad - 130, y: corrHeaderY - 1, width: 130, height: 20)
         root.addSubview(badge)
 
-        y -= scrollH + 6
+        y -= 24
+        y -= scrollH
         let corrScroll = makeScrollView(frame: NSRect(x: pad, y: y, width: W - pad * 2, height: scrollH))
         makeTextView(in: corrScroll, attributedText: diff.corrAttr)
         root.addSubview(corrScroll)
 
-        // ── Bottom bar
-        let bottomY: CGFloat = pad
+        y -= 14
 
-        // "Always apply" checkbox
-        let alwaysApply = NSButton(checkboxWithTitle: "Always apply without review", target: nil, action: nil)
-        alwaysApply.frame = NSRect(x: pad, y: bottomY + 4, width: 250, height: 20)
-        alwaysApply.font = .systemFont(ofSize: 12)
-        root.addSubview(alwaysApply)
-        self.alwaysApplyCheckbox = alwaysApply
-
-        // Reject button
-        let rejectBtn = NSButton(title: "Discard", target: self, action: #selector(rejectPressed))
-        rejectBtn.bezelStyle = .rounded
-        rejectBtn.controlSize = .large
-        rejectBtn.keyEquivalent = "\u{1b}"
-        rejectBtn.keyEquivalentModifierMask = []
-        rejectBtn.frame = NSRect(x: W - pad - 220, y: bottomY, width: 100, height: 30)
-        rejectBtn.autoresizingMask = [.minXMargin]
-        root.addSubview(rejectBtn)
-
-        // Accept button
-        let acceptBtn = NSButton(title: "Apply", target: self, action: #selector(acceptPressed))
-        acceptBtn.bezelStyle = .rounded
-        acceptBtn.controlSize = .large
-        acceptBtn.keyEquivalent = "\r"
-        acceptBtn.keyEquivalentModifierMask = .command
-        acceptBtn.frame = NSRect(x: W - pad - 110, y: bottomY, width: 110, height: 30)
-        acceptBtn.autoresizingMask = [.minXMargin]
-        root.addSubview(acceptBtn)
-
-        // Keyboard shortcut hints
+        // Keyboard shortcut hints (above bottom bar, right-aligned)
         let hintLabel = NSTextField(labelWithString: "⌘↩ Apply  ·  Esc Discard")
         hintLabel.font = .systemFont(ofSize: 10)
         hintLabel.textColor = .tertiaryLabelColor
         hintLabel.alignment = .right
-        hintLabel.frame = NSRect(x: W - pad - 220, y: bottomY + 34, width: 220, height: 14)
-        hintLabel.autoresizingMask = [.minXMargin]
+        hintLabel.frame = NSRect(x: W - pad - 180, y: bottomBarH + 6, width: 180, height: 14)
         root.addSubview(hintLabel)
     }
 
@@ -303,7 +317,7 @@ class DiffPreviewWindow: NSObject, NSWindowDelegate {
         let container = NSView()
         container.wantsLayer = true
         container.layer?.cornerRadius = 10
-        container.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.1).cgColor
+        container.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
 
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 10, weight: .medium)
