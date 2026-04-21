@@ -1333,13 +1333,6 @@ struct CorrectMeApp {
             return
         }
 
-        // Show license activation window if trial has expired
-        if !LicenseManager.shared.isAllowed {
-            debugLog("Trial expired and no license — showing activation window")
-            app.setActivationPolicy(.regular)
-            LicenseWindowController.shared.showWindow(trialExpired: true)
-        }
-
         startDaemonServices()
         app.run()
     }
@@ -1541,14 +1534,6 @@ struct CorrectMeApp {
     static func handleHotkey() {
         guard !isProcessing else {
             logPrint("⏳ Already processing...")
-            return
-        }
-
-        guard LicenseManager.shared.isAllowed else {
-            DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                LicenseWindowController.shared.showWindow(trialExpired: true)
-            }
             return
         }
 

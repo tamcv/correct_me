@@ -252,7 +252,7 @@ class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        // ── License / Updates ────────────────────────────────────
+        // ── Updates ──────────────────────────────────────────────
         let updatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         if #available(macOS 11.0, *) {
             updatesItem.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
@@ -260,30 +260,6 @@ class MenuBarManager: NSObject {
         updatesItem.target = self
         updatesItem.tag = 9001
         menu.addItem(updatesItem)
-
-        let licenseItem: NSMenuItem
-        if LicenseManager.shared.isActivated {
-            licenseItem = NSMenuItem(title: "Licensed", action: nil, keyEquivalent: "")
-            if #available(macOS 11.0, *) {
-                licenseItem.image = NSImage(systemSymbolName: "checkmark.seal.fill", accessibilityDescription: nil)
-            }
-            licenseItem.isEnabled = false
-        } else if let days = LicenseManager.shared.trialDaysRemaining, days > 0 {
-            licenseItem = NSMenuItem(
-                title: "\(days) day\(days == 1 ? "" : "s") left in trial  ·  Activate…",
-                action: #selector(openLicense), keyEquivalent: "")
-            if #available(macOS 11.0, *) {
-                licenseItem.image = NSImage(systemSymbolName: "key", accessibilityDescription: nil)
-            }
-            licenseItem.target = self
-        } else {
-            licenseItem = NSMenuItem(title: "Trial Expired  ·  Activate…", action: #selector(openLicense), keyEquivalent: "")
-            if #available(macOS 11.0, *) {
-                licenseItem.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
-            }
-            licenseItem.target = self
-        }
-        menu.addItem(licenseItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -381,10 +357,6 @@ class MenuBarManager: NSObject {
         AppUpdater.shared.checkForUpdates()
     }
 
-    @objc private func openLicense() {
-        NSApp.activate(ignoringOtherApps: true)
-        LicenseWindowController.shared.showWindow(trialExpired: false)
-    }
 
     @objc private func openFeedback() {
         NSApp.activate(ignoringOtherApps: true)

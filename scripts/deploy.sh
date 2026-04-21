@@ -15,7 +15,7 @@ echo "Installing app..."
 rsync -a --delete .build/CorrectMe.app/ /Applications/CorrectMe.app/
 
 # 3. Clear quarantine flag (prevents macOS from showing permission prompts)
-xattr -cr /Applications/CorrectMe.app 2>/dev/null || true
+xattr -c /Applications/CorrectMe.app 2>/dev/null || true
 
 # 4. Re-sign so TCC keeps tracking by bundle ID (not binary hash)
 CERT_NAME="CorrectMe Dev"
