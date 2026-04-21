@@ -158,11 +158,9 @@ struct CorrectMeApp {
                 DaemonManager.startDaemon(background: true)
             }
 
-        case "run":
-            // Legacy command - run in foreground
-            print("Note: 'correctme run' is deprecated. Use 'correctme start' instead.")
-            if args.contains("--verbose") { isVerboseLogging = true }
-            DaemonManager.startDaemon(background: false)
+        case "logs":
+            showLogs(Array(args.dropFirst(2)))
+            exit(0)
 
         case "enable":
             enableAutoStart()
@@ -429,107 +427,134 @@ struct CorrectMeApp {
         print("  \(ok ? "✓" : "✗") \(message)")
     }
 
+    // MARK: - Logs
+
+    static func showLogs(_ args: [String]) {
+        let n = args.first.flatMap { Int($0) } ?? 50
+        let logPath = DaemonManager.logFilePath.path
+        let errPath = DaemonManager.errorLogFilePath.path
+
+        print("\n── Log (last \(n) lines) ─────────────────────────────────")
+        print("   \(logPath)\n")
+        if FileManager.default.fileExists(atPath: logPath) {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/tail")
+            proc.arguments = ["-n", "\(n)", logPath]
+            try? proc.run()
+            proc.waitUntilExit()
+        } else {
+            print("(log file not found — daemon has not run yet)")
+        }
+
+        print("\n── Error log (last 20 lines) ─────────────────────────────")
+        print("   \(errPath)\n")
+        if FileManager.default.fileExists(atPath: errPath) {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/tail")
+            proc.arguments = ["-n", "20", errPath]
+            try? proc.run()
+            proc.waitUntilExit()
+        } else {
+            print("(error log not found)")
+        }
+        print("")
+    }
+
     static func printHelp() {
         print("""
 
-        CorrectMe - AI-powered text correction for macOS
+        CorrectMe \(AppVersion.current) — AI-powered text correction for macOS
+        https://tamcv.github.io/correct_me/
 
-        USAGE:
-            correctme start               Start daemon (auto-enables at login)
-            correctme stop                Stop the daemon
-            correctme restart             Restart the daemon
-            correctme status              Check daemon status
-            correctme enable              Enable auto-start at login
-            correctme disable             Disable auto-start at login
-            correctme setup               Interactive setup (choose provider + keys)
-            correctme quicksetup          Non-interactive setup (for scripts/agents)
-            correctme config              Show current configuration
-            correctme test                Test AI correction with sample text
-            correctme version             Show version
-            correctme update              Update to the latest release
-            correctme doctor              Check dependencies and configuration
-            correctme uninstall           Uninstall CorrectMe
-            correctme help                Show this help message
-
-        DAEMON MANAGEMENT:
-            start                         Start daemon (runs in background, auto-enables at login)
+        DAEMON:
+            start                         Start daemon (auto-enables login item)
             stop                          Stop the running daemon
             restart                       Restart the daemon
             status                        Show daemon status and uptime
-            enable                        Enable auto-start at login (via LaunchAgent)
-            disable                       Disable auto-start at login
+
+        SETUP:
+            setup                         Interactive setup wizard
+            quicksetup --provider <name>  Non-interactive setup (for scripts/CI)
+              --api-key <key>               API key (required for API providers)
+              --model <name>                Model override (optional)
+              --hotkey <combo>              e.g. cmd+shift+e (optional)
 
         CONFIGURATION:
             config                        Show current configuration
             config provider <name>        Set AI provider
-                                          (claude-code|codex-code|claude|gemini|codex)
-            config claude-key <key>       Set Claude API key
+                                            claude-code, codex-code, copilot
+                                            claude, gemini, codex, openrouter
+            config claude-key <key>       Set Anthropic API key
             config gemini-key <key>       Set Gemini API key
             config openai-key <key>       Set OpenAI API key
+            config openrouter-key <key>   Set OpenRouter API key
             config model <name>           Set model name
-            config hotkey                 Configure hotkey
+            config hotkey                 Configure hotkey interactively
 
-        QUICK SETUP (non-interactive):
-            quicksetup --provider <name>  Configure and start in one shot
-              --api-key <key>             API key (required for claude/gemini/codex/openrouter)
-              --model <name>              Model override (optional, defaults per provider)
-              --hotkey <hotkey>           Hotkey (optional, e.g. cmd+shift+e)
+        DIAGNOSTICS:
+            doctor                        Check all dependencies and permissions
+            test                          Run a test correction with the current provider
+            logs [N]                      Show last N lines of daemon log (default: 50)
 
-        SETUP GUIDE:
-            1. Grant Accessibility permissions:
-               System Settings → Privacy & Security → Accessibility → Add Terminal/iTerm
+        OTHER:
+            enable                        Enable auto-start at login
+            disable                       Disable auto-start at login
+            update                        Update to the latest release
+            uninstall                     Uninstall CorrectMe
+            version                       Show version
+            help                          Show this help
 
-            2. Configure AI provider:
-               # Option A: Use Claude Code (if you have it installed)
-               correctme config provider claude-code
+        QUICK START:
+            # Free option — use OpenRouter (free models available)
+            correctme quicksetup --provider openrouter --api-key sk-or-xxxxx
 
-               # Option B: Use Codex Code (if you have it installed)
-               correctme config provider codex-code
-               correctme config model gpt-5.1-codex-mini
+            # Local option — no API key needed
+            correctme quicksetup --provider claude-code
 
-               # Option C: Use Claude API
-               correctme config provider claude
-               correctme config claude-key sk-ant-xxxxx
+            # Cloud option
+            correctme quicksetup --provider claude --api-key sk-ant-xxxxx
 
-               # Option D: Use Gemini API
-               correctme config provider gemini
-               correctme config gemini-key AIzaSyxxxxx
-
-               # Option E: Use OpenAI API (Codex via API)
-               correctme config provider codex
-               correctme config openai-key sk-xxxxx
-               correctme config model gpt-5.1-codex-mini
-
-            3. Start the daemon:
-               correctme start
-
-            4. Select text anywhere and press ⌘⇧E to correct it!
-
-        DEFAULT HOTKEY: ⌘⇧E (Cmd + Shift + E)
+        DEFAULT HOTKEY: ⌘⇧E  (change in Preferences or: correctme config hotkey)
+        FLAGS:          --verbose    Enable debug logging to stderr
 
         FILES:
-            Config:       ~/.correctme/config.json
-            PID:          ~/.correctme/correctme.pid
-            LaunchAgent:  ~/Library/LaunchAgents/com.correctme.daemon.plist
-            Logs:         /tmp/correctme.log
-                          /tmp/correctme.error.log
+            Config:      ~/.correctme/config.json
+            Log:         ~/.correctme/correctme.log
+            Error log:   ~/.correctme/correctme.error.log
+            LaunchAgent: ~/Library/LaunchAgents/com.correctme.daemon.plist
 
         """)
     }
     
     static func showConfig() {
+        func keyPreview(_ key: String?) -> String {
+            guard let k = key, !k.isEmpty else { return "not set" }
+            return "\(k.prefix(8))…  (\(k.count) chars)"
+        }
+
+        let style = config.writingStyle.map { $0.count > 60 ? String($0.prefix(60)) + "…" : $0 } ?? "(default)"
+        let perAppCount = config.perAppStyles?.count ?? 0
+
         print("""
-        
+
         Current Configuration:
-        ─────────────────────
-        Provider:     \(config.aiProvider.rawValue)
-        Claude Key:   \(config.anthropicAPIKey?.prefix(10).description ?? "not set")...
-        Gemini Key:   \(config.geminiAPIKey?.prefix(10).description ?? "not set")...
-        OpenAI Key:   \(config.openaiAPIKey?.prefix(10).description ?? "not set")...
-        Hotkey:       \(config.hotkey.displayName)
-        Model:        \(config.model ?? "default (low-cost)")
-        Config Path:  \(Config.configPath.path)
-        
+        ──────────────────────
+        Provider:      \(config.aiProvider.rawValue)
+        Model:         \(config.model ?? "(default)")
+        Hotkey:        \(config.hotkey.displayName)
+
+        API Keys:
+          Anthropic:   \(keyPreview(config.anthropicAPIKey))
+          Gemini:      \(keyPreview(config.geminiAPIKey))
+          OpenAI:      \(keyPreview(config.openaiAPIKey))
+          OpenRouter:  \(keyPreview(config.openrouterAPIKey))
+
+        Writing Style: \(style)
+        Per-app styles: \(perAppCount) configured
+
+        Config file:   \(Config.configPath.path)
+        Log:           \(DaemonManager.logFilePath.path)
+
         """)
     }
     
@@ -543,20 +568,21 @@ struct CorrectMeApp {
         let currentProvider = config.aiProvider.rawValue
         let currentModel = config.model ?? "default"
         print("""
-        
+
         Current configuration:
           Provider: \(currentProvider)
           Model: \(currentModel)
-        
+
         Setup - Choose AI provider:
         1) Claude Code (local CLI) \(cliStatusLabel(claudeStatus))
         2) Codex Code (local CLI) \(cliStatusLabel(codexStatus))
         3) GitHub Copilot (local CLI) \(cliStatusLabel(copilotStatus))
         4) OpenAI API (key required)
-        5) Gemini (API key required)
-        6) Claude API (API key required)
-        7) Cancel
-        
+        5) Gemini API (key required)
+        6) Claude API (key required)
+        7) OpenRouter API (key required — access 100+ models, free tier available)
+        8) Cancel
+
         """)
         
         guard let choice = readLine(), let option = Int(choice.trimmingCharacters(in: .whitespacesAndNewlines)) else {
@@ -642,7 +668,20 @@ struct CorrectMeApp {
             saveConfig()
             print("✓ Provider set to: claude")
             promptRestartDaemon()
-            
+
+        case 7:
+            config.aiProvider = .openrouter
+            if !promptAndSetKey(label: "OpenRouter API key", envVar: "OPENROUTER_API_KEY", setter: { config.openrouterAPIKey = $0 }) {
+                return
+            }
+            promptAndSetModelFromAPI(
+                defaultModel: Config.DefaultModels.openrouter,
+                fetcher: fetchOpenRouterModels
+            )
+            saveConfig()
+            print("✓ Provider set to: openrouter")
+            promptRestartDaemon()
+
         default:
             print("Setup canceled.")
         }
@@ -949,11 +988,13 @@ struct CorrectMeApp {
         switch option {
         case "provider":
             guard args.count >= 4 else {
-                print("Usage: correctme config provider <claude-code|codex-code|claude|gemini|codex>")
+                print("Usage: correctme config provider <provider>")
+                print("Providers: claude-code, codex-code, copilot, claude, gemini, codex, openrouter")
                 return
             }
             guard let provider = Config.AIProvider(rawValue: args[3]) else {
-                print("Invalid provider. Use: claude-code, codex-code, claude, gemini, or codex")
+                print("Invalid provider '\(args[3])'.")
+                print("Valid providers: claude-code, codex-code, copilot, claude, gemini, codex, openrouter")
                 return
             }
             config.aiProvider = provider
@@ -986,6 +1027,15 @@ struct CorrectMeApp {
             config.openaiAPIKey = args[3]
             saveConfig()
             print("✓ OpenAI API key saved")
+
+        case "openrouter-key":
+            guard args.count >= 4 else {
+                print("Usage: correctme config openrouter-key <API_KEY>")
+                return
+            }
+            config.openrouterAPIKey = args[3]
+            saveConfig()
+            print("✓ OpenRouter API key saved")
 
         case "model":
             guard args.count >= 4 else {
