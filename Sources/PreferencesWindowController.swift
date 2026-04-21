@@ -867,15 +867,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Writing Style Tab
 
-    private let stylePresets: [(label: String, value: String)] = [
-        ("More formal",       "Write in a formal, professional tone."),
-        ("More casual",       "Write in a casual, friendly tone."),
-        ("More concise",      "Make it shorter and more concise."),
-        ("More polite",       "Use polite and respectful language."),
-        ("Simpler language",  "Use simple, easy-to-understand words."),
-        ("Funnier",           "Add a light, humorous touch."),
-    ]
-
     private func makeWritingStyleTab() -> NSTabViewItem {
         let item = NSTabViewItem(identifier: "style")
         item.label = "Writing Style"
@@ -884,19 +875,25 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let contentW = W - pad * 2
         var y: CGFloat = 340
 
-        // ── Global Style ──
+        // ── Global Style ── header + Clear button on the same row
         let globalLabel = makeSectionHeader("Global Style")
-        globalLabel.frame = NSRect(x: pad, y: y, width: 120, height: 18)
+        globalLabel.frame = NSRect(x: pad, y: y, width: contentW - 52, height: 18)
         view.addSubview(globalLabel)
-        y -= 20
 
-        let desc = makeDescriptionLabel("Applied to every correction unless overridden by a per-app style:")
+        let clearBtn = NSButton(title: "Clear", target: self, action: #selector(clearStyle))
+        clearBtn.bezelStyle = .inline
+        clearBtn.font = .systemFont(ofSize: 11)
+        clearBtn.frame = NSRect(x: W - pad - 44, y: y + 1, width: 44, height: 16)
+        view.addSubview(clearBtn)
+        y -= 22
+
+        let desc = makeDescriptionLabel("Applied to every correction unless overridden by a per-app style.")
         desc.frame = NSRect(x: pad, y: y, width: contentW, height: 16)
         view.addSubview(desc)
         y -= 24
 
-        // Scrollable text view
-        let scrollH: CGFloat = 80
+        // Taller scrollable text view
+        let scrollH: CGFloat = 120
         let scrollView = NSScrollView(frame: NSRect(x: pad, y: y - scrollH, width: contentW, height: scrollH))
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
@@ -919,8 +916,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         styleTextView = tv
 
         // Placeholder
-        stylePlaceholder = NSTextField(labelWithString: "e.g. \"Write in a formal tone. Use bullet points when listing.\"")
-        stylePlaceholder.frame = NSRect(x: pad + 8, y: y - 26, width: contentW - 16, height: 20)
+        stylePlaceholder = NSTextField(labelWithString: "e.g. \"Fix grammar and spelling only. Keep original tone.\"")
+        stylePlaceholder.frame = NSRect(x: pad + 8, y: y - 28, width: contentW - 16, height: 20)
         stylePlaceholder.font = .systemFont(ofSize: 13)
         stylePlaceholder.textColor = .placeholderTextColor
         stylePlaceholder.isEditable = false
@@ -935,31 +932,15 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         y -= scrollH + 8
 
-        // Preset buttons (2 rows of 3)
-        let bh: CGFloat = 22
-        let gapX: CGFloat = 6
-        var bx: CGFloat = pad
-
-        for (i, preset) in stylePresets.enumerated() {
-            if i == 3 { bx = pad }
-            let btn = NSButton(title: preset.label, target: self, action: #selector(stylePresetTapped(_:)))
-            btn.bezelStyle = .rounded
-            btn.font = .systemFont(ofSize: 11)
-            btn.tag = i
-            let bw = preset.label.size(withAttributes: [.font: btn.font!]).width + 24
-            let row: CGFloat = i < 3 ? 1 : 0
-            btn.frame = NSRect(x: bx, y: y - bh * 2 - gapX + row * (bh + gapX), width: bw, height: bh)
-            view.addSubview(btn)
-            bx += bw + gapX
-        }
-
-        // Clear style button
-        let clearBtn = NSButton(title: "Clear", target: self, action: #selector(clearStyle))
-        clearBtn.bezelStyle = .accessoryBarAction
-        clearBtn.frame = NSRect(x: W - pad - 50, y: y - bh * 2 - gapX - 6, width: 50, height: 20)
-        view.addSubview(clearBtn)
-
-        y -= bh * 2 + gapX + 16
+        // Subtle hint below the text area
+        let hint = NSTextField(labelWithString: "Instructions are appended to the AI prompt. Leave blank to use the default correction behavior.")
+        hint.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
+        hint.font = .systemFont(ofSize: 10)
+        hint.textColor = .tertiaryLabelColor
+        hint.lineBreakMode = .byWordWrapping
+        hint.maximumNumberOfLines = 2
+        view.addSubview(hint)
+        y -= 34
 
         // ── Per-App Styles ──
         view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
@@ -989,8 +970,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         y -= 26
 
-        // Container for per-app entries (scrollable)
-        let containerH: CGFloat = 110
+        // Container for per-app entries (scrollable) — taller thanks to removed preset buttons
+        let containerH: CGFloat = 138
         let containerScroll = NSScrollView(frame: NSRect(x: pad, y: y - containerH, width: contentW, height: containerH))
         containerScroll.hasVerticalScroller = true
         containerScroll.borderType = .bezelBorder
@@ -1237,17 +1218,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         addAppPanel = nil
         addAppPopUpRef = nil
         addAppStyleFieldRef = nil
-    }
-
-    @objc private func stylePresetTapped(_ sender: NSButton) {
-        let preset = stylePresets[sender.tag]
-        let current = styleTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        if current.isEmpty {
-            styleTextView.string = preset.value
-        } else if !current.hasSuffix(preset.value) {
-            styleTextView.string = current + " " + preset.value
-        }
-        stylePlaceholder.isHidden = !styleTextView.string.isEmpty
     }
 
     @objc private func clearStyle() {
