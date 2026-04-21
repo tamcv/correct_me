@@ -271,7 +271,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let view = NSView()
 
         let contentW = W - pad * 2
-        var y: CGFloat = 320
+        var y: CGFloat = 430
 
         // Provider dropdown
         let pLabel = makeSectionHeader("AI Provider")
@@ -339,7 +339,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(pasteBtn)
 
         loadAPIKeyForCurrentProvider()
-        y -= 6
+        y -= 28  // field height (24) + 4px gap
 
         // One-line masked preview: "sk-or-v1…91b1  (73 chars)"
         apiKeyPreviewLabel = NSTextField(labelWithString: "")
@@ -384,7 +384,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         fbLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
         fbLabel.tag = 700  // tag for show/hide
         view.addSubview(fbLabel)
-        y -= 6
+        y -= 26  // label height (18) + 8px gap
 
         let fbHint = NSTextField(labelWithString: "One model per line. Tried in order if primary returns 429.")
         fbHint.frame = NSRect(x: pad, y: y, width: contentW, height: 14)
