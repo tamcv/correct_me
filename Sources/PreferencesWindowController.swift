@@ -886,10 +886,12 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         globalLabel.frame = NSRect(x: pad, y: y, width: contentW - 52, height: 18)
         view.addSubview(globalLabel)
 
-        let clearBtn = NSButton(title: "Clear", target: self, action: #selector(clearStyle))
-        clearBtn.bezelStyle = .inline
+        let clearBtn = NSButton(title: "Reset", target: self, action: #selector(clearStyle))
+        clearBtn.bezelStyle = .rounded
         clearBtn.font = .systemFont(ofSize: 11)
-        clearBtn.frame = NSRect(x: W - pad - 44, y: y + 1, width: 44, height: 16)
+        clearBtn.controlSize = .small
+        clearBtn.frame = NSRect(x: W - pad - 58, y: y - 1, width: 58, height: 20)
+        clearBtn.tag = 801  // tag so we can find it for feedback
         view.addSubview(clearBtn)
         y -= 22
 
@@ -928,7 +930,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         y -= scrollH + 8
 
         // Subtle hint below the text area
-        let hint = NSTextField(labelWithString: "Instructions are appended to the AI prompt. Clear resets to the default.")
+        let hint = NSTextField(labelWithString: "Instructions are appended to the AI prompt. Reset restores the default.")
         hint.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
         hint.font = .systemFont(ofSize: 10)
         hint.textColor = .tertiaryLabelColor
@@ -1421,6 +1423,16 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     @objc private func clearStyle() {
         styleTextView.string = defaultWritingStyle
         styleTextView.selectAll(nil)  // select all so user can immediately type replacement
+
+        // Brief visual feedback on the Reset button
+        if let btn = styleTextView.window?.contentView?.viewWithTag(801) as? NSButton {
+            btn.title = "✓ Reset"
+            btn.isEnabled = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                btn.title = "Reset"
+                btn.isEnabled = true
+            }
+        }
     }
 
     // MARK: - Advanced Tab
