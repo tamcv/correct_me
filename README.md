@@ -2,9 +2,11 @@
 
 > AI-powered text correction for macOS — select text, press a hotkey, done.
 
-CorrectMe lives in your menu bar. Select any text in any app, press **⌘⇧E**, and your AI provider corrects it in place. No switching windows, no copy-pasting.
+**[→ correctme.app landing page](https://tamcv.github.io/correct_me/)**
 
-![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License](https://img.shields.io/badge/license-MIT-green)
+CorrectMe lives in your menu bar. Select any text in any app, press **⌘⇧E**, and your AI provider corrects it in place — no switching windows, no copy-pasting.
+
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License](https://img.shields.io/badge/license-MIT-green) ![Free](https://img.shields.io/badge/price-free-brightgreen)
 
 ---
 
@@ -14,68 +16,68 @@ CorrectMe lives in your menu bar. Select any text in any app, press **⌘⇧E**,
 curl -fsSL https://raw.githubusercontent.com/tamcv/correct_me/main/scripts/install.sh | sh
 ```
 
-Or download the DMG from [Releases](https://github.com/tamcv/correct_me/releases) and drag **CorrectMe.app** into Applications.
+Or download the latest `.app` from [Releases](https://github.com/tamcv/correct_me/releases) and drag it into Applications.
 
-After installing, grant **Accessibility** permissions when prompted (required to read and replace selected text).
+After installing, grant **Accessibility** permission when prompted — this is required to read and replace selected text.
 
 ---
 
 ## How it works
 
-1. CorrectMe runs as a menu bar app — pencil icon (✏️) in the top-right corner
-2. Select text in **any** app
+1. CorrectMe runs as a menu bar app — look for the ✏️ icon
+2. Select any text in **any** app
 3. Press **⌘⇧E** (customizable)
-4. A small HUD appears near your cursor while the AI works
-5. Your text is replaced with the corrected version
-
-Supports a diff preview before applying — accept with **Return**, reject with **Escape**.
+4. A HUD appears near your cursor while the AI works
+5. A diff preview shows what changed — press **Return** to apply or **Escape** to discard
 
 ---
 
 ## Features
 
-- **Works everywhere** — any app that supports text selection
-- **Multiple AI providers** — Claude API, Google Gemini, OpenAI, or local CLI tools (Claude Code, Codex)
-- **Diff preview** — see what changed before committing
-- **Correction history** — last 10 corrections accessible from the menu
+- **Works in any app** — browser, Slack, Xcode, Terminal, Notes, anywhere
+- **Diff preview** — see exactly what changed before applying, accept with ⌘↩ or discard with Esc
+- **Multiple AI providers** — Claude, Gemini, OpenAI, OpenRouter, or local CLI tools (no API key needed)
 - **Per-app writing style** — different tone for Slack vs. code comments vs. email
-- **Undo** — restore original text with a single shortcut
-- **Vietnamese & multilingual** — preserves the original language
-- **Auto-update** — Sparkle-based, notified when a new version ships
-- **Privacy-first** — your API keys stay local in `~/.correctme/`
-
----
-
-## Setup
-
-Open the menu bar icon → **Preferences** to configure:
-
-- **Provider & model** — pick your AI backend and model
-- **Hotkey** — change the trigger shortcut
-- **Writing style** — adjust tone (professional, casual, concise…)
-- **Per-app styles** — override style for specific apps
-
-Or use the setup wizard the first time you launch.
+- **Correction history** — last 10 corrections accessible from the menu bar
+- **Undo** — restore original text instantly after applying
+- **Vietnamese & multilingual** — AI preserves the original language
+- **Customizable hotkey** — change ⌘⇧E to anything you prefer
+- **Auto-update** — notified when a new version ships
+- **Privacy-first** — API keys stored in macOS Keychain, no telemetry
 
 ---
 
 ## Supported AI providers
 
-| Provider | Requires |
-|----------|----------|
-| Claude API | Anthropic API key |
-| Google Gemini | Gemini API key |
-| OpenAI | OpenAI API key |
-| Claude Code CLI | [Claude Code](https://claude.ai/code) installed locally |
-| Codex CLI | Codex CLI installed locally |
+| Provider | Type | Requires |
+|----------|------|----------|
+| Claude API | Cloud | Anthropic API key |
+| Google Gemini | Cloud | Gemini API key |
+| OpenAI | Cloud | OpenAI API key |
+| OpenRouter | Cloud | OpenRouter API key (access 100+ models, including free ones) |
+| Claude Code CLI | Local | [Claude Code](https://claude.ai/code) installed |
+| Codex CLI | Local | Codex CLI installed |
+| GitHub Copilot CLI | Local | Copilot CLI installed |
 
 ---
 
 ## Requirements
 
 - macOS 13 Ventura or later
-- An AI provider (API key or local CLI)
+- One of the supported AI providers above
 - Accessibility permission (prompted on first run)
+
+---
+
+## Configuration
+
+Open the menu bar icon → **⚙️ Preferences** to configure:
+
+- **Provider & model** — pick your AI backend, paste your API key
+- **Hotkey** — record a custom trigger shortcut
+- **Writing style** — global style instructions appended to every prompt
+- **Per-app styles** — override the global style for specific apps
+- **Advanced** — export/import config, reset settings
 
 ---
 
@@ -85,14 +87,24 @@ Or use the setup wizard the first time you launch.
 git clone https://github.com/tamcv/correct_me.git
 cd correct_me
 swift build
+.build/debug/CorrectMe start
 ```
 
-To build and install the `.app` bundle:
+To build the `.app` bundle:
 
 ```bash
-chmod +x scripts/build-app.sh
 ./scripts/build-app.sh
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome! This project is fully open source.
+
+- **Bug reports & feature requests** → [open an issue](https://github.com/tamcv/correct_me/issues)
+- **Pull requests** → fork, branch, and submit a PR
+- **New AI provider** — see `Sources/AIProviders.swift` for the protocol to implement
 
 ---
 
@@ -108,4 +120,4 @@ Or drag CorrectMe.app to Trash and remove `~/.correctme/`.
 
 ## License
 
-MIT
+MIT — free to use, modify, and distribute.
