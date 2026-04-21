@@ -153,9 +153,9 @@ class MenuBarManager: NSObject {
             attributes: [.font: NSFont.systemFont(ofSize: 11),
                          .foregroundColor: NSColor.tertiaryLabelColor]
         ))
-        let headerItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        let headerItem = NSMenuItem(title: "", action: #selector(openLandingPage), keyEquivalent: "")
         headerItem.attributedTitle = headerAttr
-        headerItem.isEnabled = false
+        headerItem.target = self
         menu.addItem(headerItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -395,6 +395,10 @@ class MenuBarManager: NSObject {
         AppUpdater.shared.checkForUpdates()
     }
 
+
+    @objc private func openLandingPage() {
+        NSWorkspace.shared.open(URL(string: "https://tamcv.github.io/correct_me/")!)
+    }
 
     @objc private func openAccessibilitySettings() {
         DaemonManager.openSystemSettings(.accessibility)
