@@ -252,9 +252,10 @@ class MenuBarManager: NSObject {
             menu.addItem(timeItem)
         }
 
-        // Latest error (clickable for details)
+        // Latest error — only show when recent (< 15s) or while status is still .error
         let errors = ErrorLog.shared.getErrors()
-        if let latestError = errors.first {
+        if let latestError = errors.first,
+           status == .error || Date().timeIntervalSince(latestError.timestamp) < 15 {
             let snippet = String(latestError.message.prefix(44))
             let errAttr = NSMutableAttributedString(
                 string: "⚠  \(snippet)",

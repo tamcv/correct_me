@@ -111,10 +111,15 @@ class StatusManager {
 
         NotificationCenter.default.post(name: .statusChanged, object: status)
 
-        // Auto-reset success status after 2 seconds
-        if status == .success {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-                if self?.currentStatus == .success {
+        // Auto-reset transient statuses back to idle
+        let autoResetDelay: TimeInterval? = switch status {
+        case .success: 2
+        case .error:   8
+        default:       nil
+        }
+        if let delay = autoResetDelay {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                if self?.currentStatus == status {
                     self?.setStatus(.idle)
                 }
             }
