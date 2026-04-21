@@ -26,6 +26,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var testButton: NSButton!
     private var apiKeyLabel: NSTextField!
     private var apiKeyHint: NSTextField!
+    private var ollamaURLField: NSTextField!   // shown only when Ollama is selected
 
     // Hotkey tab
     private var hotkeyDisplayLabel: NSTextField!
@@ -380,6 +381,29 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(modelField)
         y -= 30
 
+        // Ollama base URL (shown only when Ollama provider is selected)
+        let ollamaURLLabel = makeSectionHeader("Ollama Server URL")
+        ollamaURLLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        ollamaURLLabel.tag = 810
+        view.addSubview(ollamaURLLabel)
+        y -= 26
+
+        ollamaURLField = NSTextField(frame: NSRect(x: pad, y: y, width: contentW, height: 24))
+        ollamaURLField.placeholderString = "http://localhost:11434"
+        ollamaURLField.stringValue = config.ollamaBaseURL ?? ""
+        ollamaURLField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        ollamaURLField.controlSize = .large
+        ollamaURLField.tag = 811
+        view.addSubview(ollamaURLField)
+
+        let ollamaURLHint = NSTextField(labelWithString: "Leave blank to use OLLAMA_HOST env var or the default (localhost:11434).")
+        ollamaURLHint.frame = NSRect(x: pad, y: y - 18, width: contentW, height: 14)
+        ollamaURLHint.font = .systemFont(ofSize: 10)
+        ollamaURLHint.textColor = .tertiaryLabelColor
+        ollamaURLHint.tag = 812
+        view.addSubview(ollamaURLHint)
+        y -= 50
+
         // Fallback models (OpenRouter-specific, shown/hidden via updateProviderUI)
         let fbLabel = makeSectionHeader("Fallback Models (retry on 429)")
         fbLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
@@ -490,6 +514,13 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         fallbackModelsField?.isHidden = !showFallback
         findModelsButton?.isHidden = !showFallback
         findModelsStatus?.isHidden = !showFallback
+
+        // Show Ollama URL field only for Ollama
+        let showOllamaURL = provider == .ollama
+        for tag in 810...812 {
+            apiKeyField.superview?.viewWithTag(tag)?.isHidden = !showOllamaURL
+        }
+        ollamaURLField?.isHidden = !showOllamaURL
 
         loadAPIKeyForCurrentProvider()
         updateAPIKeyPreview()
@@ -1602,6 +1633,12 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         let style = styleTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         config.writingStyle = style.isEmpty ? defaultWritingStyle : style
+
+        // Ollama base URL (nil = use OLLAMA_HOST env var or default)
+        if let urlField = ollamaURLField {
+            let urlStr = urlField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            config.ollamaBaseURL = urlStr.isEmpty ? nil : urlStr
+        }
 
         if perAppEntries.isEmpty {
             config.perAppStyles = nil

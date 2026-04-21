@@ -711,6 +711,32 @@ class OpenRouterProvider: AIProvider {
     }
 }
 
+// MARK: - Ollama URL resolution
+
+/// Resolves the Ollama base URL from (in priority order):
+///   1. Explicit value stored in config (`ollamaBaseURL`)
+///   2. `OLLAMA_HOST` environment variable (Ollama's own convention)
+///   3. Default: http://localhost:11434
+func resolveOllamaBaseURL(from config: Config) -> String {
+    if let stored = config.ollamaBaseURL, !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return normalizeOllamaURL(stored)
+    }
+    if let env = ProcessInfo.processInfo.environment["OLLAMA_HOST"], !env.isEmpty {
+        return normalizeOllamaURL(env)
+    }
+    return "http://localhost:11434"
+}
+
+/// Ensures the URL has an http:// scheme.
+/// Ollama's OLLAMA_HOST can be bare "host:port" without a scheme.
+private func normalizeOllamaURL(_ raw: String) -> String {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+        return trimmed
+    }
+    return "http://\(trimmed)"
+}
+
 // MARK: - Ollama (local, no API key required)
 
 /// Calls a locally running Ollama instance via its REST API.
@@ -872,14 +898,16 @@ func createAIProvider(from config: Config) throws -> AIProvider {
         return OpenRouterProvider(apiKey: apiKey, model: model, fallbackModels: config.fallbackModels ?? [])
     case .ollama:
         let model = config.model ?? Config.DefaultModels.ollama
-        guard OllamaProvider.isRunning() else {
+        let baseURL = resolveOllamaBaseURL(from: config)
+        guard OllamaProvider.isRunning(baseURL: baseURL) else {
             throw AIError.commandFailed(
-                "Ollama is not running. Start it with: ollama serve\n" +
+                "Ollama is not running at \(baseURL).\n" +
+                "Start it with: ollama serve\n" +
                 "Then pull a model: ollama pull \(model)\n" +
                 "Install from: https://ollama.com"
             )
         }
-        return OllamaProvider(model: model)
+        return OllamaProvider(model: model, baseURL: baseURL)
     }
 }
 
