@@ -26,6 +26,7 @@ struct Config: Codable {
     var telegramBotToken: String?
     var telegramChatId: String?
     var forceApply: Bool?
+    var ollamaBaseURL: String?
 
     enum AIProvider: String, Codable {
         case claude = "claude"

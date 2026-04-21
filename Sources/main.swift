@@ -401,15 +401,19 @@ struct CorrectMeApp {
                 allGood = false
             }
         case .ollama:
-            let running = OllamaProvider.isRunning()
-            printCheck(running, "Ollama is running at http://localhost:11434")
+            let baseURL = resolveOllamaBaseURL(from: cfg)
+            let running = OllamaProvider.isRunning(baseURL: baseURL)
+            printCheck(running, "Ollama is running at \(baseURL)")
             if !running {
                 print("    → Install: https://ollama.com")
                 print("    → Start:   ollama serve")
+                if cfg.ollamaBaseURL != nil {
+                    print("    → Configured URL: \(baseURL)  (change in Preferences → Provider)")
+                }
                 allGood = false
             } else {
                 let model = cfg.model ?? Config.DefaultModels.ollama
-                let models = OllamaProvider.fetchModels() ?? []
+                let models = OllamaProvider.fetchModels(baseURL: baseURL) ?? []
                 let hasModel = models.contains(model)
                 printCheck(hasModel, "Model '\(model)' is available locally")
                 if !hasModel {
