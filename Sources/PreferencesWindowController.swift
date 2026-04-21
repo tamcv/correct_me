@@ -32,7 +32,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     // Writing Style tab
     private var styleTextView: NSTextView!
-    private var stylePlaceholder: NSTextField!
 
     // Per-app styles
     private var perAppStylesContainer: NSView!
@@ -55,6 +54,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private let W: CGFloat = 560
     private let H: CGFloat = 560
     private let pad: CGFloat = 24
+
+    private let defaultWritingStyle = "Fix grammar and spelling only. Keep original tone."
 
     private override init() { super.init() }
 
@@ -920,25 +921,14 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(scrollView)
         styleTextView = tv
 
-        // Placeholder
-        stylePlaceholder = NSTextField(labelWithString: "Fix grammar and spelling only. Keep original tone.")
-        stylePlaceholder.frame = NSRect(x: pad + 8, y: y - 28, width: contentW - 16, height: 20)
-        stylePlaceholder.font = .systemFont(ofSize: 13)
-        stylePlaceholder.textColor = .placeholderTextColor
-        stylePlaceholder.isEditable = false
-        stylePlaceholder.isBezeled = false
-        stylePlaceholder.drawsBackground = false
-        view.addSubview(stylePlaceholder)
-
-        // Load saved value
-        let saved = config.writingStyle ?? ""
-        tv.string = saved
-        stylePlaceholder.isHidden = !saved.isEmpty
+        // Pre-fill with saved value, falling back to the default.
+        // The field is never empty — Clear resets to the default rather than blanking.
+        tv.string = config.writingStyle ?? defaultWritingStyle
 
         y -= scrollH + 8
 
         // Subtle hint below the text area
-        let hint = NSTextField(labelWithString: "Instructions are appended to the AI prompt. Leave blank to use the default: \"Fix grammar and spelling only. Keep original tone.\"")
+        let hint = NSTextField(labelWithString: "Instructions are appended to the AI prompt. Clear resets to the default.")
         hint.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
         hint.font = .systemFont(ofSize: 10)
         hint.textColor = .tertiaryLabelColor
@@ -1429,8 +1419,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 
     @objc private func clearStyle() {
-        styleTextView.string = ""
-        stylePlaceholder.isHidden = false
+        styleTextView.string = defaultWritingStyle
+        styleTextView.selectAll(nil)  // select all so user can immediately type replacement
     }
 
     // MARK: - Advanced Tab
@@ -1594,8 +1584,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         config.fallbackModels = fallbacks.isEmpty ? nil : fallbacks
 
         let style = styleTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        let defaultStyle = "Fix grammar and spelling only. Keep original tone."
-        config.writingStyle = style.isEmpty ? defaultStyle : style
+        config.writingStyle = style.isEmpty ? defaultWritingStyle : style
 
         if perAppEntries.isEmpty {
             config.perAppStyles = nil
