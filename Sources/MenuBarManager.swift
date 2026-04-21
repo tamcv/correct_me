@@ -272,6 +272,13 @@ class MenuBarManager: NSObject {
         menu.addItem(NSMenuItem.separator())
 
         // ── Actions ──────────────────────────────────────────────
+        let prefsItem = NSMenuItem(title: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
+        if #available(macOS 11.0, *) {
+            prefsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
+        }
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+
         let historyCount = CorrectionHistory.shared.getEntries().count
         let historyTitle = historyCount > 0 ? "Correction History  (\(historyCount))" : "Correction History"
         let historyItem = NSMenuItem(title: historyTitle, action: #selector(openHistory), keyEquivalent: "")
@@ -280,13 +287,6 @@ class MenuBarManager: NSObject {
         }
         historyItem.target = self
         menu.addItem(historyItem)
-
-        let prefsItem = NSMenuItem(title: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
-        if #available(macOS 11.0, *) {
-            prefsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
-        }
-        prefsItem.target = self
-        menu.addItem(prefsItem)
 
         menu.addItem(NSMenuItem.separator())
 
