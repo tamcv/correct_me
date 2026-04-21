@@ -1,10 +1,10 @@
 # CorrectMe
 
-> AI-powered text correction for macOS — select text, press a hotkey, done.
+> Auto-correct selected text in any macOS app — just press a hotkey. Powered by AI.
 
 **[→ correctme.app landing page](https://tamcv.github.io/correct_me/)**
 
-CorrectMe lives in your menu bar. Select any text in any app, press **⌘⇧E**, and your AI provider corrects it in place — no switching windows, no copy-pasting.
+CorrectMe lives in your menu bar. Select any text in any app, press **⌘⇧E**, and your AI provider **auto-corrects it in place** — no switching windows, no copy-pasting. The fastest way to auto-correct text on macOS with a global keyboard shortcut.
 
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License](https://img.shields.io/badge/license-MIT-green) ![Free](https://img.shields.io/badge/price-free-brightgreen)
 
