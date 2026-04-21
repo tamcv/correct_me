@@ -540,15 +540,16 @@
         <!-- Feature: Multi-provider -->
         <div class="feature-card reveal delay-1 md:col-span-1">
           <div class="text-2xl mb-3">🔌</div>
-          <h3 class="font-display text-base font-medium mb-2">7 AI providers</h3>
+          <h3 class="font-display text-base font-medium mb-2">8 AI providers</h3>
           <p class="text-xs text-silver-400 leading-relaxed mb-3">Choose your model. Swap anytime from the menu bar.</p>
           <div class="flex flex-wrap gap-1.5">
-            <span class="provider-chip">Claude</span>
-            <span class="provider-chip">GPT-4</span>
-            <span class="provider-chip">Gemini</span>
-            <span class="provider-chip">Groq</span>
             <span class="provider-chip">Ollama</span>
+            <span class="provider-chip">Claude</span>
+            <span class="provider-chip">Gemini</span>
+            <span class="provider-chip">OpenAI</span>
             <span class="provider-chip">OpenRouter</span>
+            <span class="provider-chip">Claude Code</span>
+            <span class="provider-chip">Copilot</span>
             <span class="provider-chip">Codex</span>
           </div>
         </div>
@@ -613,7 +614,7 @@
             <code id="agent-cmd">correctme quicksetup --provider claude --api-key $KEY</code>
             <button class="copy-btn" onclick="copyAgent(this)" title="Copy agent command">copy</button>
           </div>
-          <p class="text-xs text-silver-500 leading-relaxed">One command configures the provider, API key, and starts the daemon. Swap <code class="text-cyan-400">claude</code> for any of the 7 supported providers.</p>
+          <p class="text-xs text-silver-500 leading-relaxed">One command configures the provider, API key, and starts the daemon. Swap <code class="text-cyan-400">claude</code> for any of the 8 supported providers — including <code class="text-cyan-400">ollama</code> for fully local, offline corrections.</p>
         </div>
 
         <div class="reveal delay-1 feature-card">
@@ -639,6 +640,7 @@
           <span class="text-silver-300"><span class="text-cyan-400">correctme</span> setup</span>
           <span class="text-silver-300"><span class="text-cyan-400">correctme</span> doctor</span>
           <span class="text-silver-300"><span class="text-cyan-400">correctme</span> quicksetup</span>
+          <span class="text-silver-300"><span class="text-cyan-400">correctme</span> logs</span>
         </div>
       </div>
     </div>

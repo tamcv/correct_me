@@ -711,6 +711,95 @@ class OpenRouterProvider: AIProvider {
     }
 }
 
+// MARK: - Ollama (local, no API key required)
+
+/// Calls a locally running Ollama instance via its REST API.
+/// Default base URL: http://localhost:11434
+/// Install: https://ollama.com — then `ollama pull llama3.2`
+class OllamaProvider: AIProvider {
+    private let model: String
+    private let baseURL: String
+
+    init(model: String, baseURL: String = "http://localhost:11434") {
+        self.model = model
+        self.baseURL = baseURL
+    }
+
+    func correctText(_ text: String) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/api/chat") else {
+            throw AIError.commandFailed("Invalid Ollama base URL: \(baseURL)")
+        }
+
+        let prompt = buildCorrectionPrompt(text: text)
+
+        let body: [String: Any] = [
+            "model": model,
+            "stream": false,
+            "messages": [
+                ["role": "user", "content": prompt]
+            ]
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 60.0  // local models can be slow on first token
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        let session = getFreshURLSession()
+        let (data, response) = try await session.data(for: request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw AIError.apiError("No HTTP response from Ollama")
+        }
+
+        guard http.statusCode == 200 else {
+            // Provide actionable hints for common errors
+            if http.statusCode == 404 {
+                throw AIError.apiError("Model '\(model)' not found. Run: ollama pull \(model)")
+            }
+            let body = String(data: data, encoding: .utf8) ?? "(empty)"
+            throw AIError.apiError("Ollama returned HTTP \(http.statusCode): \(body)")
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let message = json["message"] as? [String: Any],
+              let content = message["content"] as? String,
+              !content.isEmpty else {
+            throw AIError.parseError
+        }
+
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Fetch available local models from Ollama's `/api/tags` endpoint.
+    static func fetchModels(baseURL: String = "http://localhost:11434") -> [String]? {
+        guard let url = URL(string: "\(baseURL)/api/tags") else { return nil }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5.0
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: [String]? = nil
+
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            defer { semaphore.signal() }
+            guard let data,
+                  let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let models = json["models"] as? [[String: Any]] else { return }
+            result = models.compactMap { $0["name"] as? String }
+        }.resume()
+
+        semaphore.wait()
+        return result
+    }
+
+    /// Returns true if an Ollama instance is reachable at the given base URL.
+    static func isRunning(baseURL: String = "http://localhost:11434") -> Bool {
+        return fetchModels(baseURL: baseURL) != nil
+    }
+}
+
 // MARK: - Errors
 enum AIError: Error, LocalizedError {
     case commandFailed(String)
@@ -781,6 +870,16 @@ func createAIProvider(from config: Config) throws -> AIProvider {
         }
         let model = config.model ?? Config.DefaultModels.openrouter
         return OpenRouterProvider(apiKey: apiKey, model: model, fallbackModels: config.fallbackModels ?? [])
+    case .ollama:
+        let model = config.model ?? Config.DefaultModels.ollama
+        guard OllamaProvider.isRunning() else {
+            throw AIError.commandFailed(
+                "Ollama is not running. Start it with: ollama serve\n" +
+                "Then pull a model: ollama pull \(model)\n" +
+                "Install from: https://ollama.com"
+            )
+        }
+        return OllamaProvider(model: model)
     }
 }
 

@@ -51,13 +51,16 @@ After installing, grant **Accessibility** permission when prompted — this is r
 
 | Provider | Type | Requires |
 |----------|------|----------|
-| Claude API | Cloud | Anthropic API key |
-| Google Gemini | Cloud | Gemini API key |
-| OpenAI | Cloud | OpenAI API key |
-| OpenRouter | Cloud | OpenRouter API key (access 100+ models, including free ones) |
+| **Ollama** | Local | [Ollama](https://ollama.com) installed and running |
 | Claude Code CLI | Local | [Claude Code](https://claude.ai/code) installed |
 | Codex CLI | Local | Codex CLI installed |
 | GitHub Copilot CLI | Local | Copilot CLI installed |
+| Claude API | Cloud | Anthropic API key |
+| Google Gemini | Cloud | Gemini API key (free tier available) |
+| OpenAI | Cloud | OpenAI API key |
+| OpenRouter | Cloud | OpenRouter API key (100+ models, free tier available) |
+
+**Ollama** is the recommended option for privacy — models run entirely on your machine, no data leaves your computer.
 
 ---
 
@@ -68,6 +71,19 @@ After installing, grant **Accessibility** permission when prompted — this is r
 - Accessibility permission (prompted on first run)
 
 ---
+
+## Quick start with Ollama (no API key needed)
+
+```bash
+# 1. Install Ollama
+brew install ollama   # or download from https://ollama.com
+
+# 2. Pull a model
+ollama pull llama3.2
+
+# 3. Configure CorrectMe
+correctme quicksetup --provider ollama --model llama3.2
+```
 
 ## Configuration
 

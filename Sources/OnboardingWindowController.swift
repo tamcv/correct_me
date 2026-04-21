@@ -87,6 +87,14 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
                 cost: "Free models available",
                 badge: "100+ Models"
             )
+        case .ollama:
+            let running = OllamaProvider.isRunning()
+            return ProviderMeta(
+                description: "Run AI models locally with Ollama — completely private, no API key, no internet required.",
+                recommendedModel: Config.DefaultModels.ollama,
+                cost: "100% Free (local)",
+                badge: running ? "Running ✓" : "Not running"
+            )
         }
     }
 
@@ -94,6 +102,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         if findExecutable("claude") != nil { return .claudeCode }
         if findExecutable("codex") != nil { return .codexCode }
         if findExecutable("gh") != nil { return .copilot }
+        if OllamaProvider.isRunning() { return .ollama }
         return .claude
     }
 

@@ -285,6 +285,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             ("Claude Code (CLI)", .claudeCode),
             ("Codex Code (CLI)", .codexCode),
             ("GitHub Copilot (CLI)", .copilot),
+            ("Ollama (local, no API key)", .ollama),
             ("Claude API", .claude),
             ("Gemini API", .gemini),
             ("OpenAI/Codex API", .codex),
@@ -455,7 +456,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private func providerNeedsAPIKey(_ provider: Config.AIProvider) -> Bool {
         switch provider {
         case .claude, .gemini, .codex, .openrouter: return true
-        case .claudeCode, .codexCode, .copilot: return false
+        case .claudeCode, .codexCode, .copilot, .ollama: return false
         }
     }
 
@@ -470,6 +471,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
         if needsKey {
             apiKeyHint.stringValue = "Your API key is stored securely in the macOS Keychain."
+        } else if provider == .ollama {
+            apiKeyHint.stringValue = "Ollama runs models locally — no API key or internet required.\nInstall: https://ollama.com  •  Start: ollama serve  •  Pull a model: ollama pull llama3.2"
+            setAPIKeyValue("")
         } else {
             apiKeyHint.stringValue = "This provider uses a local CLI tool. No API key needed."
             setAPIKeyValue("")
@@ -713,12 +717,13 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private func defaultModelForProvider(_ provider: Config.AIProvider) -> String {
         switch provider {
         case .claudeCode: return Config.DefaultModels.claudeCode
-        case .claude: return Config.DefaultModels.anthropic
-        case .gemini: return Config.DefaultModels.gemini
-        case .codex: return Config.DefaultModels.openaiCodex
-        case .codexCode: return Config.DefaultModels.openaiCodex
-        case .copilot: return Config.DefaultModels.copilot
+        case .claude:     return Config.DefaultModels.anthropic
+        case .gemini:     return Config.DefaultModels.gemini
+        case .codex:      return Config.DefaultModels.openaiCodex
+        case .codexCode:  return Config.DefaultModels.openaiCodex
+        case .copilot:    return Config.DefaultModels.copilot
         case .openrouter: return Config.DefaultModels.openrouter
+        case .ollama:     return Config.DefaultModels.ollama
         }
     }
 

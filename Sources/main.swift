@@ -239,6 +239,14 @@ struct CorrectMeApp {
             exit(1)
         }
 
+        // Validate Ollama is reachable
+        if provider == .ollama && !OllamaProvider.isRunning() {
+            print("Error: Ollama is not running.")
+            print("  Install: https://ollama.com")
+            print("  Start:   ollama serve")
+            exit(1)
+        }
+
         // Resolve default model
         let resolvedModel: String = modelArg ?? {
             switch provider {
@@ -249,6 +257,7 @@ struct CorrectMeApp {
             case .gemini:     return Config.DefaultModels.gemini
             case .codex:      return Config.DefaultModels.openaiCodex
             case .openrouter: return Config.DefaultModels.openrouter
+            case .ollama:     return Config.DefaultModels.ollama
             }
         }()
 
@@ -391,6 +400,26 @@ struct CorrectMeApp {
                 print("    → Set your OpenRouter API key in Preferences → Provider")
                 allGood = false
             }
+        case .ollama:
+            let running = OllamaProvider.isRunning()
+            printCheck(running, "Ollama is running at http://localhost:11434")
+            if !running {
+                print("    → Install: https://ollama.com")
+                print("    → Start:   ollama serve")
+                allGood = false
+            } else {
+                let model = cfg.model ?? Config.DefaultModels.ollama
+                let models = OllamaProvider.fetchModels() ?? []
+                let hasModel = models.contains(model)
+                printCheck(hasModel, "Model '\(model)' is available locally")
+                if !hasModel {
+                    print("    → Pull it: ollama pull \(model)")
+                    if !models.isEmpty {
+                        print("    → Available: \(models.prefix(5).joined(separator: ", "))")
+                    }
+                    allGood = false
+                }
+            }
         }
 
         // ── 3. Hotkey
@@ -482,7 +511,7 @@ struct CorrectMeApp {
         CONFIGURATION:
             config                        Show current configuration
             config provider <name>        Set AI provider
-                                            claude-code, codex-code, copilot
+                                            claude-code, codex-code, copilot, ollama
                                             claude, gemini, codex, openrouter
             config claude-key <key>       Set Anthropic API key
             config gemini-key <key>       Set Gemini API key
@@ -508,7 +537,11 @@ struct CorrectMeApp {
             # Free option — use OpenRouter (free models available)
             correctme quicksetup --provider openrouter --api-key sk-or-xxxxx
 
-            # Local option — no API key needed
+            # Local option — no API key, no internet (Ollama)
+            ollama serve && ollama pull llama3.2
+            correctme quicksetup --provider ollama --model llama3.2
+
+        # Local option — Claude Code CLI
             correctme quicksetup --provider claude-code
 
             # Cloud option
@@ -577,11 +610,12 @@ struct CorrectMeApp {
         1) Claude Code (local CLI) \(cliStatusLabel(claudeStatus))
         2) Codex Code (local CLI) \(cliStatusLabel(codexStatus))
         3) GitHub Copilot (local CLI) \(cliStatusLabel(copilotStatus))
-        4) OpenAI API (key required)
-        5) Gemini API (key required)
-        6) Claude API (key required)
-        7) OpenRouter API (key required — access 100+ models, free tier available)
-        8) Cancel
+        4) Ollama (local, no API key — runs models on your machine) \(OllamaProvider.isRunning() ? "[running]" : "[not running]")
+        5) OpenAI API (key required)
+        6) Gemini API (key required)
+        7) Claude API (key required)
+        8) OpenRouter API (key required — 100+ models, free tier available)
+        9) Cancel
 
         """)
         
@@ -631,6 +665,33 @@ struct CorrectMeApp {
             promptRestartDaemon()
             
         case 4:
+            guard OllamaProvider.isRunning() else {
+                print("⚠️  Ollama is not running.")
+                print("   Install from https://ollama.com, then run: ollama serve")
+                return
+            }
+            config.aiProvider = .ollama
+            // Show available models
+            if let models = OllamaProvider.fetchModels(), !models.isEmpty {
+                print("\nLocal models available:")
+                for (i, m) in models.enumerated() { print("  \(i + 1)) \(m)") }
+                print("\nChoose a model by number, type a name, or press Enter for default (\(Config.DefaultModels.ollama)):", terminator: " ")
+                let input = (readLine() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if input.isEmpty {
+                    config.model = Config.DefaultModels.ollama
+                } else if let idx = Int(input), idx >= 1, idx <= models.count {
+                    config.model = models[idx - 1]
+                } else {
+                    config.model = input
+                }
+            } else {
+                promptAndSetModel(defaultModel: Config.DefaultModels.ollama)
+            }
+            saveConfig()
+            print("✓ Provider set to: ollama (model: \(config.model ?? Config.DefaultModels.ollama))")
+            promptRestartDaemon()
+
+        case 5:
             config.aiProvider = .codex
             if !promptAndSetKey(label: "OpenAI API key", envVar: "OPENAI_API_KEY", setter: { config.openaiAPIKey = $0 }) {
                 return
@@ -642,8 +703,8 @@ struct CorrectMeApp {
             saveConfig()
             print("✓ Provider set to: codex")
             promptRestartDaemon()
-            
-        case 5:
+
+        case 6:
             config.aiProvider = .gemini
             if !promptAndSetKey(label: "Gemini API key", envVar: "GEMINI_API_KEY", setter: { config.geminiAPIKey = $0 }) {
                 return
@@ -655,8 +716,8 @@ struct CorrectMeApp {
             saveConfig()
             print("✓ Provider set to: gemini")
             promptRestartDaemon()
-            
-        case 6:
+
+        case 7:
             config.aiProvider = .claude
             if !promptAndSetKey(label: "Claude API key", envVar: "ANTHROPIC_API_KEY", setter: { config.anthropicAPIKey = $0 }) {
                 return
@@ -669,7 +730,7 @@ struct CorrectMeApp {
             print("✓ Provider set to: claude")
             promptRestartDaemon()
 
-        case 7:
+        case 8:
             config.aiProvider = .openrouter
             if !promptAndSetKey(label: "OpenRouter API key", envVar: "OPENROUTER_API_KEY", setter: { config.openrouterAPIKey = $0 }) {
                 return

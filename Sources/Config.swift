@@ -35,6 +35,7 @@ struct Config: Codable {
         case codexCode = "codex-code"
         case copilot = "copilot"
         case openrouter = "openrouter"
+        case ollama = "ollama"
     }
 
     struct HotkeyConfig: Codable {
@@ -76,6 +77,7 @@ struct Config: Codable {
         static let openaiCodex = "gpt-5.1-codex-mini"
         static let copilot = "gpt-5-mini"
         static let openrouter = "meta-llama/llama-3.1-8b-instruct:free"
+        static let ollama = "llama3.2"
     }
 
     static var configPath: URL {
