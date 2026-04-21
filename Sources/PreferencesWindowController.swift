@@ -921,7 +921,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         styleTextView = tv
 
         // Placeholder
-        stylePlaceholder = NSTextField(labelWithString: "e.g. \"Fix grammar and spelling only. Keep original tone.\"")
+        stylePlaceholder = NSTextField(labelWithString: "Fix grammar and spelling only. Keep original tone.")
         stylePlaceholder.frame = NSRect(x: pad + 8, y: y - 28, width: contentW - 16, height: 20)
         stylePlaceholder.font = .systemFont(ofSize: 13)
         stylePlaceholder.textColor = .placeholderTextColor
@@ -938,7 +938,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         y -= scrollH + 8
 
         // Subtle hint below the text area
-        let hint = NSTextField(labelWithString: "Instructions are appended to the AI prompt. Leave blank to use the default correction behavior.")
+        let hint = NSTextField(labelWithString: "Instructions are appended to the AI prompt. Leave blank to use the default: \"Fix grammar and spelling only. Keep original tone.\"")
         hint.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
         hint.font = .systemFont(ofSize: 10)
         hint.textColor = .tertiaryLabelColor
@@ -1594,7 +1594,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         config.fallbackModels = fallbacks.isEmpty ? nil : fallbacks
 
         let style = styleTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        config.writingStyle = style.isEmpty ? nil : style
+        let defaultStyle = "Fix grammar and spelling only. Keep original tone."
+        config.writingStyle = style.isEmpty ? defaultStyle : style
 
         if perAppEntries.isEmpty {
             config.perAppStyles = nil
