@@ -26,6 +26,41 @@ enum DaemonManager {
         FileManager.default.fileExists(atPath: launchAgentPlistPath.path)
     }
 
+    /// Returns true if launchd currently has our service registered (i.e. background access is working).
+    static var isLaunchAgentLoaded: Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = ["list", "com.correctme.daemon"]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try? process.run()
+        process.waitUntilExit()
+        return process.terminationStatus == 0
+    }
+
+    /// Opens a specific System Settings pane via deep link.
+    static func openSystemSettings(_ pane: SystemSettingPane) {
+        NSWorkspace.shared.open(pane.url)
+    }
+
+    enum SystemSettingPane {
+        case accessibility
+        case loginItems
+
+        var url: URL {
+            switch self {
+            case .accessibility:
+                return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+            case .loginItems:
+                if #available(macOS 13.0, *) {
+                    return URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!
+                } else {
+                    return URL(string: "x-apple.systempreferences:com.apple.preferences.users")!
+                }
+            }
+        }
+    }
+
     @discardableResult
     static func runLaunchctl(_ args: [String]) -> Int32 {
         let process = Process()

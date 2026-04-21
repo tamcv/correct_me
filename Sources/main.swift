@@ -1265,6 +1265,60 @@ struct CorrectMeApp {
         return map[keyCode] ?? "KeyCode\(keyCode)"
     }
     
+    // MARK: - Permission Alerts
+
+    static func showAccessibilityAlert(isPostUpdate: Bool) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Accessibility Permission Required"
+
+        if isPostUpdate {
+            alert.informativeText = """
+                CorrectMe was just updated and macOS revoked its Accessibility permission — this is normal after updates.
+
+                To restore hotkey functionality:
+                1. Open System Settings → Privacy & Security → Accessibility
+                2. Find CorrectMe, toggle it OFF then back ON
+                """
+        } else {
+            alert.informativeText = """
+                CorrectMe needs Accessibility permission to read and replace selected text in any app.
+
+                To grant it:
+                1. Click "Open System Settings" below
+                2. Click the + button and add CorrectMe from Applications
+                3. Enable the toggle next to CorrectMe
+                """
+        }
+
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn {
+            DaemonManager.openSystemSettings(.accessibility)
+        }
+    }
+
+    static func showBackgroundPermissionAlert() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Background Access Needed"
+        alert.informativeText = """
+            CorrectMe is installed but macOS is not allowing it to start automatically at login.
+
+            To fix this:
+            1. Click "Open System Settings" below
+            2. Go to General → Login Items & Extensions
+            3. Under "Allow in the Background", make sure CorrectMe is enabled
+            """
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn {
+            DaemonManager.openSystemSettings(.loginItems)
+        }
+    }
+
     static func testCorrection() {
         print("\n🧪 Testing AI correction...\n")
         
@@ -1360,33 +1414,34 @@ struct CorrectMeApp {
             logPrint("")
         }
 
-        // Initialize menu bar manager first (before checking permissions)
+        // Initialize menu bar manager (shows permission warnings in menu automatically)
         _ = MenuBarManager.shared
 
-        // Detect permission loss after an auto-update (signature changed → TCC revoked)
+        // ── Permission alerts ────────────────────────────────────────────────
+        // Show actionable alerts for missing permissions. Two cases:
+        //   1. Never granted (new user / fresh install)
+        //   2. Was granted but lost (post-update signature change)
         let accessibilityWasGrantedKey = "correctme_accessibility_was_granted"
         let wasGranted = UserDefaults.standard.bool(forKey: accessibilityWasGrantedKey)
+
         if hasAccessibility {
             UserDefaults.standard.set(true, forKey: accessibilityWasGrantedKey)
-        } else if wasGranted {
-            // Was granted before but lost now → likely caused by a Sparkle update
+        } else {
+            let isPostUpdate = wasGranted  // had it before → likely a Sparkle update revoked it
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                NSApp.activate(ignoringOtherApps: true)
-                let alert = NSAlert()
-                alert.messageText = "Accessibility Permission Required"
-                alert.informativeText = """
-                    CorrectMe was just updated and macOS revoked its Accessibility permission (this is normal after updates).
+                CorrectMeApp.showAccessibilityAlert(isPostUpdate: isPostUpdate)
+            }
+        }
 
-                    Please re-grant it to restore hotkey functionality:
-                    1. Open System Settings → Privacy & Security → Accessibility
-                    2. Find CorrectMe and toggle it off, then back on
-                    """
-                alert.alertStyle = .warning
-                alert.addButton(withTitle: "Open System Settings")
-                alert.addButton(withTitle: "Later")
-                if alert.runModal() == .alertFirstButtonReturn {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                }
+        // ── Background (Login Item) check ────────────────────────────────────
+        // On macOS 13+, launchd notifies the user about background items.
+        // If the user dismissed or denied it, our LaunchAgent won't auto-start.
+        // We detect this: plist exists but launchd doesn't have it loaded.
+        let launchAgentInstalled = DaemonManager.isLaunchAgentInstalled
+        let launchAgentLoaded    = DaemonManager.isLaunchAgentLoaded
+        if launchAgentInstalled && !launchAgentLoaded {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                CorrectMeApp.showBackgroundPermissionAlert()
             }
         }
 

@@ -160,6 +160,44 @@ class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
+        // ── Permission warnings (shown when setup is incomplete) ──
+        let hasAccessibility = AXIsProcessTrusted()
+        let launchAgentBroken = DaemonManager.isLaunchAgentInstalled && !DaemonManager.isLaunchAgentLoaded
+
+        if !hasAccessibility {
+            let item = NSMenuItem(title: "", action: #selector(openAccessibilitySettings), keyEquivalent: "")
+            item.target = self
+            let attr = NSMutableAttributedString(
+                string: "⚠️  Accessibility not granted",
+                attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium),
+                             .foregroundColor: NSColor.systemOrange])
+            attr.append(NSAttributedString(
+                string: "  →  Fix…",
+                attributes: [.font: NSFont.systemFont(ofSize: 12),
+                             .foregroundColor: NSColor.systemOrange]))
+            item.attributedTitle = attr
+            menu.addItem(item)
+        }
+
+        if launchAgentBroken {
+            let item = NSMenuItem(title: "", action: #selector(openLoginItemsSettings), keyEquivalent: "")
+            item.target = self
+            let attr = NSMutableAttributedString(
+                string: "⚠️  Background access disabled",
+                attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium),
+                             .foregroundColor: NSColor.systemOrange])
+            attr.append(NSAttributedString(
+                string: "  →  Fix…",
+                attributes: [.font: NSFont.systemFont(ofSize: 12),
+                             .foregroundColor: NSColor.systemOrange]))
+            item.attributedTitle = attr
+            menu.addItem(item)
+        }
+
+        if !hasAccessibility || launchAgentBroken {
+            menu.addItem(NSMenuItem.separator())
+        }
+
         // ── Status ───────────────────────────────────────────────
         let statusColor: NSColor
         switch status {
@@ -357,6 +395,14 @@ class MenuBarManager: NSObject {
         AppUpdater.shared.checkForUpdates()
     }
 
+
+    @objc private func openAccessibilitySettings() {
+        DaemonManager.openSystemSettings(.accessibility)
+    }
+
+    @objc private func openLoginItemsSettings() {
+        DaemonManager.openSystemSettings(.loginItems)
+    }
 
     @objc private func openFeedback() {
         NSApp.activate(ignoringOtherApps: true)
