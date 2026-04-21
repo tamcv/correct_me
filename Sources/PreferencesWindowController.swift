@@ -43,6 +43,11 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var addAppPopUpRef: NSPopUpButton?
     private var addAppStyleFieldRef: NSTextField?
 
+    // Edit-app panel references
+    private var editAppPanel: NSPanel?
+    private var editAppStyleFieldRef: NSTextField?
+    private var editingIndex: Int = -1
+
     // General tab
     private var autoStartCheckbox: NSButton!
     private var forceApplyCheckbox: NSButton!
@@ -1042,16 +1047,33 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             nameLabel.lineBreakMode = .byTruncatingTail
             container.addSubview(nameLabel)
 
-            // Style text (leave 28px on right for × button)
+            // Style text (leave 50px on right for edit + × buttons)
             let styleLabel = NSTextField(labelWithString: entry.style)
-            styleLabel.frame = NSRect(x: 210, y: y + 11, width: cw - 242, height: 16)
+            styleLabel.frame = NSRect(x: 210, y: y + 11, width: cw - 264, height: 16)
             styleLabel.font = .systemFont(ofSize: 11)
             styleLabel.textColor = .secondaryLabelColor
             styleLabel.lineBreakMode = .byTruncatingTail
             container.addSubview(styleLabel)
 
+            // ✏️ edit button
+            let editBtn = NSButton(frame: NSRect(x: cw - 50, y: y + 8, width: 20, height: 20))
+            if #available(macOS 11.0, *),
+               let editImg = NSImage(systemSymbolName: "pencil.circle", accessibilityDescription: "Edit") {
+                editBtn.image = editImg
+                editBtn.imagePosition = .imageOnly
+                editBtn.isBordered = false
+                editBtn.contentTintColor = .secondaryLabelColor
+            } else {
+                editBtn.title = "✏️"
+                editBtn.bezelStyle = .inline
+            }
+            editBtn.tag = i
+            editBtn.target = self
+            editBtn.action = #selector(editPerAppRowAtTag(_:))
+            container.addSubview(editBtn)
+
             // × remove button
-            let xBtn = NSButton(frame: NSRect(x: cw - 28, y: y + 8, width: 20, height: 20))
+            let xBtn = NSButton(frame: NSRect(x: cw - 26, y: y + 8, width: 20, height: 20))
             if #available(macOS 11.0, *),
                let xImg = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove") {
                 xBtn.image = xImg
@@ -1103,6 +1125,117 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         perAppEntries.remove(at: idx)
         rebuildPerAppList()
+    }
+
+    @objc private func editPerAppRowAtTag(_ sender: NSButton) {
+        let idx = sender.tag
+        guard idx >= 0, idx < perAppEntries.count else { return }
+
+        if let existing = editAppPanel, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        editingIndex = idx
+        let entry = perAppEntries[idx]
+        let info = appDisplayInfo(for: entry.bundleId)
+
+        let W: CGFloat = 400
+        let H: CGFloat = 158
+        let pad: CGFloat = 20
+
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: W, height: H),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Edit Style — \(info.name)"
+        panel.isReleasedWhenClosed = false
+        panel.level = .floating
+
+        let cv = panel.contentView!
+
+        // App name (read-only label with icon)
+        let appLabel = NSTextField(labelWithString: "App")
+        appLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        appLabel.frame = NSRect(x: pad, y: H - 42, width: W - pad * 2, height: 16)
+        cv.addSubview(appLabel)
+
+        let iconView = NSImageView(frame: NSRect(x: pad, y: H - 70, width: 20, height: 20))
+        if let icon = info.icon {
+            iconView.image = icon
+        } else if #available(macOS 11.0, *) {
+            iconView.image = NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil)
+        }
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        cv.addSubview(iconView)
+
+        let appNameLabel = NSTextField(labelWithString: info.name)
+        appNameLabel.frame = NSRect(x: pad + 26, y: H - 68, width: W - pad * 2 - 26, height: 22)
+        appNameLabel.font = .systemFont(ofSize: 13)
+        appNameLabel.textColor = .labelColor
+        cv.addSubview(appNameLabel)
+
+        // Style field (editable, pre-filled)
+        let styleLabel = NSTextField(labelWithString: "Writing Style")
+        styleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        styleLabel.frame = NSRect(x: pad, y: H - 100, width: W - pad * 2, height: 16)
+        cv.addSubview(styleLabel)
+
+        let styleField = NSTextField(frame: NSRect(x: pad, y: H - 128, width: W - pad * 2, height: 26))
+        styleField.stringValue = entry.style
+        styleField.font = .systemFont(ofSize: 12)
+        styleField.placeholderString = "e.g. casual tone, professional, no jargon"
+        cv.addSubview(styleField)
+        editAppStyleFieldRef = styleField
+
+        // Buttons
+        let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancelEditPerAppStyle))
+        cancelBtn.bezelStyle = .rounded
+        cancelBtn.frame = NSRect(x: W - pad - 160, y: pad - 4, width: 72, height: 28)
+        cv.addSubview(cancelBtn)
+
+        let saveBtn = NSButton(title: "Save", target: self, action: #selector(confirmEditPerAppStyle))
+        saveBtn.bezelStyle = .rounded
+        saveBtn.keyEquivalent = "\r"
+        saveBtn.frame = NSRect(x: W - pad - 80, y: pad - 4, width: 80, height: 28)
+        cv.addSubview(saveBtn)
+
+        editAppPanel = panel
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Focus the style field and select all text for quick replacement
+        panel.makeFirstResponder(styleField)
+        styleField.selectText(nil)
+    }
+
+    @objc private func confirmEditPerAppStyle() {
+        guard let field = editAppStyleFieldRef,
+              editingIndex >= 0, editingIndex < perAppEntries.count else { return }
+
+        let style = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !style.isEmpty else {
+            field.layer?.borderWidth = 1
+            field.layer?.borderColor = NSColor.systemRed.cgColor
+            return
+        }
+
+        perAppEntries[editingIndex].style = style
+        editAppPanel?.close()
+        editAppPanel = nil
+        editAppStyleFieldRef = nil
+        editingIndex = -1
+        rebuildPerAppList()
+    }
+
+    @objc private func cancelEditPerAppStyle() {
+        editAppPanel?.close()
+        editAppPanel = nil
+        editAppStyleFieldRef = nil
+        editingIndex = -1
     }
 
     @objc private func addPerAppStyle() {
