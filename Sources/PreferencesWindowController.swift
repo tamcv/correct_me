@@ -1141,7 +1141,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let info = appDisplayInfo(for: entry.bundleId)
 
         let W: CGFloat = 400
-        let H: CGFloat = 158
+        let H: CGFloat = 180
         let pad: CGFloat = 20
 
         let panel = NSPanel(
