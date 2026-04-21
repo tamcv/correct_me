@@ -41,11 +41,11 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     // Add-app panel references
     private var addAppPanel: NSPanel?
     private var addAppPopUpRef: NSPopUpButton?
-    private var addAppStyleFieldRef: NSTextField?
+    private var addAppStyleViewRef: NSTextView?
 
     // Edit-app panel references
     private var editAppPanel: NSPanel?
-    private var editAppStyleFieldRef: NSTextField?
+    private var editAppStyleViewRef: NSTextView?
     private var editingIndex: Int = -1
 
     // General tab
@@ -1000,6 +1000,48 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Per-App Styles Helpers
 
+    /// Creates a scrollable multi-line NSTextView for style input, matching the Global Style editor.
+    private func makeStyleTextView(frame: NSRect, initialText: String, placeholder: String) -> (scrollView: NSScrollView, textView: NSTextView) {
+        let scrollView = NSScrollView(frame: frame)
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
+        scrollView.autohidesScrollers = true
+
+        let textStorage = NSTextStorage()
+        let layoutManager = NSLayoutManager()
+        textStorage.addLayoutManager(layoutManager)
+        let textContainer = NSTextContainer(size: NSSize(width: scrollView.contentSize.width, height: .greatestFiniteMagnitude))
+        textContainer.widthTracksTextView = true
+        layoutManager.addTextContainer(textContainer)
+
+        let tv = NSTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize), textContainer: textContainer)
+        tv.isEditable = true
+        tv.isRichText = false
+        tv.font = .systemFont(ofSize: 12)
+        tv.allowsUndo = true
+        tv.textContainerInset = NSSize(width: 4, height: 5)
+        tv.string = initialText
+        scrollView.documentView = tv
+
+        // Placeholder overlay (shown when empty)
+        let ph = NSTextField(labelWithString: placeholder)
+        ph.frame = NSRect(x: 7, y: frame.height - 22, width: frame.width - 14, height: 18)
+        ph.font = .systemFont(ofSize: 12)
+        ph.textColor = .placeholderTextColor
+        ph.isEditable = false
+        ph.isBezeled = false
+        ph.drawsBackground = false
+        ph.isHidden = !initialText.isEmpty
+        scrollView.addSubview(ph)
+
+        // Hide placeholder when user starts typing (via notification)
+        NotificationCenter.default.addObserver(forName: NSText.didChangeNotification, object: tv, queue: .main) { _ in
+            ph.isHidden = !tv.string.isEmpty
+        }
+
+        return (scrollView, tv)
+    }
+
     /// Resolves a bundle ID to a human-readable app name and icon.
     private func appDisplayInfo(for bundleId: String) -> (name: String, icon: NSImage?) {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
@@ -1140,29 +1182,32 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let entry = perAppEntries[idx]
         let info = appDisplayInfo(for: entry.bundleId)
 
-        let W: CGFloat = 400
-        let H: CGFloat = 180
+        let W: CGFloat = 420
+        let H: CGFloat = 240
         let pad: CGFloat = 20
+        let contentW = W - pad * 2
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: W, height: H),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         panel.title = "Edit Style — \(info.name)"
         panel.isReleasedWhenClosed = false
         panel.level = .floating
+        panel.minSize = NSSize(width: 340, height: 220)
 
         let cv = panel.contentView!
 
-        // App name (read-only label with icon)
-        let appLabel = NSTextField(labelWithString: "App")
-        appLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        appLabel.frame = NSRect(x: pad, y: H - 42, width: W - pad * 2, height: 16)
-        cv.addSubview(appLabel)
+        // App row (icon + name)
+        let appSectionLabel = NSTextField(labelWithString: "App")
+        appSectionLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        appSectionLabel.textColor = .secondaryLabelColor
+        appSectionLabel.frame = NSRect(x: pad, y: H - 36, width: contentW, height: 14)
+        cv.addSubview(appSectionLabel)
 
-        let iconView = NSImageView(frame: NSRect(x: pad, y: H - 70, width: 20, height: 20))
+        let iconView = NSImageView(frame: NSRect(x: pad, y: H - 62, width: 20, height: 20))
         if let icon = info.icon {
             iconView.image = icon
         } else if #available(macOS 11.0, *) {
@@ -1172,61 +1217,72 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         cv.addSubview(iconView)
 
         let appNameLabel = NSTextField(labelWithString: info.name)
-        appNameLabel.frame = NSRect(x: pad + 26, y: H - 68, width: W - pad * 2 - 26, height: 22)
-        appNameLabel.font = .systemFont(ofSize: 13)
+        appNameLabel.frame = NSRect(x: pad + 26, y: H - 61, width: contentW - 26, height: 18)
+        appNameLabel.font = .systemFont(ofSize: 13, weight: .medium)
         appNameLabel.textColor = .labelColor
         cv.addSubview(appNameLabel)
 
-        // Style field (editable, pre-filled)
+        // Separator
+        let sep = NSBox()
+        sep.boxType = .separator
+        sep.frame = NSRect(x: pad, y: H - 74, width: contentW, height: 1)
+        cv.addSubview(sep)
+
+        // Style label
         let styleLabel = NSTextField(labelWithString: "Writing Style")
-        styleLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        styleLabel.frame = NSRect(x: pad, y: H - 100, width: W - pad * 2, height: 16)
+        styleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        styleLabel.textColor = .secondaryLabelColor
+        styleLabel.frame = NSRect(x: pad, y: H - 92, width: contentW, height: 14)
         cv.addSubview(styleLabel)
 
-        let styleField = NSTextField(frame: NSRect(x: pad, y: H - 128, width: W - pad * 2, height: 26))
-        styleField.stringValue = entry.style
-        styleField.font = .systemFont(ofSize: 12)
-        styleField.placeholderString = "e.g. casual tone, professional, no jargon"
-        cv.addSubview(styleField)
-        editAppStyleFieldRef = styleField
+        // Multi-line text view (resizes with panel)
+        let tvH: CGFloat = H - 92 - 48  // space between style label and buttons
+        let (scrollView, tv) = makeStyleTextView(
+            frame: NSRect(x: pad, y: 48, width: contentW, height: tvH),
+            initialText: entry.style,
+            placeholder: "e.g. casual tone, professional, no jargon"
+        )
+        scrollView.autoresizingMask = [.width, .height]
+        cv.addSubview(scrollView)
+        editAppStyleViewRef = tv
 
-        // Buttons
+        // Buttons (pinned to bottom)
         let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancelEditPerAppStyle))
         cancelBtn.bezelStyle = .rounded
-        cancelBtn.frame = NSRect(x: W - pad - 160, y: pad - 4, width: 72, height: 28)
+        cancelBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        cancelBtn.frame = NSRect(x: W - pad - 162, y: 12, width: 72, height: 28)
         cv.addSubview(cancelBtn)
 
         let saveBtn = NSButton(title: "Save", target: self, action: #selector(confirmEditPerAppStyle))
         saveBtn.bezelStyle = .rounded
         saveBtn.keyEquivalent = "\r"
-        saveBtn.frame = NSRect(x: W - pad - 80, y: pad - 4, width: 80, height: 28)
+        saveBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        saveBtn.frame = NSRect(x: W - pad - 82, y: 12, width: 82, height: 28)
         cv.addSubview(saveBtn)
 
         editAppPanel = panel
         panel.center()
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-
-        // Focus the style field and select all text for quick replacement
-        panel.makeFirstResponder(styleField)
-        styleField.selectText(nil)
+        panel.makeFirstResponder(tv)
+        tv.selectAll(nil)
     }
 
     @objc private func confirmEditPerAppStyle() {
-        guard let field = editAppStyleFieldRef,
+        guard let tv = editAppStyleViewRef,
               editingIndex >= 0, editingIndex < perAppEntries.count else { return }
 
-        let style = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let style = tv.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !style.isEmpty else {
-            field.layer?.borderWidth = 1
-            field.layer?.borderColor = NSColor.systemRed.cgColor
+            tv.enclosingScrollView?.layer?.borderWidth = 1
+            tv.enclosingScrollView?.layer?.borderColor = NSColor.systemRed.cgColor
             return
         }
 
         perAppEntries[editingIndex].style = style
         editAppPanel?.close()
         editAppPanel = nil
-        editAppStyleFieldRef = nil
+        editAppStyleViewRef = nil
         editingIndex = -1
         rebuildPerAppList()
     }
@@ -1234,7 +1290,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     @objc private func cancelEditPerAppStyle() {
         editAppPanel?.close()
         editAppPanel = nil
-        editAppStyleFieldRef = nil
+        editAppStyleViewRef = nil
         editingIndex = -1
     }
 
@@ -1244,29 +1300,33 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             return
         }
 
-        let W: CGFloat = 400
-        let H: CGFloat = 188
+        let W: CGFloat = 420
+        let H: CGFloat = 260
         let pad: CGFloat = 20
+        let contentW = W - pad * 2
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: W, height: H),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         panel.title = "Add Per-App Style"
         panel.isReleasedWhenClosed = false
         panel.level = .floating
+        panel.minSize = NSSize(width: 340, height: 240)
 
         let cv = panel.contentView!
 
         // App picker
-        let appLabel = NSTextField(labelWithString: "App")
-        appLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        appLabel.frame = NSRect(x: pad, y: H - 42, width: W - pad * 2, height: 16)
-        cv.addSubview(appLabel)
+        let appSectionLabel = NSTextField(labelWithString: "App")
+        appSectionLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        appSectionLabel.textColor = .secondaryLabelColor
+        appSectionLabel.frame = NSRect(x: pad, y: H - 36, width: contentW, height: 14)
+        cv.addSubview(appSectionLabel)
 
-        let appPopUp = NSPopUpButton(frame: NSRect(x: pad, y: H - 70, width: W - pad * 2, height: 26))
+        let appPopUp = NSPopUpButton(frame: NSRect(x: pad, y: H - 64, width: contentW, height: 26))
+        appPopUp.autoresizingMask = [.width]
         let runningApps = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != nil }
             .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
@@ -1287,49 +1347,64 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         cv.addSubview(appPopUp)
         addAppPopUpRef = appPopUp
 
-        // Style field
+        // Separator
+        let sep = NSBox()
+        sep.boxType = .separator
+        sep.frame = NSRect(x: pad, y: H - 78, width: contentW, height: 1)
+        cv.addSubview(sep)
+
+        // Style label
         let styleLabel = NSTextField(labelWithString: "Writing Style")
-        styleLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        styleLabel.frame = NSRect(x: pad, y: H - 108, width: W - pad * 2, height: 16)
+        styleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        styleLabel.textColor = .secondaryLabelColor
+        styleLabel.frame = NSRect(x: pad, y: H - 96, width: contentW, height: 14)
         cv.addSubview(styleLabel)
 
-        let styleField = NSTextField(frame: NSRect(x: pad, y: H - 136, width: W - pad * 2, height: 26))
-        styleField.placeholderString = "e.g. casual tone, professional, no jargon"
-        styleField.font = .systemFont(ofSize: 12)
-        cv.addSubview(styleField)
-        addAppStyleFieldRef = styleField
+        // Multi-line text view
+        let tvH: CGFloat = H - 96 - 48
+        let (scrollView, tv) = makeStyleTextView(
+            frame: NSRect(x: pad, y: 48, width: contentW, height: tvH),
+            initialText: "",
+            placeholder: "e.g. casual tone, professional, no jargon"
+        )
+        scrollView.autoresizingMask = [.width, .height]
+        cv.addSubview(scrollView)
+        addAppStyleViewRef = tv
 
         // Buttons
         let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancelAddPerAppStyle))
         cancelBtn.bezelStyle = .rounded
-        cancelBtn.frame = NSRect(x: W - pad - 160, y: pad - 4, width: 72, height: 28)
+        cancelBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        cancelBtn.frame = NSRect(x: W - pad - 162, y: 12, width: 72, height: 28)
         cv.addSubview(cancelBtn)
 
         let addBtn = NSButton(title: "Add", target: self, action: #selector(confirmAddPerAppStyle))
         addBtn.bezelStyle = .rounded
         addBtn.keyEquivalent = "\r"
-        addBtn.frame = NSRect(x: W - pad - 80, y: pad - 4, width: 80, height: 28)
+        addBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        addBtn.frame = NSRect(x: W - pad - 82, y: 12, width: 82, height: 28)
         cv.addSubview(addBtn)
 
         addAppPanel = panel
         panel.center()
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        panel.makeFirstResponder(tv)
     }
 
     @objc private func confirmAddPerAppStyle() {
-        guard let popup = addAppPopUpRef, let field = addAppStyleFieldRef else { return }
+        guard let popup = addAppPopUpRef, let tv = addAppStyleViewRef else { return }
 
         guard popup.indexOfSelectedItem > 0,
               let bundleId = popup.selectedItem?.representedObject as? String else {
-            // Briefly highlight the popup to indicate selection is required
             popup.layer?.borderColor = NSColor.systemRed.cgColor
             return
         }
 
-        let style = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let style = tv.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !style.isEmpty else {
-            field.layer?.borderColor = NSColor.systemRed.cgColor
+            tv.enclosingScrollView?.layer?.borderWidth = 1
+            tv.enclosingScrollView?.layer?.borderColor = NSColor.systemRed.cgColor
             return
         }
 
@@ -1342,7 +1417,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         addAppPanel?.close()
         addAppPanel = nil
         addAppPopUpRef = nil
-        addAppStyleFieldRef = nil
+        addAppStyleViewRef = nil
         rebuildPerAppList()
     }
 
@@ -1350,7 +1425,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         addAppPanel?.close()
         addAppPanel = nil
         addAppPopUpRef = nil
-        addAppStyleFieldRef = nil
+        addAppStyleViewRef = nil
     }
 
     @objc private func clearStyle() {
