@@ -386,7 +386,6 @@
         <span class="font-mono text-xs text-silver-500 ml-1">v0.5.0</span>
       </div>
       <div class="nav-links flex items-center gap-6">
-        <a href="#free-setup" class="text-xs text-cyan-400 hover:text-cyan-300 transition-colors tracking-wide font-medium">Free Setup</a>
         <a href="#features" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">Features</a>
         <a href="#how-it-works" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">How it works</a>
         <a href="#contribute" class="text-xs text-silver-400 hover:text-silver-100 transition-colors tracking-wide">Contribute</a>
@@ -454,106 +453,9 @@
 
       <!-- macOS requirement note -->
       <p class="reveal delay-5 text-xs text-silver-500 mt-5">Requires macOS 13 Ventura or later · 100% free &amp; open source</p>
-    </div>
-  </section>
-
-  <!-- Thin separator -->
-  <div class="max-w-5xl mx-auto px-6">
-    <div class="border-t border-white/5"></div>
-  </div>
-
-  <!-- Free Setup with Ollama -->
-  <section id="free-setup" class="py-20 px-6">
-    <div class="max-w-3xl mx-auto">
-
-      <div class="text-center mb-12">
-        <div class="reveal section-divider mx-auto mb-4"></div>
-        <div class="reveal inline-flex items-center gap-2 bg-ink-800 border border-cyan-400/20 rounded-full px-3 py-1.5 mb-5 text-xs text-cyan-400 font-mono">
-          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-          100% free &nbsp;·&nbsp; no API key &nbsp;·&nbsp; runs on your Mac
-        </div>
-        <h2 class="reveal delay-1 font-display text-3xl md:text-4xl font-light">Get started for free<br/><em class="shimmer-text not-italic">with Ollama.</em></h2>
-        <p class="reveal delay-2 text-xs text-silver-400 max-w-lg mx-auto mt-4 leading-relaxed">
-          Run AI models locally with <strong class="text-silver-200">Ollama</strong>. Your text never leaves your Mac — no cloud, no API fees, no rate limits. Three commands and you're done.
-        </p>
-      </div>
-
-      <!-- Steps -->
-      <div class="space-y-3 mb-10">
-
-        <!-- Step 1 -->
-        <div class="reveal feature-card">
-          <div class="flex items-start gap-4">
-            <div class="w-8 h-8 rounded-lg bg-ink-700 border border-cyan-400/20 flex items-center justify-center font-mono text-xs text-cyan-400 font-semibold shrink-0">01</div>
-            <div class="flex-1 min-w-0">
-              <p class="font-mono text-xs text-silver-200 font-semibold mb-1">Install Ollama</p>
-              <div class="code-block mb-2">
-                <code>brew install ollama</code>
-                <button class="copy-btn" onclick="copyCode(this, 'brew install ollama')">copy</button>
-              </div>
-              <p class="text-xs text-silver-500">Or download the macOS app at <a href="https://ollama.com" target="_blank" rel="noopener" class="text-cyan-400 hover:text-cyan-300 transition-colors">ollama.com</a></p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 2 -->
-        <div class="reveal delay-1 feature-card">
-          <div class="flex items-start gap-4">
-            <div class="w-8 h-8 rounded-lg bg-ink-700 border border-cyan-400/20 flex items-center justify-center font-mono text-xs text-cyan-400 font-semibold shrink-0">02</div>
-            <div class="flex-1 min-w-0">
-              <p class="font-mono text-xs text-silver-200 font-semibold mb-1">Pull a free model</p>
-              <div class="code-block mb-3">
-                <code id="pull-cmd">ollama pull gemma3:4b</code>
-                <button class="copy-btn" onclick="copyCode(this, document.getElementById('pull-cmd').textContent)">copy</button>
-              </div>
-              <!-- Model picker -->
-              <div class="flex flex-wrap gap-2 mb-2">
-                <button onclick="pickModel('gemma3:4b', this)"
-                  class="model-btn active font-mono text-xs px-2.5 py-1 rounded-lg border border-cyan-400/40 bg-cyan-400/10 text-cyan-400 transition-all hover:border-cyan-400/60">
-                  gemma3:4b <span class="text-cyan-400/60 ml-1">⭐</span>
-                </button>
-                <button onclick="pickModel('gemma4:4b', this)"
-                  class="model-btn font-mono text-xs px-2.5 py-1 rounded-lg border border-white/8 bg-ink-700 text-silver-400 transition-all hover:border-cyan-400/30 hover:text-silver-200">
-                  gemma4:4b <span class="text-silver-600 ml-1">⭐</span>
-                </button>
-                <button onclick="pickModel('llama3.2', this)"
-                  class="model-btn font-mono text-xs px-2.5 py-1 rounded-lg border border-white/8 bg-ink-700 text-silver-400 transition-all hover:border-cyan-400/30 hover:text-silver-200">
-                  llama3.2
-                </button>
-                <button onclick="pickModel('phi4-mini', this)"
-                  class="model-btn font-mono text-xs px-2.5 py-1 rounded-lg border border-white/8 bg-ink-700 text-silver-400 transition-all hover:border-cyan-400/30 hover:text-silver-200">
-                  phi4-mini
-                </button>
-              </div>
-              <p id="model-note" class="text-xs text-silver-500 leading-relaxed">~3 GB download · best balance of speed and quality · runs on any Mac with 8 GB RAM</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 3 -->
-        <div class="reveal delay-2 feature-card">
-          <div class="flex items-start gap-4">
-            <div class="w-8 h-8 rounded-lg bg-ink-700 border border-cyan-400/20 flex items-center justify-center font-mono text-xs text-cyan-400 font-semibold shrink-0">03</div>
-            <div class="flex-1 min-w-0">
-              <p class="font-mono text-xs text-silver-200 font-semibold mb-1">Configure CorrectMe</p>
-              <div class="code-block">
-                <code id="setup-cmd">correctme quicksetup --provider ollama --model gemma3:4b</code>
-                <button class="copy-btn" onclick="copyCode(this, document.getElementById('setup-cmd').textContent)">copy</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Done callout -->
-      <div class="reveal delay-3 text-center bg-ink-800 border border-white/5 rounded-xl px-6 py-4">
-        <p class="font-mono text-xs text-silver-400 leading-relaxed">
-          Done! Press <span class="key">⌘</span><span class="key">⇧</span><span class="key">E</span> anywhere to start correcting text —
-          <strong class="text-silver-200">free, forever, 100% on your Mac.</strong>
-        </p>
-      </div>
-
+      <p class="reveal delay-5 text-xs text-silver-600 mt-1.5">
+        No API key? <a href="#features" class="text-cyan-400/70 hover:text-cyan-400 transition-colors">Start free with Ollama →</a>
+      </p>
     </div>
   </section>
 
@@ -667,7 +569,18 @@
         <div class="feature-card reveal delay-1">
           <div class="text-2xl mb-3">🔒</div>
           <h3 class="font-display text-base font-medium mb-2">100% private with Ollama</h3>
-          <p class="text-xs text-silver-400 leading-relaxed">Run corrections entirely on your Mac with Ollama. Your text never leaves your machine. No API keys, no cloud, no logs.</p>
+          <p class="text-xs text-silver-400 leading-relaxed mb-3">Run corrections entirely on your Mac. Your text never leaves your machine — no API key, no cloud, no logs.</p>
+          <div class="space-y-1 font-mono text-xs">
+            <div class="flex justify-between text-silver-500">
+              <span class="text-silver-300">gemma3:4b</span><span>3.3 GB · recommended</span>
+            </div>
+            <div class="flex justify-between text-silver-500">
+              <span>llama3.2</span><span>2.0 GB · lightweight</span>
+            </div>
+            <div class="flex justify-between text-silver-500">
+              <span>phi4-mini</span><span>2.5 GB · fast</span>
+            </div>
+          </div>
         </div>
 
         <!-- Feature: Diff preview -->
@@ -883,31 +796,6 @@
           btn.classList.remove('copied');
         }, 2000);
       });
-    }
-
-    // ─── Ollama model picker ─────────────────────────────────────────────────
-    const modelNotes = {
-      'gemma3:4b':  '~3 GB download · best balance of speed and quality · runs on any Mac with 8 GB RAM',
-      'gemma4:4b':  '~3 GB download · latest Gemma, slightly higher quality · runs on any Mac with 8 GB RAM',
-      'llama3.2':   '~2 GB download · very fast responses · good for simple grammar fixes',
-      'phi4-mini':  '~2.5 GB download · compact model from Microsoft · good all-rounder',
-    };
-    function pickModel(model, btn) {
-      // Update active button style
-      document.querySelectorAll('.model-btn').forEach(b => {
-        b.classList.remove('border-cyan-400/40', 'bg-cyan-400/10', 'text-cyan-400');
-        b.classList.add('border-white/8', 'bg-ink-700', 'text-silver-400');
-      });
-      btn.classList.remove('border-white/8', 'bg-ink-700', 'text-silver-400');
-      btn.classList.add('border-cyan-400/40', 'bg-cyan-400/10', 'text-cyan-400');
-
-      // Update commands
-      document.getElementById('pull-cmd').textContent = 'ollama pull ' + model;
-      document.getElementById('setup-cmd').textContent = 'correctme quicksetup --provider ollama --model ' + model;
-
-      // Update note
-      const note = document.getElementById('model-note');
-      if (note && modelNotes[model]) note.textContent = modelNotes[model];
     }
 
     // ─── Demo animation ──────────────────────────────────────────────────────

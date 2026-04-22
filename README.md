@@ -72,32 +72,31 @@ After installing, grant **Accessibility** permission when prompted — this is r
 
 ---
 
-## Use CorrectMe for free (no API key needed)
+## Quick start with Ollama (no API key needed)
 
-CorrectMe works completely offline using [Ollama](https://ollama.com) — AI runs locally on your Mac, no API key required, no data sent anywhere.
+CorrectMe works fully offline with [Ollama](https://ollama.com) — no API key, no cloud, no fees.
 
 ```bash
-# Step 1 — Install Ollama
-brew install ollama
-# or download the installer at https://ollama.com
+# 1. Install Ollama
+brew install ollama   # or download from https://ollama.com
 
-# Step 2 — Pull a free model (pick one below)
+# 2. Pull a model
 ollama pull gemma3:4b
 
-# Step 3 — Configure CorrectMe
+# 3. Configure CorrectMe
 correctme quicksetup --provider ollama --model gemma3:4b
 ```
 
-**Recommended free models** (tested and working well with CorrectMe):
+**Models that work well with CorrectMe:**
 
-| Model | Pull command | Size | Best for |
-|-------|-------------|------|----------|
-| **gemma3:4b** ⭐ | `ollama pull gemma3:4b` | ~3 GB | Best balance — fast + accurate |
-| **gemma4:4b** ⭐ | `ollama pull gemma4:4b` | ~3 GB | Latest Gemma, slightly better quality |
-| llama3.2 | `ollama pull llama3.2` | ~2 GB | Lightweight, very fast |
-| phi4-mini | `ollama pull phi4-mini` | ~2.5 GB | Good for short corrections |
+| Model | Size | Notes |
+|-------|------|-------|
+| **gemma3:4b** ⭐ | 3.3 GB | Best balance of speed and quality |
+| llama3.2 | 2.0 GB | Lightest option, very fast |
+| phi4-mini | 2.5 GB | Good all-rounder |
+| gemma4:e2b | 5.1 GB | Latest Gemma architecture |
 
-> **Requirements**: macOS with 8 GB RAM or more. Models are downloaded once (~2–4 GB) and run fully offline afterwards.
+> Requires 8 GB RAM or more. Models download once and run fully offline.
 
 ## Configuration
 
