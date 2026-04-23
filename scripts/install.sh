@@ -123,6 +123,9 @@ else
     fi
 fi
 
+# ── Remove macOS quarantine flag (prevents Gatekeeper warning) ──
+xattr -rc /Applications/CorrectMe.app 2>/dev/null || true
+
 # ── Verify code signature ──
 if codesign --verify --deep --strict /Applications/CorrectMe.app 2>/dev/null; then
     echo "✅ Code signature verified"
@@ -171,6 +174,16 @@ printf "  \033]8;;x-apple.systempreferences:com.apple.preference.security?Privac
 echo "     Enable CorrectMe in the list"
 echo ""
 echo "  No restart needed — takes effect immediately."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  ℹ️  If macOS says \"CorrectMe cannot be opened\":"
+echo ""
+echo "  Go to System Settings › Privacy & Security"
+echo "  Scroll down and click \"Open Anyway\" next to CorrectMe."
+echo ""
+echo "  Or run:"
+echo "    find /Applications/CorrectMe.app -exec xattr -c {} \\;"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
