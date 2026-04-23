@@ -6,7 +6,7 @@
 
 CorrectMe lives in your menu bar. Select any text in any app, press **⌘⇧E**, and your AI provider **auto-corrects it in place** — no switching windows, no copy-pasting. The fastest way to auto-correct text on macOS with a global keyboard shortcut.
 
-![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License](https://img.shields.io/badge/license-MIT-green) ![Free](https://img.shields.io/badge/price-free-brightgreen)
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License](https://img.shields.io/badge/license-MIT-green) ![Free](https://img.shields.io/badge/price-free-brightgreen) [![Ko-fi](https://img.shields.io/badge/support-ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tamcv)
 
 ---
 
