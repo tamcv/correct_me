@@ -14,14 +14,15 @@ class QuickActionPickerWindow: NSPanel {
     private var rowViews: [NSView] = []
     private var keyMonitor: Any?
 
-    private let rowH: CGFloat   = 40
-    private let winW: CGFloat   = 238
-    private let vPad: CGFloat   = 6
+    private let rowH:    CGFloat = 40
+    private let headerH: CGFloat = 30
+    private let winW:    CGFloat = 238
+    private let vPad:    CGFloat = 6
 
     // MARK: - Init
 
     private init() {
-        let h = CGFloat(TextAction.allCases.count) * 40 + 12
+        let h = CGFloat(TextAction.allCases.count) * 40 + 30 + 12
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 238, height: h),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -67,7 +68,7 @@ class QuickActionPickerWindow: NSPanel {
 
     private func buildUI() {
         let actions = TextAction.allCases
-        let H = rowH * CGFloat(actions.count) + vPad * 2
+        let H = rowH * CGFloat(actions.count) + headerH + vPad * 2
 
         setContentSize(NSSize(width: winW, height: H))
 
@@ -78,14 +79,42 @@ class QuickActionPickerWindow: NSPanel {
         bg.layer?.masksToBounds   = true
         contentView = bg
 
+        // ── Header: title + close button ──
+        let titleLbl = NSTextField(labelWithString: "Quick Actions")
+        titleLbl.font      = .systemFont(ofSize: 11, weight: .medium)
+        titleLbl.textColor = NSColor(white: 0.45, alpha: 1)
+        titleLbl.frame     = NSRect(x: 12, y: H - headerH + (headerH - 14) / 2, width: winW - 36, height: 14)
+        bg.addSubview(titleLbl)
+
+        let closeBtn = NSButton(frame: NSRect(x: winW - 26, y: H - headerH + (headerH - 18) / 2, width: 18, height: 18))
+        closeBtn.bezelStyle  = .shadowlessSquare
+        closeBtn.isBordered  = false
+        closeBtn.title       = "✕"
+        closeBtn.font        = .systemFont(ofSize: 11, weight: .regular)
+        closeBtn.contentTintColor = NSColor(white: 0.45, alpha: 1)
+        closeBtn.target      = self
+        closeBtn.action      = #selector(closeBtnClicked)
+        bg.addSubview(closeBtn)
+
+        // Thin separator below header
+        let sep = NSView(frame: NSRect(x: 8, y: H - headerH, width: winW - 16, height: 1))
+        sep.wantsLayer = true
+        sep.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.07).cgColor
+        bg.addSubview(sep)
+
+        // ── Action rows ──
         rowViews.removeAll()
 
         for (i, action) in actions.enumerated() {
-            let y   = H - vPad - rowH * CGFloat(i + 1)
+            let y   = H - headerH - vPad - rowH * CGFloat(i + 1)
             let row = makeRow(action: action, index: i, y: y)
             bg.addSubview(row)
             rowViews.append(row)
         }
+    }
+
+    @objc private func closeBtnClicked() {
+        dismiss(cancelled: true)
     }
 
     private func makeRow(action: TextAction, index: Int, y: CGFloat) -> NSView {
@@ -196,20 +225,34 @@ class QuickActionPickerWindow: NSPanel {
     private func positionNearMouse() {
         let mouse  = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main!
-        let sf     = screen.frame
+        // Use visibleFrame so we respect the Dock and menu bar insets
+        let sf     = screen.visibleFrame
+        let margin: CGFloat = 8
+        let ph = frame.height
+        let pw = frame.width
 
-        // Try to the right of the cursor, vertically centred
-        var origin = CGPoint(
-            x: mouse.x + 14,
-            y: mouse.y - frame.height / 2
-        )
+        // Prefer: to the right of the cursor, top-aligned with the cursor
+        var ox = mouse.x + 14
+        var oy = mouse.y - 20   // slight offset so the first row is near the cursor
 
-        // Clamp to screen
-        if origin.y + frame.height > sf.maxY - 10 { origin.y = sf.maxY - frame.height - 10 }
-        if origin.y < sf.minY + 10                { origin.y = sf.minY + 10 }
-        if origin.x + frame.width > sf.maxX - 10  { origin.x = mouse.x - frame.width - 14 }
-        if origin.x < sf.minX + 10                { origin.x = sf.minX + 10 }
+        // If panel would overflow bottom of visible area → move it up
+        if oy < sf.minY + margin {
+            oy = sf.minY + margin
+        }
+        // If panel would overflow top → align its top to the top of visible area
+        if oy + ph > sf.maxY - margin {
+            oy = sf.maxY - ph - margin
+        }
 
-        setFrameOrigin(origin)
+        // If panel would overflow right edge → flip to the left of the cursor
+        if ox + pw > sf.maxX - margin {
+            ox = mouse.x - pw - 14
+        }
+        // If still off left edge → clamp
+        if ox < sf.minX + margin {
+            ox = sf.minX + margin
+        }
+
+        setFrameOrigin(CGPoint(x: ox, y: oy))
     }
 }
