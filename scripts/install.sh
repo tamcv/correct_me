@@ -93,7 +93,9 @@ fi
 if [ "$FORMAT" = "dmg" ]; then
     # ── DMG install ──
     echo "  Mounting DMG..."
-    MOUNT_POINT="$(hdiutil attach "$DOWNLOAD_PATH" -nobrowse -quiet | tail -1 | awk -F'\t' '{print $NF}')"
+    MOUNT_POINT="$TMP_DIR/mount"
+    mkdir -p "$MOUNT_POINT"
+    hdiutil attach "$DOWNLOAD_PATH" -nobrowse -quiet -mountpoint "$MOUNT_POINT"
 
     if [ ! -d "$MOUNT_POINT/CorrectMe.app" ]; then
         echo "❌ CorrectMe.app not found in DMG"
