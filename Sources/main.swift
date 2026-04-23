@@ -30,6 +30,7 @@ struct CorrectMeApp {
     static var aiProvider: AIProvider?
     static var hud: HUDWindow?
     static var diffPreview = DiffPreviewWindow.shared
+    static var quickActionPicker = QuickActionPickerWindow.shared
     static var isProcessing = false
     /// Original text of the most recently accepted correction (for undo)
     static var lastOriginalText: String?
@@ -1710,27 +1711,17 @@ struct CorrectMeApp {
         isProcessing = true
         debugLog("handleHotkey() triggered")
 
-        // Remember the source app so we can paste back to it even if user switches apps
         let sourceApp = NSWorkspace.shared.frontmostApplication
         debugLog("Source app: \(sourceApp?.localizedName ?? "nil")")
-
-        // Set bundle ID for per-app writing style resolution
         currentCorrectionBundleId = sourceApp?.bundleIdentifier
 
-        // Show HUD immediately near mouse cursor — no AX call here so the main thread
-        // stays free and the ⏳ icon updates right away.
+        // Show HUD immediately — signals the hotkey was registered
         hud?.showLoading()
 
-        // Brief delay to let the hotkey event fully clear before we simulate Cmd+C.
+        // Brief delay to let the hotkey event fully clear before Cmd+C fallback
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            // Snapshot clipboard BEFORE getSelectedText(), which may overwrite it
-            // via the Cmd+C fallback.
-            let clipboardBeforeCorrection = NSPasteboard.general.string(forType: .string)
+            let clipboardBefore = NSPasteboard.general.string(forType: .string)
 
-            // Move text capture to a background thread so the main thread stays
-            // responsive. getSelectedText() may call Thread.sleep() in its clipboard
-            // fallback path, which would otherwise freeze the HUD animation and
-            // prevent the menu-bar icon from updating.
             Task.detached {
                 guard let selectedText = AccessibilityHelper.getSelectedText(), !selectedText.isEmpty else {
                     let errorMsg = "No text selected"
@@ -1743,78 +1734,102 @@ struct CorrectMeApp {
                     return
                 }
 
-                let preview = selectedText.prefix(50)
-                logPrint("📝 Correcting: \"\(preview)\(selectedText.count > 50 ? "..." : "")\"")
+                logPrint("📝 Selected: \"\(selectedText.prefix(50))\(selectedText.count > 50 ? "..." : "")\"")
 
-                guard let provider = aiProvider else {
-                    let errorMsg = "No AI provider configured"
-                    logPrint("❌ \(errorMsg)")
-                    ErrorLog.shared.log(errorMsg, category: .userError)
-                    await MainActor.run {
-                        isProcessing = false
-                        hud?.showError()
+                await MainActor.run {
+                    // Text captured — hide spinner and show action picker
+                    hud?.hide()
+
+                    quickActionPicker.show(
+                        onAction: { action in
+                            Task {
+                                await runTextAction(
+                                    action,
+                                    text: selectedText,
+                                    sourceApp: sourceApp,
+                                    clipboardBefore: clipboardBefore
+                                )
+                            }
+                        },
+                        onCancel: {
+                            logPrint("↩ Action picker cancelled")
+                            isProcessing = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    /// Run an AI action on already-captured text, then replace it in the source app.
+    static func runTextAction(
+        _ action: TextAction,
+        text: String,
+        sourceApp: NSRunningApplication?,
+        clipboardBefore: String?
+    ) async {
+        guard let provider = aiProvider else {
+            let errorMsg = "No AI provider configured"
+            logPrint("❌ \(errorMsg)")
+            ErrorLog.shared.log(errorMsg, category: .userError)
+            await MainActor.run { isProcessing = false; hud?.showError() }
+            return
+        }
+
+        await MainActor.run { hud?.showLoading() }
+        logPrint("🤖 Action: \(action.title)")
+
+        do {
+            let prompt = action.buildPrompt(for: text)
+            let result = try await provider.runPrompt(prompt)
+
+            await MainActor.run {
+                hud?.hide()
+
+                let applyResult = {
+                    CorrectionHistory.shared.record(original: text, corrected: result)
+                    lastOriginalText = text
+                    lastCorrectionSourceApp = sourceApp
+                    let pasteSuccess = AccessibilityHelper.replaceSelectedText(
+                        with: result,
+                        targetApp: sourceApp,
+                        originalClipboard: clipboardBefore
+                    )
+                    if pasteSuccess {
+                        logPrint("✅ \(action.title) applied!")
+                    } else {
+                        logPrint("⚠️ Source app unavailable — result copied to clipboard")
+                        ErrorLog.shared.log("Text copied to clipboard (source app unavailable)", category: .userError)
                     }
+                    hud?.showSuccess()
+                    isProcessing = false
+                }
+
+                // Always show diff preview (unless forceApply is on)
+                if Config.load().forceApply ?? false {
+                    applyResult()
                     return
                 }
 
-                do {
-                    let correctedText = try await provider.correctText(selectedText)
-
-                    await MainActor.run {
-                        hud?.hide()
-
-                        let applyCorrection = {
-                            CorrectionHistory.shared.record(
-                                original: selectedText,
-                                corrected: correctedText
-                            )
-                            lastOriginalText = selectedText
-                            lastCorrectionSourceApp = sourceApp
-                            let pasteSuccess = AccessibilityHelper.replaceSelectedText(
-                                with: correctedText,
-                                targetApp: sourceApp,
-                                originalClipboard: clipboardBeforeCorrection
-                            )
-                            if pasteSuccess {
-                                logPrint("✅ Corrected!")
-                                hud?.showSuccess()
-                            } else {
-                                logPrint("⚠️ Source app unavailable - corrected text copied to clipboard")
-                                ErrorLog.shared.log("Text copied to clipboard (source app unavailable)", category: .userError)
-                                hud?.showSuccess()
-                            }
-                            isProcessing = false
-                        }
-
-                        if Config.load().forceApply ?? false {
-                            applyCorrection()
-                            return
-                        }
-
-                        diffPreview.onAccept = applyCorrection
-
-                        diffPreview.onReject = {
-                            logPrint("↩ Correction discarded by user")
-                            if let original = clipboardBeforeCorrection {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(original, forType: .string)
-                            } else {
-                                NSPasteboard.general.clearContents()
-                            }
-                            isProcessing = false
-                        }
-
-                        diffPreview.show(original: selectedText, corrected: correctedText)
+                diffPreview.onAccept = applyResult
+                diffPreview.onReject = {
+                    logPrint("↩ \(action.title) discarded by user")
+                    if let original = clipboardBefore {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(original, forType: .string)
+                    } else {
+                        NSPasteboard.general.clearContents()
                     }
-                } catch {
-                    await MainActor.run {
-                        let errorMsg = error.localizedDescription
-                        logPrint("❌ Error: \(errorMsg)")
-                        ErrorLog.shared.log(errorMsg, category: .aiError)
-                        isProcessing = false
-                        hud?.showError()
-                    }
+                    isProcessing = false
                 }
+                diffPreview.show(original: text, corrected: result)
+            }
+        } catch {
+            await MainActor.run {
+                logPrint("❌ Error: \(error.localizedDescription)")
+                ErrorLog.shared.log(error.localizedDescription, category: .aiError)
+                isProcessing = false
+                hud?.showError()
             }
         }
     }

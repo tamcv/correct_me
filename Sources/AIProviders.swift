@@ -1,7 +1,15 @@
 import Foundation
 
 protocol AIProvider {
-    func correctText(_ text: String) async throws -> String
+    /// Execute the given fully-built prompt and return the model's response.
+    func runPrompt(_ prompt: String) async throws -> String
+}
+
+extension AIProvider {
+    /// Convenience: correct text using the standard correction prompt.
+    func correctText(_ text: String) async throws -> String {
+        return try await runPrompt(buildCorrectionPrompt(text: text))
+    }
 }
 
 /// Bundle ID of the frontmost app when the hotkey was triggered.
@@ -94,40 +102,38 @@ class ClaudeCodeProvider: AIProvider {
         self.model = model
     }
 
+    // Override to prepend file-access safety context for the CLI tool.
     func correctText(_ text: String) async throws -> String {
-        // Find claude executable path
+        let safeContext = "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
+        return try await runPrompt(buildCorrectionPrompt(text: text, context: safeContext))
+    }
+
+    func runPrompt(_ prompt: String) async throws -> String {
         guard let claudePath = findExecutable("claude") else {
             throw AIError.commandFailed("Claude CLI not found. Please ensure Claude Code is installed and accessible.")
         }
-
-        let prompt = buildCorrectionPrompt(text: text)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: claudePath)
         process.currentDirectoryURL = FileManager.default.temporaryDirectory
         process.environment = getFreshConnectionEnvironment()
         var args = ["--no-session-persistence"]
-        if let model {
-            args += ["--model", model]
-        }
+        if let model { args += ["--model", model] }
         args += ["-p", prompt]
         process.arguments = args
 
         let outputPipe = Pipe()
-        let errorPipe = Pipe()
+        let errorPipe  = Pipe()
         process.standardOutput = outputPipe
-        process.standardError = errorPipe
+        process.standardError  = errorPipe
 
         try process.run()
 
-        // Add timeout mechanism - Claude CLI needs more time to start up
-        let timeout: TimeInterval = 45.0 // 45 seconds
+        let timeout: TimeInterval = 45.0
         let deadline = Date().addingTimeInterval(timeout)
-
         while process.isRunning && Date() < deadline {
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+            try await Task.sleep(nanoseconds: 100_000_000)
         }
-
         if process.isRunning {
             cleanupProcess(process, outputPipe: outputPipe, errorPipe: errorPipe)
             throw AIError.commandFailed("Claude CLI timed out after \(Int(timeout)) seconds")
@@ -135,14 +141,11 @@ class ClaudeCodeProvider: AIProvider {
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        // Cleanup pipes after reading
         cleanupProcess(process, outputPipe: outputPipe, errorPipe: errorPipe)
 
         if process.terminationStatus != 0 {
             throw AIError.commandFailed("Claude CLI failed with exit code \(process.terminationStatus)")
         }
-
         return output
     }
 }
@@ -156,15 +159,14 @@ class CodexCodeProvider: AIProvider {
     }
 
     func correctText(_ text: String) async throws -> String {
-        // Find codex executable path
+        let safeContext = "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
+        return try await runPrompt(buildCorrectionPrompt(text: text, context: safeContext))
+    }
+
+    func runPrompt(_ prompt: String) async throws -> String {
         guard let codexPath = findExecutable("codex") else {
             throw AIError.commandFailed("Codex CLI not found. Please ensure Codex is installed and accessible.")
         }
-
-        let prompt = buildCorrectionPrompt(
-            text: text,
-            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
-        )
 
         let tempDir = FileManager.default.temporaryDirectory
         let outputURL = tempDir.appendingPathComponent("correctme_codex_output_\(UUID().uuidString).txt")
@@ -238,15 +240,14 @@ class CopilotProvider: AIProvider {
     }
 
     func correctText(_ text: String) async throws -> String {
-        // Find gh copilot executable path
+        let safeContext = "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\nDo not try to understand project structure or read any code.\n\n"
+        return try await runPrompt(buildCorrectionPrompt(text: text, context: safeContext))
+    }
+
+    func runPrompt(_ prompt: String) async throws -> String {
         guard let ghPath = findExecutable("gh") else {
             throw AIError.commandFailed("GitHub CLI not found. Please install: brew install gh")
         }
-
-        let prompt = buildCorrectionPrompt(
-            text: text,
-            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\nDo not try to understand project structure or read any code.\n\n"
-        )
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: ghPath)
@@ -301,27 +302,22 @@ class CopilotProvider: AIProvider {
 class ClaudeAPIProvider: AIProvider {
     private let apiKey: String
     private let model: String
-    
+
     init(apiKey: String, model: String) {
         self.apiKey = apiKey
         self.model = model
     }
-    
-    func correctText(_ text: String) async throws -> String {
+
+    func runPrompt(_ prompt: String) async throws -> String {
         let url = URL(string: "https://api.anthropic.com/v1/messages")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 15.0 // 15 seconds timeout
+        request.timeoutInterval = 15.0
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
-        
-        let prompt = buildCorrectionPrompt(
-            text: text,
-            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
-        )
+        request.setValue("close", forHTTPHeaderField: "Connection")
 
         let body: [String: Any] = [
             "model": model,
@@ -358,25 +354,20 @@ class ClaudeAPIProvider: AIProvider {
 class GeminiProvider: AIProvider {
     private let apiKey: String
     private let model: String
-    
+
     init(apiKey: String, model: String) {
         self.apiKey = apiKey
         self.model = model
     }
-    
-    func correctText(_ text: String) async throws -> String {
+
+    func runPrompt(_ prompt: String) async throws -> String {
         let url = URL(string: "https://generativelanguage.googleapis.com/v1/models/\(model):generateContent?key=\(apiKey)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 15.0 // 15 seconds timeout
+        request.timeoutInterval = 15.0
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
-        
-        let prompt = buildCorrectionPrompt(
-            text: text,
-            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
-        )
+        request.setValue("close", forHTTPHeaderField: "Connection")
 
         let body: [String: Any] = [
             "contents": [
@@ -420,20 +411,15 @@ class OpenAICodexProvider: AIProvider {
         self.model = model
     }
 
-    func correctText(_ text: String) async throws -> String {
+    func runPrompt(_ prompt: String) async throws -> String {
         let url = URL(string: "https://api.openai.com/v1/responses")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 15.0 // 15 seconds timeout
+        request.timeoutInterval = 15.0
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("close", forHTTPHeaderField: "Connection") // Disable keep-alive
-
-        let prompt = buildCorrectionPrompt(
-            text: text,
-            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
-        )
+        request.setValue("close", forHTTPHeaderField: "Connection")
 
         let body: [String: Any] = [
             "model": model,
@@ -490,18 +476,22 @@ class OpenRouterProvider: AIProvider {
         self.fallbackModels = fallbackModels
     }
 
+    /// correctText override: builds correction prompt + retry across fallback models.
     func correctText(_ text: String) async throws -> String {
-        // Build the model chain: primary + fallbacks
-        var modelsToTry = [model] + fallbackModels
+        return try await runPromptWithFallback(buildCorrectionPrompt(text: text))
+    }
 
-        // De-duplicate while preserving order
+    /// runPrompt: single-model call (no fallback) — used by Quick Action Picker.
+    func runPrompt(_ prompt: String) async throws -> String {
+        let result = try await callOpenRouter(model: model, prompt: prompt)
+        lastUsedModel = model
+        return result
+    }
+
+    private func runPromptWithFallback(_ prompt: String) async throws -> String {
+        var modelsToTry = [model] + fallbackModels
         var seen = Set<String>()
         modelsToTry = modelsToTry.filter { seen.insert($0).inserted }
-
-        let prompt = buildCorrectionPrompt(
-            text: text,
-            context: "IMPORTANT: Do not scan, read, or index any files in the repository or workspace.\nDo not access any file system or project context.\n\n"
-        )
 
         var lastError: Error = AIError.noProviderConfigured
 
@@ -515,18 +505,14 @@ class OpenRouterProvider: AIProvider {
                 return result
             } catch let error as AIError {
                 lastError = error
-                // Only retry on 429 (rate limit) or 503 (overloaded)
                 if case .apiError(let msg) = error,
                    (msg.contains("(429)") || msg.contains("(503)")) {
                     debugLog("OpenRouter: \(currentModel) returned rate limit/overload, trying next model...")
                     continue
                 }
-                // Other errors (auth, parse, etc.) — don't retry
                 throw error
             }
         }
-
-        // All models exhausted
         throw lastError
     }
 
@@ -751,25 +737,21 @@ class OllamaProvider: AIProvider {
         self.baseURL = baseURL
     }
 
-    func correctText(_ text: String) async throws -> String {
+    func runPrompt(_ prompt: String) async throws -> String {
         guard let url = URL(string: "\(baseURL)/api/chat") else {
             throw AIError.commandFailed("Invalid Ollama base URL: \(baseURL)")
         }
 
-        let prompt = buildCorrectionPrompt(text: text)
-
         let body: [String: Any] = [
             "model": model,
             "stream": false,
-            "messages": [
-                ["role": "user", "content": prompt]
-            ]
+            "messages": [["role": "user", "content": prompt]]
         ]
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 60.0  // local models can be slow on first token
+        request.timeoutInterval = 60.0
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         let session = getFreshURLSession()
@@ -780,7 +762,6 @@ class OllamaProvider: AIProvider {
         }
 
         guard http.statusCode == 200 else {
-            // Provide actionable hints for common errors
             if http.statusCode == 404 {
                 throw AIError.apiError("Model '\(model)' not found. Run: ollama pull \(model)")
             }
