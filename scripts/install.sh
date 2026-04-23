@@ -152,39 +152,33 @@ echo ""
 # Clean up
 rm -rf "$TMP_DIR"
 
-# Ask if user wants to run setup now
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Setup CorrectMe"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-read -p "Run setup wizard now? [Y/n] " -r
+# ── Start daemon ──
+echo "🚀 Starting CorrectMe..."
+/usr/local/bin/correctme start
 echo ""
 
-if [ -z "$REPLY" ] || echo "$REPLY" | grep -iq "^y"; then
-    correctme setup
-    echo ""
-fi
-
-# Ask if they want to start the daemon
-read -p "Start CorrectMe daemon now? [Y/n] " -r
+# ── Done ──
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  ✅ CorrectMe $VERSION installed!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-if [ -z "$REPLY" ] || echo "$REPLY" | grep -iq "^y"; then
-    correctme start
-    echo ""
-fi
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Installation Complete!"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  ⚠️  Required: Grant Accessibility permission"
 echo ""
-echo "CorrectMe is now installed and will auto-start at login!"
+echo "  CorrectMe needs Accessibility access to read and"
+echo "  replace selected text in any app."
 echo ""
-echo "Quick start:"
-echo "  • Select any text and press ⌘⇧E to correct it"
-echo "  • Run 'correctme status' to check daemon status"
-echo "  • Run 'correctme help' for more commands"
+echo "  → System Settings › Privacy & Security › Accessibility"
+echo "     Enable CorrectMe in the list"
 echo ""
-echo "To disable auto-start at login:"
-echo "  correctme disable"
+echo "  No restart needed — takes effect immediately."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  Next steps:"
+echo "  • Configure AI provider:"
+echo "    correctme quicksetup"
+echo "  • Or open Preferences from the ✏️ menu bar icon"
+echo ""
+echo "  Once configured, select any text in any app"
+echo "  and press ⌘⇧E to correct it."
 echo ""
