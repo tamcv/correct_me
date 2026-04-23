@@ -1759,10 +1759,11 @@ struct CorrectMeApp {
                     hud?.hide()
 
                     quickActionPicker.show(
-                        onAction: { action in
+                        sourceApp: sourceApp,
+                        onAction: { pickerAction in
                             Task {
-                                await runTextAction(
-                                    action,
+                                await runPickerAction(
+                                    pickerAction,
                                     text: selectedText,
                                     sourceApp: sourceApp,
                                     clipboardBefore: clipboardBefore
@@ -1779,7 +1780,81 @@ struct CorrectMeApp {
         }
     }
 
-    /// Run an AI action on already-captured text, then replace it in the source app.
+    /// Dispatch a PickerAction chosen from the Quick Action Picker.
+    static func runPickerAction(
+        _ pickerAction: PickerAction,
+        text: String,
+        sourceApp: NSRunningApplication?,
+        clipboardBefore: String?
+    ) async {
+        switch pickerAction {
+        case .standard(let textAction):
+            await runTextAction(textAction, text: text, sourceApp: sourceApp, clipboardBefore: clipboardBefore)
+
+        case .correctWithAppStyle(let appName, let style):
+            // Correct grammar + apply the app's custom writing style explicitly
+            logPrint("🤖 Action: Correct · \(appName) style")
+            guard let provider = aiProvider else {
+                let msg = "No AI provider configured"
+                logPrint("❌ \(msg)")
+                ErrorLog.shared.log(msg, category: .userError)
+                await MainActor.run { isProcessing = false; hud?.showError() }
+                return
+            }
+
+            await MainActor.run { hud?.showLoading() }
+            do {
+                let prompt = buildCorrectionPrompt(text: text, writingStyleOverride: style)
+                let result = try await provider.runPrompt(prompt)
+
+                await MainActor.run {
+                    hud?.hide()
+                    let applyResult = {
+                        CorrectionHistory.shared.record(original: text, corrected: result)
+                        lastOriginalText = text
+                        lastCorrectionSourceApp = sourceApp
+                        let ok = AccessibilityHelper.replaceSelectedText(
+                            with: result, targetApp: sourceApp, originalClipboard: clipboardBefore
+                        )
+                        if ok {
+                            logPrint("✅ Correct · \(appName) applied!")
+                        } else {
+                            logPrint("⚠️ Result copied to clipboard (source app unavailable)")
+                        }
+                        hud?.showSuccess()
+                        isProcessing = false
+                    }
+
+                    if Config.load().forceApply ?? false {
+                        applyResult()
+                        return
+                    }
+
+                    diffPreview.onAccept = applyResult
+                    diffPreview.onReject = {
+                        logPrint("↩ Correct · \(appName) discarded")
+                        if let orig = clipboardBefore {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(orig, forType: .string)
+                        } else {
+                            NSPasteboard.general.clearContents()
+                        }
+                        isProcessing = false
+                    }
+                    diffPreview.show(original: text, corrected: result)
+                }
+            } catch {
+                await MainActor.run {
+                    logPrint("❌ Error: \(error.localizedDescription)")
+                    ErrorLog.shared.log(error.localizedDescription, category: .aiError)
+                    isProcessing = false
+                    hud?.showError()
+                }
+            }
+        }
+    }
+
+    /// Run a standard TextAction on already-captured text, then replace it in the source app.
     static func runTextAction(
         _ action: TextAction,
         text: String,

@@ -48,7 +48,10 @@ enum TextAction: String, CaseIterable {
     func buildPrompt(for text: String) -> String {
         switch self {
         case .correct:
-            return buildCorrectionPrompt(text: text)
+            // Use global writing style only. Per-app style is exposed as a
+            // separate "Correct · AppName" action in the Quick Action Picker.
+            let globalStyle = Config.load().writingStyle ?? ""
+            return buildCorrectionPrompt(text: text, writingStyleOverride: globalStyle)
 
         case .translate:
             let cfg = Config.load()

@@ -991,18 +991,26 @@ func createAIProvider(from config: Config) throws -> AIProvider {
 /// language of the input and correct it in that language. Vietnamese (tiếng Việt)
 /// is called out explicitly because tone marks and diacritics are commonly
 /// mishandled by generic spell-checkers.
-func buildCorrectionPrompt(text: String, context: String = "") -> String {
+/// - `writingStyleOverride`: when non-nil, use this style directly (bypasses auto per-app lookup).
+///   Pass `nil` to use the automatic logic (per-app style > global style > none).
+///   Pass an empty string `""` to force no style (pure grammar-only correction).
+func buildCorrectionPrompt(text: String, context: String = "", writingStyleOverride: String? = nil) -> String {
     let config = Config.load()
-    let bundleId = currentCorrectionBundleId
 
-    // Per-app style takes priority, fall back to global style
     let writingStyle: String
-    if let bundleId = bundleId,
-       let appStyle = config.perAppStyles?[bundleId],
-       !appStyle.isEmpty {
-        writingStyle = appStyle
+    if let override = writingStyleOverride {
+        // Caller supplied an explicit style (or "" for pure grammar)
+        writingStyle = override
     } else {
-        writingStyle = config.writingStyle ?? ""
+        // Auto: per-app style > global style > none  (used by direct correctText() calls)
+        let bundleId = currentCorrectionBundleId
+        if let bundleId = bundleId,
+           let appStyle = config.perAppStyles?[bundleId],
+           !appStyle.isEmpty {
+            writingStyle = appStyle
+        } else {
+            writingStyle = config.writingStyle ?? ""
+        }
     }
 
     if writingStyle.isEmpty {
