@@ -148,8 +148,9 @@ jobs:
         printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "CorrectMe-%s-macos.dmg",\n  "url": "%s",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
           "$TAG" "$VERSION" "$TAG" "$DMG_URL" "$SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
 
-        git add dist/appcast.xml
+        git add -f dist/appcast.xml
         git add -f dist/latest.json
+        git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
         git diff --staged --quiet || (git commit -m "release: update appcast.xml and latest.json for $TAG" && git push origin main)
 
     - name: Cleanup keychain
