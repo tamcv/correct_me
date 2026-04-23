@@ -915,11 +915,12 @@ func buildCorrectionPrompt(text: String, context: String = "") -> String {
 
     if writingStyle.isEmpty {
         return """
-        \(context)Detect the language of the following text and correct its spelling and grammar in that same language.
+        \(context)Fix the spelling and grammar of the following text.
         Rules:
+        - DO NOT translate. Keep every word in its original language.
+        - If the text mixes languages (e.g. English + Vietnamese), keep that exact mix — do not normalise to one language.
         - Return ONLY the corrected text — no explanations, no markdown, no quotes.
-        - Preserve the original language exactly (e.g. English stays English, Vietnamese/tiếng Việt stays Vietnamese, etc.).
-        - For Vietnamese text: fix tone marks (dấu), diacritics, and common lỗi chính tả while keeping the meaning intact.
+        - For Vietnamese: fix tone marks (dấu) and diacritics while keeping the meaning intact.
         - Preserve the original formatting and line breaks.
         - If the text is already correct, return it unchanged.
 
@@ -928,13 +929,13 @@ func buildCorrectionPrompt(text: String, context: String = "") -> String {
         """
     } else {
         return """
-        \(context)Detect the language of the following text and rewrite/improve it in that same language.
-        Apply these writing style requirements: \(writingStyle)
-        Also fix any spelling and grammar errors.
+        \(context)Rewrite/improve the following text while applying the style requirements below.
+        Style requirements: \(writingStyle)
         Rules:
+        - DO NOT translate. Keep every word in its original language.
+        - If the text mixes languages, keep that exact mix — do not normalise to one language.
         - Return ONLY the rewritten text — no explanations, no markdown, no quotes.
-        - Preserve the original language exactly (e.g. English stays English, Vietnamese/tiếng Việt stays Vietnamese, etc.).
-        - For Vietnamese text: ensure tone marks (dấu) and diacritics are correct.
+        - For Vietnamese: ensure tone marks (dấu) and diacritics are correct.
         - Preserve the original formatting and line breaks.
 
         Text to rewrite:
