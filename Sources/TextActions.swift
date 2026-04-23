@@ -75,11 +75,15 @@ enum TextAction: String, CaseIterable {
 
         case .formal:
             return """
-            Rewrite the following text in a formal, professional tone.
-            Rules:
-            - DO NOT translate. Keep every word in its original language.
-            - If the text mixes languages, keep that exact mix.
-            - Fix any spelling or grammar errors while rewriting.
+            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
+            Your output MUST use the EXACT same language(s). \
+            If the input is Vietnamese, output Vietnamese. \
+            If the input is English, output English. \
+            If the input mixes languages, keep that exact mix. \
+            NEVER translate any word into a different language.
+
+            Task: Rewrite the text below in a formal, professional tone while keeping its original language(s).
+            - Fix spelling and grammar errors.
             - Return ONLY the rewritten text — no explanations, no quotes, no markdown.
 
             Text:
@@ -88,11 +92,15 @@ enum TextAction: String, CaseIterable {
 
         case .casual:
             return """
-            Rewrite the following text in a casual, friendly, conversational tone.
-            Rules:
-            - DO NOT translate. Keep every word in its original language.
-            - If the text mixes languages, keep that exact mix.
-            - Fix any spelling or grammar errors while rewriting.
+            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
+            Your output MUST use the EXACT same language(s). \
+            If the input is Vietnamese, output Vietnamese. \
+            If the input is English, output English. \
+            If the input mixes languages, keep that exact mix. \
+            NEVER translate any word into a different language.
+
+            Task: Rewrite the text below in a casual, friendly, conversational tone while keeping its original language(s).
+            - Fix spelling and grammar errors.
             - Return ONLY the rewritten text — no explanations, no quotes, no markdown.
 
             Text:
@@ -101,9 +109,13 @@ enum TextAction: String, CaseIterable {
 
         case .summarize:
             return """
-            Summarize the following text concisely, capturing only the key points.
-            Rules:
-            - DO NOT translate. Write the summary in the same language(s) as the original.
+            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
+            Your output MUST use the EXACT same language(s). \
+            If the input is Vietnamese, output Vietnamese. \
+            If the input is English, output English. \
+            NEVER translate any word into a different language.
+
+            Task: Summarize the text below concisely, capturing only the key points, in the same language(s) as the original.
             - Return ONLY the summary — no explanations, no quotes, no markdown.
 
             Text:
@@ -112,10 +124,15 @@ enum TextAction: String, CaseIterable {
 
         case .expand:
             return """
-            Expand and elaborate on the following text with more detail and context.
-            Rules:
-            - DO NOT translate. Write the expansion in the same language(s) as the original.
-            - Keep the same tone and style as the original.
+            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
+            Your output MUST use the EXACT same language(s). \
+            If the input is Vietnamese, output Vietnamese. \
+            If the input is English, output English. \
+            If the input mixes languages, keep that exact mix. \
+            NEVER translate any word into a different language.
+
+            Task: Expand and elaborate on the text below with more detail and context, in the same language(s) as the original.
+            - Keep the same tone and style.
             - Return ONLY the expanded text — no explanations, no quotes, no markdown.
 
             Text:
