@@ -105,7 +105,7 @@ if [ "$FORMAT" = "dmg" ]; then
     fi
 
     echo "  Copying to /Applications..."
-    cp -R "$MOUNT_POINT/CorrectMe.app" /Applications/
+    ditto "$MOUNT_POINT/CorrectMe.app" /Applications/CorrectMe.app
 
     echo "  Unmounting DMG..."
     hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
@@ -115,7 +115,7 @@ else
     unzip -q "$DOWNLOAD_PATH" -d "$TMP_DIR"
 
     if [ -d "$TMP_DIR/CorrectMe.app" ]; then
-        cp -R "$TMP_DIR/CorrectMe.app" /Applications/
+        ditto "$TMP_DIR/CorrectMe.app" /Applications/CorrectMe.app
     else
         echo "❌ CorrectMe.app not found in ZIP"
         rm -rf "$TMP_DIR"
