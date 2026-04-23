@@ -496,7 +496,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         if needsKey {
             apiKeyHint.stringValue = "Your API key is stored securely in the macOS Keychain."
         } else if provider == .ollama {
-            apiKeyHint.stringValue = "Ollama runs models locally — no API key or internet required.\nInstall: https://ollama.com  •  Start: ollama serve  •  Pull a model: ollama pull llama3.2"
+            apiKeyHint.stringValue = "🔒 100% local — your text never leaves this Mac. No API key, no internet, no data sent anywhere.\nInstall: https://ollama.com  •  Recommended model: ollama pull gemma3:4b"
             setAPIKeyValue("")
         } else {
             apiKeyHint.stringValue = "This provider uses a local CLI tool. No API key needed."

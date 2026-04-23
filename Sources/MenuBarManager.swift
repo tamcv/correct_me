@@ -238,6 +238,20 @@ class MenuBarManager: NSObject {
         providerItem.indentationLevel = 1
         menu.addItem(providerItem)
 
+        // Privacy badge — shown only when using Ollama (fully local)
+        if cfg.aiProvider == .ollama {
+            let privacyAttr = NSAttributedString(
+                string: "🔒  Runs locally · no data leaves your Mac",
+                attributes: [.font: NSFont.systemFont(ofSize: 10),
+                             .foregroundColor: NSColor.tertiaryLabelColor]
+            )
+            let privacyItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+            privacyItem.attributedTitle = privacyAttr
+            privacyItem.isEnabled = false
+            privacyItem.indentationLevel = 1
+            menu.addItem(privacyItem)
+        }
+
         // Last correction time
         if let timeAgo = StatusManager.shared.lastCorrectionTimeAgo {
             let timeAttr = NSAttributedString(
