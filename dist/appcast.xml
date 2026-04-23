@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>CorrectMe</title>
+    <link>https://raw.githubusercontent.com/tamcv/correct_me/main/dist/appcast.xml</link>
+    <description>CorrectMe release feed</description>
+    <language>en</language>
+
+    <item>
+      <title>CorrectMe 0.4.1</title>
+      <sparkle:version>41</sparkle:version>
+      <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
+      <pubDate>Mon, 20 Apr 2026 09:02:04 +0000</pubDate>
+      <enclosure
+        url="https://github.com/tamcv/correct_me/releases/download/v0.4.1/CorrectMe-v0.4.1-macos.dmg"
+        sparkle:version="41"
+        sparkle:shortVersionString="0.4.1"
+        length="1710171"
+        type="application/octet-stream"
+        sparkle:edSignature="9eFXcsUpjE8FQXuTUAr17eMAltNSWTZNxh8bHNeoptiViIuMIvO9rgJ33pfAfVQg7a5XxnlUFgY2aQUlkL6BBw=="
+      />
+    </item>
+
+    <item>
+      <title>CorrectMe 0.4.2</title>
+      <sparkle:version>42</sparkle:version>
+      <sparkle:shortVersionString>0.4.2</sparkle:shortVersionString>
+      <pubDate>Mon, 20 Apr 2026 09:19:56 +0000</pubDate>
+      <enclosure
+        url="https://github.com/tamcv/correct_me/releases/download/v0.4.2/CorrectMe-v0.4.2-macos.dmg"
+        sparkle:version="42"
+        sparkle:shortVersionString="0.4.2"
+        length="1709734"
+        type="application/octet-stream"
+        sparkle:edSignature="z7xOoaE1o8FVKPS8OCTYop68fV5CHlDHvXpEyt/7gzKPCSqS6hJf7KQWJ6eSXipCveGog3dS+gzjjH729ih+CA=="
+      />
+    </item>
+
+    <item>
+      <title>CorrectMe 0.4.3</title>
+      <sparkle:version>43</sparkle:version>
+      <sparkle:shortVersionString>0.4.3</sparkle:shortVersionString>
+      <pubDate>Mon, 20 Apr 2026 09:30:38 +0000</pubDate>
+      <enclosure
+        url="https://github.com/tamcv/correct_me/releases/download/v0.4.3/CorrectMe-v0.4.3-macos.dmg"
+        sparkle:version="43"
+        sparkle:shortVersionString="0.4.3"
+        length="1712694"
+        type="application/octet-stream"
+        sparkle:edSignature="Xq2qmp/7eLZ508/Q7S6RVR6jAoWnaYfeAut6xUOjbVyksI5AEaFjwGvmnsOBnO2V+sKoAIFuo/tBv2vcjdhhDw=="
+      />
+    </item>
+  </channel>
+</rss>
