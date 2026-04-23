@@ -1773,6 +1773,7 @@ struct CorrectMeApp {
                         onCancel: {
                             logPrint("↩ Action picker cancelled")
                             isProcessing = false
+                            StatusManager.shared.setStatus(.idle)
                         }
                     )
                 }
@@ -1840,6 +1841,7 @@ struct CorrectMeApp {
                             NSPasteboard.general.clearContents()
                         }
                         isProcessing = false
+                        StatusManager.shared.setStatus(.idle)
                     }
                     diffPreview.show(original: text, corrected: result)
                 }
@@ -1914,6 +1916,7 @@ struct CorrectMeApp {
                         NSPasteboard.general.clearContents()
                     }
                     isProcessing = false
+                    StatusManager.shared.setStatus(.idle)
                 }
                 diffPreview.show(original: text, corrected: result)
             }
