@@ -23,6 +23,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     // API key step views
     private var modelTextField: NSTextField?
+    private var ollamaModelPopup: NSPopUpButton?
 
     // MARK: - Provider Metadata
 
@@ -372,6 +373,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             (.claudeCode, "Claude Code  —  local CLI"),
             (.codexCode,  "Codex Code  —  local CLI"),
             (.copilot,    "GitHub Copilot  —  local CLI"),
+            (.ollama,     "Ollama  —  local, free, no API key"),
             (.claude,     "Claude API  —  key required"),
             (.gemini,     "Gemini API  —  key required"),
             (.codex,      "OpenAI / Codex API  —  key required"),
@@ -407,7 +409,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     @objc private func providerChanged(_ sender: NSPopUpButton) {
-        let providers: [Config.AIProvider] = [.claudeCode, .codexCode, .copilot, .claude, .gemini, .codex, .openrouter]
+        let providers: [Config.AIProvider] = [.claudeCode, .codexCode, .copilot, .ollama, .claude, .gemini, .codex, .openrouter]
         selectedProvider = providers[sender.indexOfSelectedItem]
         // Reset selected model so the new provider's default is picked up
         selectedModel = nil
@@ -502,6 +504,12 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             title.autoresizingMask = [.width]
             contentView.addSubview(title)
 
+            if selectedProvider == .ollama {
+                renderOllamaStep(bounds: bounds, cx: cx)
+                addNavigationButtons(showBack: true)
+                return
+            }
+
             let providerName: String
             switch selectedProvider {
             case .claudeCode: providerName = "Claude Code"
@@ -588,6 +596,106 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
 
         addModelField(at: bounds.height - 350, in: bounds)
         addNavigationButtons(showBack: true)
+    }
+
+    private func renderOllamaStep(bounds: NSRect, cx: CGFloat) {
+        let icon = makeSFSymbol("desktopcomputer", size: 44, color: .systemGreen)
+        icon.frame = NSRect(x: cx - 30, y: bounds.height - 110, width: 60, height: 60)
+        icon.autoresizingMask = [.minXMargin, .maxXMargin]
+        contentView.addSubview(icon)
+
+        let title = makeTitle("Choose Ollama Model")
+        title.font = .systemFont(ofSize: 20, weight: .bold)
+        title.frame = NSRect(x: contentPad, y: bounds.height - 150, width: bounds.width - contentPad * 2, height: 28)
+        title.autoresizingMask = [.width]
+        contentView.addSubview(title)
+
+        // Privacy badge
+        let badge = NSTextField(labelWithString: "🔒  100% local · no data leaves your Mac")
+        badge.font = .systemFont(ofSize: 11, weight: .medium)
+        badge.textColor = .systemGreen
+        badge.alignment = .center
+        badge.frame = NSRect(x: contentPad, y: bounds.height - 178, width: bounds.width - contentPad * 2, height: 16)
+        badge.autoresizingMask = [.width]
+        contentView.addSubview(badge)
+
+        // Model label + refresh
+        let modelLabel = makeSectionLabel("Installed Models")
+        modelLabel.frame = NSRect(x: contentPad, y: bounds.height - 215, width: 140, height: 18)
+        contentView.addSubview(modelLabel)
+
+        let refreshBtn = NSButton(title: "↻ Refresh", target: self, action: #selector(refreshOllamaModels))
+        refreshBtn.bezelStyle = .rounded
+        refreshBtn.font = .systemFont(ofSize: 11)
+        refreshBtn.frame = NSRect(x: bounds.width - contentPad - 80, y: bounds.height - 218, width: 80, height: 22)
+        refreshBtn.autoresizingMask = [.minXMargin]
+        contentView.addSubview(refreshBtn)
+
+        // Model popup
+        let popup = NSPopUpButton(frame: NSRect(x: contentPad, y: bounds.height - 250, width: bounds.width - contentPad * 2, height: 26))
+        popup.autoresizingMask = [.width]
+        popup.controlSize = .large
+        popup.addItem(withTitle: "Loading installed models…")
+        popup.isEnabled = false
+        ollamaModelPopup = popup
+        contentView.addSubview(popup)
+
+        // Hint
+        let hint = NSTextField(wrappingLabelWithString: "Shows models installed on your Mac. To install a model, open Terminal and run: ollama pull gemma3:4b")
+        hint.font = .systemFont(ofSize: 10)
+        hint.textColor = .tertiaryLabelColor
+        hint.frame = NSRect(x: contentPad, y: bounds.height - 302, width: bounds.width - contentPad * 2, height: 42)
+        hint.autoresizingMask = [.width]
+        contentView.addSubview(hint)
+
+        // Load models in background
+        loadOllamaModels()
+    }
+
+    private func loadOllamaModels() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let baseURL = "http://localhost:11434"
+            let models = OllamaProvider.fetchModels(baseURL: baseURL) ?? []
+
+            DispatchQueue.main.async {
+                guard let popup = self.ollamaModelPopup else { return }
+                popup.removeAllItems()
+
+                if models.isEmpty {
+                    popup.addItem(withTitle: "No models installed — run: ollama pull gemma3:4b")
+                    popup.isEnabled = false
+                    self.selectedModel = Config.DefaultModels.ollama
+                } else {
+                    for m in models { popup.addItem(withTitle: m) }
+                    popup.isEnabled = true
+                    // Pre-select previously chosen model if available
+                    if let prev = self.selectedModel, models.contains(prev) {
+                        popup.selectItem(withTitle: prev)
+                    } else {
+                        // Pick recommended if available
+                        let recommended = Config.DefaultModels.ollama
+                        if models.contains(recommended) {
+                            popup.selectItem(withTitle: recommended)
+                        }
+                        self.selectedModel = popup.titleOfSelectedItem ?? models[0]
+                    }
+                    popup.target = self
+                    popup.action = #selector(self.ollamaModelSelected(_:))
+                }
+            }
+        }
+    }
+
+    @objc private func refreshOllamaModels() {
+        ollamaModelPopup?.removeAllItems()
+        ollamaModelPopup?.addItem(withTitle: "Refreshing…")
+        ollamaModelPopup?.isEnabled = false
+        loadOllamaModels()
+    }
+
+    @objc private func ollamaModelSelected(_ sender: NSPopUpButton) {
+        selectedModel = sender.titleOfSelectedItem
     }
 
     private func addModelField(at y: CGFloat, in bounds: NSRect) {
@@ -910,7 +1018,11 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             }
 
             // Capture model override
-            if let field = modelTextField {
+            if selectedProvider == .ollama {
+                if let popup = ollamaModelPopup, popup.isEnabled, let title = popup.titleOfSelectedItem {
+                    selectedModel = title
+                }
+            } else if let field = modelTextField {
                 let val = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 selectedModel = val.isEmpty ? nil : val
             }
@@ -948,7 +1060,11 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
                 let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !key.isEmpty { apiKey = key }
             }
-            if let field = modelTextField {
+            if selectedProvider == .ollama {
+                if let popup = ollamaModelPopup, popup.isEnabled, let title = popup.titleOfSelectedItem {
+                    selectedModel = title
+                }
+            } else if let field = modelTextField {
                 let val = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 selectedModel = val.isEmpty ? nil : val
             }

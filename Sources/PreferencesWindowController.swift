@@ -27,6 +27,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var apiKeyLabel: NSTextField!
     private var apiKeyHint: NSTextField!
     private var ollamaURLField: NSTextField!   // shown only when Ollama is selected
+    private var ollamaPickModelBtn: NSButton!  // shown only when Ollama is selected
 
     // Hotkey tab
     private var hotkeyDisplayLabel: NSTextField!
@@ -373,12 +374,22 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         view.addSubview(mLabel)
         y -= 28
 
-        modelField = NSTextField(frame: NSRect(x: pad, y: y, width: contentW, height: 24))
+        let pickBtnW: CGFloat = 100
+        let modelFieldW = contentW - pickBtnW - 6
+        modelField = NSTextField(frame: NSRect(x: pad, y: y, width: modelFieldW, height: 24))
         modelField.placeholderString = defaultModelForProvider(config.aiProvider)
         modelField.stringValue = config.model ?? ""
         modelField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         modelField.controlSize = .large
         view.addSubview(modelField)
+
+        // "Pick from installed" button — only visible for Ollama
+        ollamaPickModelBtn = NSButton(title: "↻ Pick Model", target: self, action: #selector(pickOllamaModel))
+        ollamaPickModelBtn.bezelStyle = .rounded
+        ollamaPickModelBtn.font = .systemFont(ofSize: 11)
+        ollamaPickModelBtn.frame = NSRect(x: pad + modelFieldW + 6, y: y, width: pickBtnW, height: 24)
+        ollamaPickModelBtn.isHidden = config.aiProvider != .ollama
+        view.addSubview(ollamaPickModelBtn)
         y -= 30
 
         // Ollama base URL (shown only when Ollama provider is selected)
@@ -469,6 +480,57 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         updateProviderUI()
     }
 
+    @objc private func pickOllamaModel() {
+        ollamaPickModelBtn.isEnabled = false
+        ollamaPickModelBtn.title = "Loading…"
+
+        let baseURL = ollamaURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveURL = baseURL.isEmpty ? "http://localhost:11434" : baseURL
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let models = OllamaProvider.fetchModels(baseURL: effectiveURL) ?? []
+
+            DispatchQueue.main.async {
+                self.ollamaPickModelBtn.isEnabled = true
+                self.ollamaPickModelBtn.title = "↻ Pick Model"
+
+                guard !models.isEmpty else {
+                    let alert = NSAlert()
+                    alert.messageText = "No Models Found"
+                    alert.informativeText = "Ollama is not running or no models are installed.\n\nStart Ollama and install a model:\n  ollama pull gemma3:4b"
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                    return
+                }
+
+                let menu = NSMenu()
+                for model in models {
+                    let item = NSMenuItem(title: model, action: #selector(self.ollamaModelMenuItemSelected(_:)), keyEquivalent: "")
+                    item.target = self
+                    menu.addItem(item)
+                }
+
+                let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+                popup.menu = menu
+                let current = self.modelField.stringValue
+                if models.contains(current) {
+                    popup.selectItem(withTitle: current)
+                }
+
+                // Show menu under the button
+                if let event = NSApp.currentEvent {
+                    NSMenu.popUpContextMenu(menu, with: event, for: self.ollamaPickModelBtn)
+                }
+            }
+        }
+    }
+
+    @objc private func ollamaModelMenuItemSelected(_ sender: NSMenuItem) {
+        modelField.stringValue = sender.title
+    }
+
     private func selectedProvider() -> Config.AIProvider {
         guard let raw = providerPopUp.selectedItem?.representedObject as? String,
               let provider = Config.AIProvider(rawValue: raw) else {
@@ -515,12 +577,13 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         findModelsButton?.isHidden = !showFallback
         findModelsStatus?.isHidden = !showFallback
 
-        // Show Ollama URL field only for Ollama
+        // Show Ollama URL field + pick model button only for Ollama
         let showOllamaURL = provider == .ollama
         for tag in 810...812 {
             apiKeyField.superview?.viewWithTag(tag)?.isHidden = !showOllamaURL
         }
         ollamaURLField?.isHidden = !showOllamaURL
+        ollamaPickModelBtn?.isHidden = !showOllamaURL
 
         loadAPIKeyForCurrentProvider()
         updateAPIKeyPreview()
