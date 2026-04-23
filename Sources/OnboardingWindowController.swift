@@ -17,6 +17,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     private var apiKey: String = ""
     private var selectedHotkey: Config.HotkeyConfig = .default
     private var selectedModel: String?
+    private var selectedTranslateLanguage: String = Config.TranslateLanguage.auto.rawValue
 
     // Provider step views
     private var providerInfoBox: NSBox?
@@ -24,6 +25,9 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     // API key step views
     private var modelTextField: NSTextField?
     private var ollamaModelPopup: NSPopUpButton?
+
+    // Hotkey step views
+    private var translateLangPopup: NSPopUpButton?
 
     // MARK: - Provider Metadata
 
@@ -930,6 +934,44 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         captureBtn.autoresizingMask = [.minXMargin, .maxXMargin]
         contentView.addSubview(captureBtn)
 
+        // ── Translation Language ──
+        let sepBox = NSBox()
+        sepBox.boxType = .separator
+        sepBox.frame = NSRect(x: contentPad, y: bounds.height - 372, width: bounds.width - contentPad * 2, height: 1)
+        sepBox.autoresizingMask = [.width]
+        contentView.addSubview(sepBox)
+
+        let transLabel = makeSectionLabel("Translate action target language")
+        transLabel.frame = NSRect(x: contentPad, y: bounds.height - 402, width: bounds.width - contentPad * 2, height: 18)
+        transLabel.autoresizingMask = [.width]
+        contentView.addSubview(transLabel)
+
+        let langPopup = NSPopUpButton(
+            frame: NSRect(x: contentPad, y: bounds.height - 434, width: bounds.width - contentPad * 2, height: 26),
+            pullsDown: false
+        )
+        langPopup.autoresizingMask = [.width]
+        langPopup.controlSize = .regular
+        for lang in Config.TranslateLanguage.allCases {
+            langPopup.addItem(withTitle: lang.rawValue)
+        }
+        if langPopup.item(withTitle: selectedTranslateLanguage) != nil {
+            langPopup.selectItem(withTitle: selectedTranslateLanguage)
+        } else {
+            langPopup.selectItem(at: 0)
+        }
+        langPopup.target = self
+        langPopup.action = #selector(translateLangChanged(_:))
+        translateLangPopup = langPopup
+        contentView.addSubview(langPopup)
+
+        let transHint = NSTextField(labelWithString: "\"Auto\" detects language and translates EN↔VI. You can change this later in Preferences.")
+        transHint.font = .systemFont(ofSize: 10)
+        transHint.textColor = .tertiaryLabelColor
+        transHint.frame = NSRect(x: contentPad, y: bounds.height - 452, width: bounds.width - contentPad * 2, height: 14)
+        transHint.autoresizingMask = [.width]
+        contentView.addSubview(transHint)
+
         addNavigationButtons(showBack: true, nextLabel: "Finish")
     }
 
@@ -955,6 +997,10 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
             )
             hotkeyDisplayLabel?.stringValue = captured.displayName
         }
+    }
+
+    @objc private func translateLangChanged(_ sender: NSPopUpButton) {
+        selectedTranslateLanguage = sender.titleOfSelectedItem ?? Config.TranslateLanguage.auto.rawValue
     }
 
     // MARK: - Done (step 6)
@@ -1045,6 +1091,10 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         }
 
         if currentStep == 5 {
+            // Capture translate language popup state before saving
+            if let popup = translateLangPopup, let title = popup.titleOfSelectedItem {
+                selectedTranslateLanguage = title
+            }
             // Save config on the hotkey step (the last real step)
             saveOnboardingConfig()
             currentStep = 6
@@ -1146,6 +1196,10 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         case .openrouter: config.openrouterAPIKey = apiKey
         default: break
         }
+
+        // Translation target language (nil = auto)
+        let isAuto = selectedTranslateLanguage == Config.TranslateLanguage.auto.rawValue
+        config.translateTargetLanguage = isAuto ? nil : selectedTranslateLanguage
 
         do {
             try config.save()

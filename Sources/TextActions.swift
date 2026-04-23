@@ -51,22 +51,36 @@ enum TextAction: String, CaseIterable {
             return buildCorrectionPrompt(text: text)
 
         case .translate:
-            return """
-            Detect the language of the following text.
-            - If it is English, translate it to Vietnamese.
-            - Otherwise, translate it to English.
-            Return ONLY the translated text — no explanations, no quotes, no markdown.
+            let cfg = Config.load()
+            let target = cfg.translateTargetLanguage ?? Config.TranslateLanguage.auto.rawValue
+            if target == Config.TranslateLanguage.auto.rawValue {
+                return """
+                Detect the source language of the following text.
+                - If it is English, translate it to Vietnamese.
+                - Otherwise, translate it to English.
+                Return ONLY the translated text — no explanations, no quotes, no markdown.
 
-            Text:
-            \(text)
-            """
+                Text:
+                \(text)
+                """
+            } else {
+                return """
+                Translate the following text to \(target).
+                Return ONLY the translated text — no explanations, no quotes, no markdown.
+
+                Text:
+                \(text)
+                """
+            }
 
         case .formal:
             return """
             Rewrite the following text in a formal, professional tone.
-            Detect the language and keep exactly the same language.
-            Fix any spelling or grammar errors while rewriting.
-            Return ONLY the rewritten text — no explanations, no quotes, no markdown.
+            Rules:
+            - DO NOT translate. Keep every word in its original language.
+            - If the text mixes languages, keep that exact mix.
+            - Fix any spelling or grammar errors while rewriting.
+            - Return ONLY the rewritten text — no explanations, no quotes, no markdown.
 
             Text:
             \(text)
@@ -75,9 +89,11 @@ enum TextAction: String, CaseIterable {
         case .casual:
             return """
             Rewrite the following text in a casual, friendly, conversational tone.
-            Detect the language and keep exactly the same language.
-            Fix any spelling or grammar errors while rewriting.
-            Return ONLY the rewritten text — no explanations, no quotes, no markdown.
+            Rules:
+            - DO NOT translate. Keep every word in its original language.
+            - If the text mixes languages, keep that exact mix.
+            - Fix any spelling or grammar errors while rewriting.
+            - Return ONLY the rewritten text — no explanations, no quotes, no markdown.
 
             Text:
             \(text)
@@ -86,8 +102,9 @@ enum TextAction: String, CaseIterable {
         case .summarize:
             return """
             Summarize the following text concisely, capturing only the key points.
-            Detect the language and write the summary in that same language.
-            Return ONLY the summary — no explanations, no quotes, no markdown.
+            Rules:
+            - DO NOT translate. Write the summary in the same language(s) as the original.
+            - Return ONLY the summary — no explanations, no quotes, no markdown.
 
             Text:
             \(text)
@@ -96,9 +113,10 @@ enum TextAction: String, CaseIterable {
         case .expand:
             return """
             Expand and elaborate on the following text with more detail and context.
-            Detect the language and write the expansion in that same language.
-            Keep the same tone and style as the original.
-            Return ONLY the expanded text — no explanations, no quotes, no markdown.
+            Rules:
+            - DO NOT translate. Write the expansion in the same language(s) as the original.
+            - Keep the same tone and style as the original.
+            - Return ONLY the expanded text — no explanations, no quotes, no markdown.
 
             Text:
             \(text)

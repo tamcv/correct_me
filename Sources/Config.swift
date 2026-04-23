@@ -30,6 +30,7 @@ struct Config: Codable {
     var telegramChatId: String?
     var forceApply: Bool?
     var ollamaBaseURL: String?
+    var translateTargetLanguage: String?  // nil = auto (EN↔VI); see TranslateLanguage enum
 
     enum AIProvider: String, Codable {
         case claude = "claude"
@@ -75,6 +76,24 @@ struct Config: Codable {
             telegramChatId: nil,
             forceApply: nil
         )
+    }
+
+    /// Available target languages for the Translate action.
+    enum TranslateLanguage: String, CaseIterable {
+        case auto                = "Auto (EN ↔ VI)"
+        case english             = "English"
+        case vietnamese          = "Vietnamese"
+        case spanish             = "Spanish"
+        case french              = "French"
+        case german              = "German"
+        case japanese            = "Japanese"
+        case korean              = "Korean"
+        case chineseSimplified   = "Chinese (Simplified)"
+        case chineseTraditional  = "Chinese (Traditional)"
+        case portuguese          = "Portuguese"
+        case italian             = "Italian"
+        case russian             = "Russian"
+        case arabic              = "Arabic"
     }
 
     enum DefaultModels {

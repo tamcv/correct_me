@@ -53,6 +53,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     // General tab
     private var autoStartCheckbox: NSButton!
     private var forceApplyCheckbox: NSButton!
+    private var translateLanguagePopup: NSPopUpButton!
 
     private let W: CGFloat = 560
     private let H: CGFloat = 560
@@ -190,7 +191,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let view = NSView()
 
         let contentW = W - pad * 2
-        var y: CGFloat = 320
+        var y: CGFloat = 480
 
         // Section: Behavior
         let behaviorLabel = makeSectionHeader("Behavior")
@@ -209,6 +210,42 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         forceApplyCheckbox.state = (config.forceApply ?? false) ? .on : .off
         view.addSubview(forceApplyCheckbox)
         y -= 36
+
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 24
+
+        // Section: Translation
+        let translationHeader = makeSectionHeader("Translation")
+        translationHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        view.addSubview(translationHeader)
+        y -= 28
+
+        let langRowLabel = NSTextField(labelWithString: "Target Language")
+        langRowLabel.font = .systemFont(ofSize: 13)
+        langRowLabel.textColor = .labelColor
+        langRowLabel.frame = NSRect(x: pad, y: y + 3, width: 134, height: 18)
+        view.addSubview(langRowLabel)
+
+        translateLanguagePopup = NSPopUpButton(
+            frame: NSRect(x: pad + 138, y: y, width: contentW - 138, height: 26),
+            pullsDown: false
+        )
+        for lang in Config.TranslateLanguage.allCases {
+            translateLanguagePopup.addItem(withTitle: lang.rawValue)
+        }
+        let savedLang = config.translateTargetLanguage ?? Config.TranslateLanguage.auto.rawValue
+        if translateLanguagePopup.item(withTitle: savedLang) != nil {
+            translateLanguagePopup.selectItem(withTitle: savedLang)
+        } else {
+            translateLanguagePopup.selectItem(at: 0)
+        }
+        view.addSubview(translateLanguagePopup)
+        y -= 30
+
+        let langHint = makeDescriptionLabel("Used by the \"Translate\" action in the Quick Action Picker.")
+        langHint.frame = NSRect(x: pad, y: y, width: contentW, height: 14)
+        view.addSubview(langHint)
+        y -= 28
 
         view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
         y -= 24
@@ -1757,6 +1794,12 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         }
 
         config.forceApply = forceApplyCheckbox.state == .on ? true : nil
+
+        // Translation target language (nil = auto)
+        if let popup = translateLanguagePopup, let selected = popup.selectedItem?.title {
+            let isAuto = selected == Config.TranslateLanguage.auto.rawValue
+            config.translateTargetLanguage = isAuto ? nil : selected
+        }
 
         do {
             try config.save()
