@@ -1,20 +1,23 @@
 import Cocoa
 
-// MARK: - Picker action (standard TextAction + dynamic per-app correction)
+// MARK: - Picker action (standard TextAction + dynamic per-app correction + custom)
 
 /// What the user picked from the Quick Action Picker.
 enum PickerAction {
-    /// One of the 6 built-in actions (correct, translate, formal, casual, summarize, expand).
+    /// One of the 3 fixed actions (correct, translate, summarize).
     case standard(TextAction)
     /// Correct grammar while applying the current app's custom writing style.
     case correctWithAppStyle(appName: String, style: String)
+    /// A user-defined custom action.
+    case custom(Config.CustomAction)
 }
 
 // MARK: - Quick Action Picker window
 
 /// Floating panel that appears when the hotkey fires.
-/// Shows 6 built-in actions + an optional "Correct · AppName" row when
-/// the front-most app has a per-app writing style configured.
+/// Shows 3 fixed actions + an optional "Correct · AppName" row when the
+/// front-most app has a per-app writing style, then up to 5 custom actions
+/// below a thin separator.
 class QuickActionPickerWindow: NSPanel {
 
     static let shared = QuickActionPickerWindow()
@@ -27,15 +30,16 @@ class QuickActionPickerWindow: NSPanel {
     private var rowActions: [PickerAction] = []   // parallel array to rowViews
     private var keyMonitor: Any?
 
-    private let rowH:    CGFloat = 40
-    private let headerH: CGFloat = 30
-    private let winW:    CGFloat = 238
-    private let vPad:    CGFloat = 6
+    private let rowH:      CGFloat = 40
+    private let headerH:   CGFloat = 30
+    private let winW:      CGFloat = 238
+    private let vPad:      CGFloat = 6
+    /// Extra vertical space carved out for the separator between fixed and custom rows.
+    private let sepBlockH: CGFloat = 13
 
     // MARK: - Init
 
     private init() {
-        // Placeholder size — resized properly in buildUI()
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 238, height: 300),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -86,14 +90,15 @@ class QuickActionPickerWindow: NSPanel {
         rowViews.removeAll()
         rowActions.removeAll()
 
-        // ── Build item list ──
-        // Standard actions + optional per-app correct row after "correct"
-        var items: [(action: PickerAction, icon: String, appIcon: NSImage?,
-                     title: String, badge: String?, number: String?)] = []
+        typealias Item = (action: PickerAction, icon: String, appIcon: NSImage?,
+                          title: String, badge: String?, number: String?)
 
+        // ── Build fixed-action items ──────────────────────────────────────────
+        var fixedItems: [Item] = []
         let cfg = Config.load()
+
         for action in TextAction.allCases {
-            items.append((
+            fixedItems.append((
                 action: .standard(action),
                 icon: action.icon,
                 appIcon: nil,
@@ -106,10 +111,10 @@ class QuickActionPickerWindow: NSPanel {
             if action == .correct,
                let bundleId = sourceApp?.bundleIdentifier,
                let appStyle = cfg.perAppStyles?[bundleId], !appStyle.isEmpty,
-               let appName = sourceApp?.localizedName {
-                items.append((
+               let appName  = sourceApp?.localizedName {
+                fixedItems.append((
                     action: .correctWithAppStyle(appName: appName, style: appStyle),
-                    icon: "",            // will use appIcon instead
+                    icon: "",
                     appIcon: sourceApp?.icon,
                     title: "Correct · \(appName)",
                     badge: "App style",
@@ -118,8 +123,24 @@ class QuickActionPickerWindow: NSPanel {
             }
         }
 
-        let totalRows = items.count
-        let H = rowH * CGFloat(totalRows) + headerH + vPad * 2
+        // ── Build custom-action items ─────────────────────────────────────────
+        let customActions = cfg.customActions ?? Config.CustomAction.defaults
+        var customItems: [Item] = []
+        for (i, ca) in customActions.enumerated() {
+            customItems.append((
+                action: .custom(ca),
+                icon: ca.icon,
+                appIcon: nil,
+                title: ca.name,
+                badge: nil,
+                number: "\(i + 4)"   // shortcuts 4–8
+            ))
+        }
+
+        let hasCustom    = !customItems.isEmpty
+        let totalRows    = fixedItems.count + customItems.count
+        let extraH: CGFloat = hasCustom ? sepBlockH : 0
+        let H = rowH * CGFloat(totalRows) + extraH + headerH + vPad * 2
         setContentSize(NSSize(width: winW, height: H))
 
         let bg = NSView(frame: NSRect(x: 0, y: 0, width: winW, height: H))
@@ -129,7 +150,7 @@ class QuickActionPickerWindow: NSPanel {
         bg.layer?.masksToBounds   = true
         contentView = bg
 
-        // ── Header ──
+        // ── Header ───────────────────────────────────────────────────────────
         let titleLbl = NSTextField(labelWithString: "Quick Actions")
         titleLbl.font      = .systemFont(ofSize: 11, weight: .medium)
         titleLbl.textColor = NSColor(white: 0.45, alpha: 1)
@@ -154,10 +175,39 @@ class QuickActionPickerWindow: NSPanel {
         sep.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.07).cgColor
         bg.addSubview(sep)
 
-        // ── Action rows ──
-        for (i, item) in items.enumerated() {
-            let y   = H - headerH - vPad - rowH * CGFloat(i + 1)
+        // ── Fixed-action rows ─────────────────────────────────────────────────
+        // y starts just below the header; fixed rows stack downward.
+        let fixedTopY = H - headerH - vPad
+        for (i, item) in fixedItems.enumerated() {
+            let y   = fixedTopY - rowH * CGFloat(i + 1)
             let row = makeRow(item: item, index: i, y: y)
+            bg.addSubview(row)
+            rowViews.append(row)
+            rowActions.append(item.action)
+        }
+
+        // ── Separator between fixed and custom rows ───────────────────────────
+        if hasCustom {
+            let sepY = fixedTopY - rowH * CGFloat(fixedItems.count) - 1
+            let sepLine = NSView(frame: NSRect(x: 12, y: sepY - 5, width: winW - 24, height: 1))
+            sepLine.wantsLayer = true
+            sepLine.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.10).cgColor
+            bg.addSubview(sepLine)
+
+            // "Custom" label
+            let customLbl = NSTextField(labelWithString: "Custom")
+            customLbl.font      = .systemFont(ofSize: 9, weight: .medium)
+            customLbl.textColor = NSColor(white: 0.38, alpha: 1)
+            customLbl.frame     = NSRect(x: 12, y: sepY - sepBlockH + 2, width: 60, height: 10)
+            bg.addSubview(customLbl)
+        }
+
+        // ── Custom-action rows ────────────────────────────────────────────────
+        let customTopY = fixedTopY - rowH * CGFloat(fixedItems.count) - (hasCustom ? sepBlockH : 0)
+        let customOffset = fixedItems.count   // row index offset for rowViews
+        for (i, item) in customItems.enumerated() {
+            let y   = customTopY - rowH * CGFloat(i + 1)
+            let row = makeRow(item: item, index: customOffset + i, y: y)
             bg.addSubview(row)
             rowViews.append(row)
             rowActions.append(item.action)
@@ -175,7 +225,7 @@ class QuickActionPickerWindow: NSPanel {
         container.wantsLayer = true
         container.layer?.cornerRadius = 6
 
-        // Number badge (standard rows only)
+        // Number badge
         if let num = item.number {
             let numLbl = NSTextField(labelWithString: num)
             numLbl.font      = .monospacedSystemFont(ofSize: 10, weight: .regular)
@@ -199,10 +249,10 @@ class QuickActionPickerWindow: NSPanel {
 
         // Title
         let badgeW: CGFloat = isAppStyle ? 62 : 0
-        let titleLbl      = NSTextField(labelWithString: item.title)
-        titleLbl.font      = .systemFont(ofSize: 13, weight: isAppStyle ? .regular : .regular)
+        let titleLbl       = NSTextField(labelWithString: item.title)
+        titleLbl.font      = .systemFont(ofSize: 13)
         titleLbl.textColor = isAppStyle
-            ? NSColor(white: 0.70, alpha: 1)   // slightly dimmer for sub-action
+            ? NSColor(white: 0.70, alpha: 1)
             : NSColor(white: 0.88, alpha: 1)
         let titleX: CGFloat = 52
         titleLbl.frame = NSRect(x: titleX, y: (rowH - 16) / 2,
@@ -295,16 +345,33 @@ class QuickActionPickerWindow: NSPanel {
             selectAction(at: selectedIndex)
             return nil
         default:
-            // Number shortcuts 1–6 map to TextAction positions
-            if let c = event.characters, let n = Int(c), n >= 1, n <= TextAction.allCases.count {
-                // Find the nth standard action row
-                var stdCount = 0
-                for (i, action) in rowActions.enumerated() {
-                    if case .standard = action {
-                        stdCount += 1
-                        if stdCount == n {
-                            selectAction(at: i)
-                            return nil
+            // Number shortcuts:
+            //   1–3  → nth standard TextAction row
+            //   4–8  → nth custom action row (index 0-based: n-4)
+            if let c = event.characters, let n = Int(c) {
+                if n >= 1, n <= TextAction.allCases.count {
+                    // Find the nth standard action row (skip per-app style rows)
+                    var stdCount = 0
+                    for (i, action) in rowActions.enumerated() {
+                        if case .standard = action {
+                            stdCount += 1
+                            if stdCount == n {
+                                selectAction(at: i)
+                                return nil
+                            }
+                        }
+                    }
+                } else if n >= 4 {
+                    // Custom action shortcut: 4 → first custom, 5 → second, etc.
+                    let customIndex = n - 4
+                    var seen = 0
+                    for (i, action) in rowActions.enumerated() {
+                        if case .custom = action {
+                            if seen == customIndex {
+                                selectAction(at: i)
+                                return nil
+                            }
+                            seen += 1
                         }
                     }
                 }
@@ -326,13 +393,13 @@ class QuickActionPickerWindow: NSPanel {
     private func positionNearMouse() {
         let mouse  = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main!
-        let sf     = screen.visibleFrame   // respects Dock + menu bar
+        let sf     = screen.visibleFrame
         let margin: CGFloat = 8
         let ph = frame.height
         let pw = frame.width
 
         var ox = mouse.x + 14
-        var oy = mouse.y - 20   // slight offset so first row is near cursor
+        var oy = mouse.y - 20
 
         if oy < sf.minY + margin         { oy = sf.minY + margin }
         if oy + ph > sf.maxY - margin    { oy = sf.maxY - ph - margin }

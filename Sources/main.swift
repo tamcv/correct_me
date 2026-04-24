@@ -1792,6 +1792,67 @@ struct CorrectMeApp {
         case .standard(let textAction):
             await runTextAction(textAction, text: text, sourceApp: sourceApp, clipboardBefore: clipboardBefore)
 
+        case .custom(let customAction):
+            logPrint("🤖 Action: \(customAction.name)")
+            guard let provider = aiProvider else {
+                let msg = "No AI provider configured"
+                logPrint("❌ \(msg)")
+                ErrorLog.shared.log(msg, category: .userError)
+                await MainActor.run { isProcessing = false; hud?.showError() }
+                return
+            }
+
+            await MainActor.run { hud?.showLoading() }
+            do {
+                let prompt = customAction.buildPrompt(for: text)
+                let result = try await provider.runPrompt(prompt)
+
+                await MainActor.run {
+                    hud?.hide()
+                    let applyResult = {
+                        CorrectionHistory.shared.record(original: text, corrected: result)
+                        lastOriginalText = text
+                        lastCorrectionSourceApp = sourceApp
+                        let ok = AccessibilityHelper.replaceSelectedText(
+                            with: result, targetApp: sourceApp, originalClipboard: clipboardBefore
+                        )
+                        if ok {
+                            logPrint("✅ \(customAction.name) applied!")
+                        } else {
+                            logPrint("⚠️ Result copied to clipboard (source app unavailable)")
+                        }
+                        hud?.showSuccess()
+                        isProcessing = false
+                    }
+
+                    if Config.load().forceApply ?? false {
+                        applyResult()
+                        return
+                    }
+
+                    diffPreview.onAccept = applyResult
+                    diffPreview.onReject = {
+                        logPrint("↩ \(customAction.name) discarded")
+                        if let orig = clipboardBefore {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(orig, forType: .string)
+                        } else {
+                            NSPasteboard.general.clearContents()
+                        }
+                        isProcessing = false
+                        StatusManager.shared.setStatus(.idle)
+                    }
+                    diffPreview.show(original: text, corrected: result)
+                }
+            } catch {
+                await MainActor.run {
+                    logPrint("❌ Error: \(error.localizedDescription)")
+                    ErrorLog.shared.log(error.localizedDescription, category: .aiError)
+                    isProcessing = false
+                    hud?.showError()
+                }
+            }
+
         case .correctWithAppStyle(let appName, let style):
             // Correct grammar + apply the app's custom writing style explicitly
             logPrint("🤖 Action: Correct · \(appName) style")

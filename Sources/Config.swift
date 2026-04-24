@@ -31,6 +31,62 @@ struct Config: Codable {
     var forceApply: Bool?
     var ollamaBaseURL: String?
     var translateTargetLanguage: String?  // nil = auto (EN↔VI); see TranslateLanguage enum
+    var customActions: [CustomAction]?   // nil → defaults are returned at load time (max 5)
+
+    // MARK: - Custom Action
+
+    struct CustomAction: Codable {
+        /// Stable identifier (UUID string). Never changes after creation.
+        var id: String
+        /// Display name shown in the Quick Action Picker.
+        var name: String
+        /// Single emoji icon shown next to the name.
+        var icon: String
+        /// Task-level instruction written by the user.
+        /// The language-preservation rule is automatically prepended at runtime.
+        var prompt: String
+
+        /// Three pre-built actions that replace the old hard-coded formal / casual / expand.
+        static var defaults: [CustomAction] {
+            [
+                CustomAction(
+                    id: "com.correctme.builtin.formal",
+                    name: "Make formal",
+                    icon: "📝",
+                    prompt: "Rewrite the text below in a formal, professional tone while keeping its original language(s).\n- Fix spelling and grammar errors.\n- Return ONLY the rewritten text — no explanations, no quotes, no markdown."
+                ),
+                CustomAction(
+                    id: "com.correctme.builtin.casual",
+                    name: "Make casual",
+                    icon: "💬",
+                    prompt: "Rewrite the text below in a casual, friendly, conversational tone while keeping its original language(s).\n- Fix spelling and grammar errors.\n- Return ONLY the rewritten text — no explanations, no quotes, no markdown."
+                ),
+                CustomAction(
+                    id: "com.correctme.builtin.expand",
+                    name: "Expand",
+                    icon: "➕",
+                    prompt: "Expand and elaborate on the text below with more detail and context, in the same language(s) as the original.\n- Keep the same tone and style.\n- Return ONLY the expanded text — no explanations, no quotes, no markdown."
+                ),
+            ]
+        }
+
+        /// Builds the full AI prompt: language-preservation rule + user's task instruction + text.
+        func buildPrompt(for text: String) -> String {
+            """
+            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
+            Your output MUST use the EXACT same language(s). \
+            If the input is Vietnamese, output Vietnamese. \
+            If the input is English, output English. \
+            If the input mixes languages, keep that exact mix. \
+            NEVER translate any word into a different language.
+
+            \(prompt)
+
+            Text:
+            \(text)
+            """
+        }
+    }
 
     enum AIProvider: String, Codable {
         case claude = "claude"
@@ -138,6 +194,11 @@ struct Config: Codable {
         config.freellmAPIKey    = resolveAPIKey(config.freellmAPIKey,
                                                 account: KeychainAccount.freellmapi,
                                                 hadPlaintext: &hadPlaintext)
+
+        // Populate custom action defaults for existing users who don't have them yet.
+        if config.customActions == nil {
+            config.customActions = CustomAction.defaults
+        }
 
         // Flush any plaintext keys from disk right away.
         if hadPlaintext { try? config.save() }

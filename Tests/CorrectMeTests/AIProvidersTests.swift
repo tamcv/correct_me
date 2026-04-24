@@ -11,8 +11,8 @@ final class AIProvidersTests: XCTestCase {
     func testBuildCorrectionPromptWithoutStyleContainsLanguageInstruction() {
         let prompt = buildCorrectionPrompt(text: "sample")
         XCTAssertTrue(
-            prompt.contains("Detect the language"),
-            "Basic prompt should include language detection instruction"
+            prompt.contains("original language") || prompt.contains("Detect the language"),
+            "Basic prompt should include language preservation instruction"
         )
     }
 

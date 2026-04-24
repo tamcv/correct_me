@@ -40,6 +40,17 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var perAppStylesContainer: NSView!
     private var perAppEntries: [(bundleId: String, style: String)] = []
 
+    // Actions tab
+    private var customActionsContainer: NSView!
+    private var customActionEntries: [Config.CustomAction] = []
+
+    // Add/Edit action panel
+    private var editActionPanel: NSPanel?
+    private var editActionNameField: NSTextField?
+    private var editActionIconField: NSTextField?
+    private var editActionTextView: NSTextView?
+    private var editActionIndex: Int = -1   // -1 = new action
+
     // Add-app panel references
     private var addAppPanel: NSPanel?
     private var addAppPopUpRef: NSPopUpButton?
@@ -110,6 +121,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         }
 
         config = Config.load()
+        customActionEntries = config.customActions ?? Config.CustomAction.defaults
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: W, height: H),
@@ -129,7 +141,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         panel.contentView = root
 
         // Segmented control for tab switching
-        let tabLabels = ["General", "Provider", "Hotkey", "Writing Style", "Advanced"]
+        let tabLabels = ["General", "Provider", "Hotkey", "Writing Style", "Actions", "Advanced"]
         segmentedControl = NSSegmentedControl(labels: tabLabels, trackingMode: .selectOne, target: self, action: #selector(segmentChanged(_:)))
         segmentedControl.selectedSegment = 0
         segmentedControl.segmentStyle = .automatic
@@ -158,6 +170,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         tabView.addTabViewItem(makeProviderTab())
         tabView.addTabViewItem(makeHotkeyTab())
         tabView.addTabViewItem(makeWritingStyleTab())
+        tabView.addTabViewItem(makeActionsTab())
         tabView.addTabViewItem(makeAdvancedTab())
 
         // Bottom buttons
@@ -1607,6 +1620,391 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    // MARK: - Actions Tab
+
+    private func makeActionsTab() -> NSTabViewItem {
+        let item = NSTabViewItem(identifier: "actions")
+        item.label = "Actions"
+        let view = NSView()
+
+        let contentW = W - pad * 2
+        var y: CGFloat = 430
+
+        // Header
+        let header = makeSectionHeader("Custom Actions")
+        header.frame = NSRect(x: pad, y: y, width: contentW - 80, height: 18)
+        view.addSubview(header)
+
+        // "Add Action" button (disabled when 5 reached)
+        let addBtn = NSButton(title: " Add Action…", target: self, action: #selector(addCustomAction))
+        addBtn.bezelStyle = .rounded
+        addBtn.font = .systemFont(ofSize: 11)
+        if #available(macOS 11.0, *),
+           let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil) {
+            let cfg2 = NSImage.SymbolConfiguration(pointSize: 9, weight: .medium)
+            addBtn.image = img.withSymbolConfiguration(cfg2)
+            addBtn.imagePosition = .imageLeft
+        }
+        let addBtnW: CGFloat = 108
+        addBtn.frame = NSRect(x: contentW + pad - addBtnW, y: y - 2, width: addBtnW, height: 22)
+        addBtn.tag = 900  // tag so we can find it to enable/disable
+        view.addSubview(addBtn)
+        y -= 26
+
+        let desc = makeDescriptionLabel(
+            "Add up to 5 custom actions to the Quick Action Picker (shortcuts 4–8). " +
+            "Language preservation is applied automatically."
+        )
+        desc.frame = NSRect(x: pad, y: y, width: contentW, height: 30)
+        view.addSubview(desc)
+        y -= 36
+
+        // Fixed-actions info box
+        let fixedBox = NSBox()
+        fixedBox.boxType = .custom
+        fixedBox.borderWidth = 1
+        fixedBox.cornerRadius = 6
+        fixedBox.fillColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5)
+        fixedBox.borderColor = NSColor.separatorColor
+        fixedBox.frame = NSRect(x: pad, y: y - 52, width: contentW, height: 52)
+        view.addSubview(fixedBox)
+
+        let fixedLabel = NSTextField(labelWithString: "Fixed actions (always shown, cannot be removed):")
+        fixedLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        fixedLabel.textColor = .secondaryLabelColor
+        fixedLabel.frame = NSRect(x: pad + 8, y: y - 20, width: contentW - 16, height: 14)
+        view.addSubview(fixedLabel)
+
+        let fixedValue = NSTextField(labelWithString: "  ✏️  Correct grammar (1)     🌐  Translate (2)     ✂️  Summarize (3)")
+        fixedValue.font = .systemFont(ofSize: 12)
+        fixedValue.textColor = .labelColor
+        fixedValue.frame = NSRect(x: pad + 8, y: y - 40, width: contentW - 16, height: 16)
+        view.addSubview(fixedValue)
+        y -= 60
+
+        view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
+        y -= 20
+
+        let customHeader = makeSectionHeader("Your Custom Actions")
+        customHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
+        view.addSubview(customHeader)
+        y -= 26
+
+        // Scrollable container for custom action entries
+        let containerH: CGFloat = 200
+        let containerScroll = NSScrollView(frame: NSRect(x: pad, y: y - containerH, width: contentW, height: containerH))
+        containerScroll.hasVerticalScroller = true
+        containerScroll.borderType = .bezelBorder
+        containerScroll.drawsBackground = true
+
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: containerScroll.contentSize.width, height: containerH))
+        containerScroll.documentView = containerView
+        view.addSubview(containerScroll)
+        customActionsContainer = containerView
+
+        // Load entries
+        customActionEntries = config.customActions ?? Config.CustomAction.defaults
+        rebuildCustomActionList()
+        updateAddActionButton(in: view)
+
+        item.view = view
+        return item
+    }
+
+    private func rebuildCustomActionList() {
+        guard let container = customActionsContainer else { return }
+        container.subviews.forEach { $0.removeFromSuperview() }
+
+        let rowH: CGFloat = 40
+        let totalH = max(CGFloat(customActionEntries.count) * rowH, container.superview?.frame.height ?? 80)
+        container.frame = NSRect(x: 0, y: 0, width: container.frame.width, height: totalH)
+        let cw = container.frame.width
+
+        for (i, ca) in customActionEntries.enumerated() {
+            let y = totalH - CGFloat(i + 1) * rowH
+
+            // Shortcut number badge
+            let numLbl = NSTextField(labelWithString: "\(i + 4)")
+            numLbl.frame = NSRect(x: 8, y: y + (rowH - 14) / 2, width: 14, height: 14)
+            numLbl.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+            numLbl.textColor = .tertiaryLabelColor
+            container.addSubview(numLbl)
+
+            // Icon
+            let iconLbl = NSTextField(labelWithString: ca.icon)
+            iconLbl.frame = NSRect(x: 26, y: y + (rowH - 20) / 2, width: 22, height: 20)
+            iconLbl.font = .systemFont(ofSize: 15)
+            container.addSubview(iconLbl)
+
+            // Name
+            let nameLbl = NSTextField(labelWithString: ca.name)
+            nameLbl.frame = NSRect(x: 52, y: y + (rowH - 16) / 2, width: 140, height: 16)
+            nameLbl.font = .systemFont(ofSize: 13, weight: .medium)
+            nameLbl.textColor = .labelColor
+            nameLbl.lineBreakMode = .byTruncatingTail
+            container.addSubview(nameLbl)
+
+            // Prompt preview (truncated)
+            let previewLbl = NSTextField(labelWithString: ca.prompt)
+            previewLbl.frame = NSRect(x: 196, y: y + (rowH - 14) / 2, width: cw - 250, height: 14)
+            previewLbl.font = .systemFont(ofSize: 10)
+            previewLbl.textColor = .secondaryLabelColor
+            previewLbl.lineBreakMode = .byTruncatingTail
+            container.addSubview(previewLbl)
+
+            // ✏️ edit button
+            let editBtn = NSButton(frame: NSRect(x: cw - 50, y: y + (rowH - 20) / 2, width: 20, height: 20))
+            if #available(macOS 11.0, *),
+               let img = NSImage(systemSymbolName: "pencil.circle", accessibilityDescription: "Edit") {
+                editBtn.image = img; editBtn.imagePosition = .imageOnly
+                editBtn.isBordered = false; editBtn.contentTintColor = .secondaryLabelColor
+            } else { editBtn.title = "✏️"; editBtn.bezelStyle = .inline }
+            editBtn.tag = i; editBtn.target = self
+            editBtn.action = #selector(editCustomActionAtTag(_:))
+            container.addSubview(editBtn)
+
+            // × remove button
+            let xBtn = NSButton(frame: NSRect(x: cw - 26, y: y + (rowH - 20) / 2, width: 20, height: 20))
+            if #available(macOS 11.0, *),
+               let img = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove") {
+                xBtn.image = img; xBtn.imagePosition = .imageOnly
+                xBtn.isBordered = false; xBtn.contentTintColor = .tertiaryLabelColor
+            } else { xBtn.title = "×"; xBtn.bezelStyle = .inline }
+            xBtn.tag = i; xBtn.target = self
+            xBtn.action = #selector(removeCustomActionAtTag(_:))
+            container.addSubview(xBtn)
+
+            // Row separator
+            if i < customActionEntries.count - 1 {
+                let sep = NSView(frame: NSRect(x: 4, y: y, width: cw - 8, height: 1))
+                sep.wantsLayer = true
+                sep.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
+                container.addSubview(sep)
+            }
+        }
+
+        if customActionEntries.isEmpty {
+            let placeholder = NSTextField(labelWithString: "No custom actions yet — click \"Add Action…\" to create one")
+            placeholder.frame = NSRect(x: 4, y: (totalH - 20) / 2, width: cw - 8, height: 20)
+            placeholder.font = .systemFont(ofSize: 11)
+            placeholder.textColor = .tertiaryLabelColor
+            placeholder.alignment = .center
+            container.addSubview(placeholder)
+        }
+    }
+
+    /// Enable/disable the "Add Action…" button based on current count.
+    private func updateAddActionButton(in view: NSView) {
+        if let btn = view.viewWithTag(900) as? NSButton {
+            let atMax = customActionEntries.count >= 5
+            btn.isEnabled = !atMax
+        }
+    }
+
+    private func updateAddActionButtonInCurrentTab() {
+        // Walk up to find the actions tab view
+        if let tabItemView = customActionsContainer?.superview?.superview {
+            updateAddActionButton(in: tabItemView)
+        }
+    }
+
+    @objc private func addCustomAction() {
+        showEditActionPanel(editingIndex: -1)
+    }
+
+    @objc private func editCustomActionAtTag(_ sender: NSButton) {
+        showEditActionPanel(editingIndex: sender.tag)
+    }
+
+    @objc private func removeCustomActionAtTag(_ sender: NSButton) {
+        let idx = sender.tag
+        guard idx >= 0, idx < customActionEntries.count else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "Remove \"\(customActionEntries[idx].name)\"?"
+        alert.informativeText = "This custom action will be removed from the Quick Action Picker."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        customActionEntries.remove(at: idx)
+        rebuildCustomActionList()
+        updateAddActionButtonInCurrentTab()
+    }
+
+    private func showEditActionPanel(editingIndex idx: Int) {
+        if let existing = editActionPanel, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+        editActionIndex = idx
+        let isNew = idx == -1
+        let existing: Config.CustomAction? = isNew ? nil : customActionEntries[idx]
+
+        let pW: CGFloat = 440
+        let pH: CGFloat = 280
+        let pPad: CGFloat = 20
+        let pContentW = pW - pPad * 2
+
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: pW, height: pH),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = isNew ? "Add Custom Action" : "Edit Action"
+        panel.isReleasedWhenClosed = false
+        panel.level = .floating
+        panel.minSize = NSSize(width: 360, height: 260)
+        let cv = panel.contentView!
+
+        var py: CGFloat = pH - 36
+
+        // Name row
+        let nameLabel = NSTextField(labelWithString: "Name")
+        nameLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        nameLabel.textColor = .secondaryLabelColor
+        nameLabel.frame = NSRect(x: pPad, y: py, width: pContentW, height: 14)
+        cv.addSubview(nameLabel)
+        py -= 26
+
+        let nameField = NSTextField(frame: NSRect(x: pPad, y: py, width: pContentW - 60, height: 22))
+        nameField.placeholderString = "e.g. Fix typos"
+        nameField.stringValue = existing?.name ?? ""
+        nameField.font = .systemFont(ofSize: 13)
+        cv.addSubview(nameField)
+        editActionNameField = nameField
+
+        // Icon field (right of name)
+        let iconLabel = NSTextField(labelWithString: "Icon")
+        iconLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        iconLabel.textColor = .secondaryLabelColor
+        iconLabel.alignment = .center
+        iconLabel.frame = NSRect(x: pPad + pContentW - 54, y: py + 26, width: 54, height: 14)
+        cv.addSubview(iconLabel)
+
+        let iconField = NSTextField(frame: NSRect(x: pPad + pContentW - 54, y: py, width: 54, height: 22))
+        iconField.placeholderString = "✨"
+        iconField.stringValue = existing?.icon ?? ""
+        iconField.font = .systemFont(ofSize: 16)
+        iconField.alignment = .center
+        cv.addSubview(iconField)
+        editActionIconField = iconField
+        py -= 32
+
+        // Separator
+        let sep = NSBox(); sep.boxType = .separator
+        sep.frame = NSRect(x: pPad, y: py, width: pContentW, height: 1)
+        cv.addSubview(sep)
+        py -= 16
+
+        // Prompt label
+        let promptHeader = NSTextField(labelWithString: "Prompt (task instruction)")
+        promptHeader.font = .systemFont(ofSize: 11, weight: .semibold)
+        promptHeader.textColor = .secondaryLabelColor
+        promptHeader.frame = NSRect(x: pPad, y: py, width: pContentW, height: 14)
+        cv.addSubview(promptHeader)
+        py -= 20
+
+        // Prompt text view
+        let tvH: CGFloat = py - 52
+        let (scrollView, tv) = makeStyleTextView(
+            frame: NSRect(x: pPad, y: 52, width: pContentW, height: tvH),
+            initialText: existing?.prompt ?? "",
+            placeholder: "e.g. Rewrite the text in a more concise way.\n- Return ONLY the rewritten text."
+        )
+        scrollView.autoresizingMask = [.width, .height]
+        cv.addSubview(scrollView)
+        editActionTextView = tv
+
+        // Hint
+        let hint = NSTextField(labelWithString: "ℹ️  Language preservation rule is added automatically.")
+        hint.font = .systemFont(ofSize: 10)
+        hint.textColor = .tertiaryLabelColor
+        hint.frame = NSRect(x: pPad, y: 38, width: pContentW, height: 12)
+        cv.addSubview(hint)
+
+        // Buttons
+        let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancelEditAction))
+        cancelBtn.bezelStyle = .rounded
+        cancelBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        cancelBtn.frame = NSRect(x: pW - pPad - 166, y: 10, width: 72, height: 28)
+        cv.addSubview(cancelBtn)
+
+        let saveBtn = NSButton(title: isNew ? "Add" : "Save", target: self, action: #selector(confirmEditAction))
+        saveBtn.bezelStyle = .rounded
+        saveBtn.keyEquivalent = "\r"
+        saveBtn.autoresizingMask = [.minXMargin, .maxYMargin]
+        saveBtn.frame = NSRect(x: pW - pPad - 86, y: 10, width: 86, height: 28)
+        cv.addSubview(saveBtn)
+
+        editActionPanel = panel
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeFirstResponder(nameField)
+    }
+
+    @objc private func confirmEditAction() {
+        guard let nameField = editActionNameField,
+              let iconField = editActionIconField,
+              let tv        = editActionTextView else { return }
+
+        let name   = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let icon   = iconField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = tv.string.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !name.isEmpty else {
+            nameField.layer?.borderWidth = 1
+            nameField.layer?.borderColor = NSColor.systemRed.cgColor
+            return
+        }
+        guard !prompt.isEmpty else {
+            tv.enclosingScrollView?.wantsLayer = true
+            tv.enclosingScrollView?.layer?.borderWidth = 1
+            tv.enclosingScrollView?.layer?.borderColor = NSColor.systemRed.cgColor
+            return
+        }
+
+        let finalIcon = icon.isEmpty ? "⚡️" : String(icon.prefix(2))
+
+        if editActionIndex == -1 {
+            // New action
+            let newAction = Config.CustomAction(
+                id: UUID().uuidString,
+                name: name,
+                icon: finalIcon,
+                prompt: prompt
+            )
+            customActionEntries.append(newAction)
+        } else {
+            // Edit existing
+            customActionEntries[editActionIndex].name   = name
+            customActionEntries[editActionIndex].icon   = finalIcon
+            customActionEntries[editActionIndex].prompt = prompt
+        }
+
+        editActionPanel?.close()
+        editActionPanel = nil
+        editActionNameField = nil
+        editActionIconField = nil
+        editActionTextView = nil
+        editActionIndex = -1
+
+        rebuildCustomActionList()
+        updateAddActionButtonInCurrentTab()
+    }
+
+    @objc private func cancelEditAction() {
+        editActionPanel?.close()
+        editActionPanel = nil
+        editActionNameField = nil
+        editActionIconField = nil
+        editActionTextView = nil
+        editActionIndex = -1
+    }
+
     // MARK: - Advanced Tab
 
     private func makeAdvancedTab() -> NSTabViewItem {
@@ -1800,6 +2198,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             let isAuto = selected == Config.TranslateLanguage.auto.rawValue
             config.translateTargetLanguage = isAuto ? nil : selected
         }
+
+        // Custom actions (empty array = user explicitly cleared all)
+        config.customActions = customActionEntries.isEmpty ? [] : customActionEntries
 
         do {
             try config.save()

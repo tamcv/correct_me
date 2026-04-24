@@ -2,23 +2,18 @@ import Foundation
 
 // MARK: - Text Actions
 
-/// All AI actions available in the Quick Action Picker.
+/// Fixed AI actions always shown in the Quick Action Picker.
+/// (Make formal / casual / expand are now user-configurable custom actions.)
 enum TextAction: String, CaseIterable {
     case correct   = "correct"
     case translate = "translate"
-    case formal    = "formal"
-    case casual    = "casual"
     case summarize = "summarize"
-    case expand    = "expand"
 
     var title: String {
         switch self {
         case .correct:   return "Correct grammar"
         case .translate: return "Translate"
-        case .formal:    return "Make formal"
-        case .casual:    return "Make casual"
         case .summarize: return "Summarize"
-        case .expand:    return "Expand"
         }
     }
 
@@ -26,10 +21,7 @@ enum TextAction: String, CaseIterable {
         switch self {
         case .correct:   return "✏️"
         case .translate: return "🌐"
-        case .formal:    return "📝"
-        case .casual:    return "💬"
         case .summarize: return "✂️"
-        case .expand:    return "➕"
         }
     }
 
@@ -37,10 +29,7 @@ enum TextAction: String, CaseIterable {
         switch self {
         case .correct:   return "1"
         case .translate: return "2"
-        case .formal:    return "3"
-        case .casual:    return "4"
-        case .summarize: return "5"
-        case .expand:    return "6"
+        case .summarize: return "3"
         }
     }
 
@@ -76,40 +65,6 @@ enum TextAction: String, CaseIterable {
                 """
             }
 
-        case .formal:
-            return """
-            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
-            Your output MUST use the EXACT same language(s). \
-            If the input is Vietnamese, output Vietnamese. \
-            If the input is English, output English. \
-            If the input mixes languages, keep that exact mix. \
-            NEVER translate any word into a different language.
-
-            Task: Rewrite the text below in a formal, professional tone while keeping its original language(s).
-            - Fix spelling and grammar errors.
-            - Return ONLY the rewritten text — no explanations, no quotes, no markdown.
-
-            Text:
-            \(text)
-            """
-
-        case .casual:
-            return """
-            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
-            Your output MUST use the EXACT same language(s). \
-            If the input is Vietnamese, output Vietnamese. \
-            If the input is English, output English. \
-            If the input mixes languages, keep that exact mix. \
-            NEVER translate any word into a different language.
-
-            Task: Rewrite the text below in a casual, friendly, conversational tone while keeping its original language(s).
-            - Fix spelling and grammar errors.
-            - Return ONLY the rewritten text — no explanations, no quotes, no markdown.
-
-            Text:
-            \(text)
-            """
-
         case .summarize:
             return """
             LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
@@ -120,23 +75,6 @@ enum TextAction: String, CaseIterable {
 
             Task: Summarize the text below concisely, capturing only the key points, in the same language(s) as the original.
             - Return ONLY the summary — no explanations, no quotes, no markdown.
-
-            Text:
-            \(text)
-            """
-
-        case .expand:
-            return """
-            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
-            Your output MUST use the EXACT same language(s). \
-            If the input is Vietnamese, output Vietnamese. \
-            If the input is English, output English. \
-            If the input mixes languages, keep that exact mix. \
-            NEVER translate any word into a different language.
-
-            Task: Expand and elaborate on the text below with more detail and context, in the same language(s) as the original.
-            - Keep the same tone and style.
-            - Return ONLY the expanded text — no explanations, no quotes, no markdown.
 
             Text:
             \(text)
