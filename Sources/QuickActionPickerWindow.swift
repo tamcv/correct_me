@@ -24,6 +24,8 @@ class QuickActionPickerWindow: NSPanel {
 
     var onAction: ((PickerAction) -> Void)?
     var onCancel: (() -> Void)?
+    /// Called when the user clicks "Manage…" in the Custom section header.
+    var onManageCustomActions: (() -> Void)?
 
     private var selectedIndex = 0
     private var rowViews: [NSView] = []
@@ -200,6 +202,18 @@ class QuickActionPickerWindow: NSPanel {
             customLbl.textColor = NSColor(white: 0.38, alpha: 1)
             customLbl.frame     = NSRect(x: 12, y: sepY - sepBlockH + 2, width: 60, height: 10)
             bg.addSubview(customLbl)
+
+            // "Manage…" link — opens Preferences > Actions tab
+            let manageBtn = NSButton(title: "Manage…", target: self,
+                                     action: #selector(manageCustomActionsClicked))
+            manageBtn.bezelStyle       = .shadowlessSquare
+            manageBtn.isBordered       = false
+            manageBtn.font             = .systemFont(ofSize: 9)
+            manageBtn.contentTintColor = NSColor.controlAccentColor.withAlphaComponent(0.85)
+            manageBtn.alignment        = .right
+            manageBtn.frame = NSRect(x: winW - 72, y: sepY - sepBlockH + 1,
+                                     width: 66, height: 12)
+            bg.addSubview(manageBtn)
         }
 
         // ── Custom-action rows ────────────────────────────────────────────────
@@ -308,6 +322,12 @@ class QuickActionPickerWindow: NSPanel {
 
     @objc private func closeBtnClicked() {
         dismiss(cancelled: true)
+    }
+
+    @objc private func manageCustomActionsClicked() {
+        let handler = onManageCustomActions
+        dismiss(cancelled: true)
+        handler?()
     }
 
     override func mouseEntered(with event: NSEvent) {

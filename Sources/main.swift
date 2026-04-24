@@ -1755,8 +1755,37 @@ struct CorrectMeApp {
                 logPrint("📝 Selected: \"\(selectedText.prefix(50))\(selectedText.count > 50 ? "..." : "")\"")
 
                 await MainActor.run {
-                    // Text captured — hide spinner and show action picker
+                    // Text captured — stop the "capturing" spinner
                     hud?.hide()
+                    StatusManager.shared.setStatus(.idle)
+
+                    let cfg = Config.load()
+
+                    // ── Quick Actions disabled: correct directly ──────────
+                    if cfg.quickActionsEnabled == false {
+                        let bundleId = sourceApp?.bundleIdentifier ?? ""
+                        let directAction: PickerAction
+                        if let style = cfg.perAppStyles?[bundleId], !style.isEmpty,
+                           let appName = sourceApp?.localizedName {
+                            directAction = .correctWithAppStyle(appName: appName, style: style)
+                        } else {
+                            directAction = .standard(.correct)
+                        }
+                        Task {
+                            await runPickerAction(
+                                directAction,
+                                text: selectedText,
+                                sourceApp: sourceApp,
+                                clipboardBefore: clipboardBefore
+                            )
+                        }
+                        return
+                    }
+
+                    // ── Show Quick Action Picker ───────────────────────────
+                    quickActionPicker.onManageCustomActions = {
+                        PreferencesWindowController.shared.showActionsTab()
+                    }
 
                     quickActionPicker.show(
                         sourceApp: sourceApp,

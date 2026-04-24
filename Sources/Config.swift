@@ -32,6 +32,7 @@ struct Config: Codable {
     var ollamaBaseURL: String?
     var translateTargetLanguage: String?  // nil = auto (EN↔VI); see TranslateLanguage enum
     var customActions: [CustomAction]?   // nil → defaults are returned at load time (max 5)
+    var quickActionsEnabled: Bool?       // nil = true (show picker on hotkey)
 
     // MARK: - Custom Action
 

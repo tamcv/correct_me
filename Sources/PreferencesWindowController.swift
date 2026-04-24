@@ -69,6 +69,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     // General tab
     private var autoStartCheckbox: NSButton!
     private var forceApplyCheckbox: NSButton!
+    private var quickActionsCheckbox: NSButton!
     private var translateLanguagePopup: NSPopUpButton!
 
     private let W: CGFloat = 560
@@ -229,7 +230,17 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         forceApplyCheckbox.frame = NSRect(x: pad, y: y, width: contentW, height: 20)
         forceApplyCheckbox.state = (config.forceApply ?? false) ? .on : .off
         view.addSubview(forceApplyCheckbox)
-        y -= 36
+        y -= 26
+
+        quickActionsCheckbox = NSButton(checkboxWithTitle: "Show Quick Actions picker on hotkey", target: nil, action: nil)
+        quickActionsCheckbox.frame = NSRect(x: pad, y: y, width: contentW, height: 20)
+        quickActionsCheckbox.state = (config.quickActionsEnabled ?? true) ? .on : .off
+        view.addSubview(quickActionsCheckbox)
+
+        let qaHint = makeDescriptionLabel("When off, the hotkey corrects text directly using your writing style.")
+        qaHint.frame = NSRect(x: pad + 18, y: y - 22, width: contentW - 18, height: 14)
+        view.addSubview(qaHint)
+        y -= 48
 
         view.addSubview(makeSeparator(x: pad, y: y, width: contentW))
         y -= 24
@@ -1510,15 +1521,15 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             isExpanded: true,
             chevronBtn: transHeader.viewWithTag(100) as? NSButton))
 
-        // ── Correct Grammar (collapsed by default) ────────────────────────
+        // ── Correct Grammar (expanded by default — contains per-app styles) ─
         let correctHeader = buildCollapsibleHeader(title: "Correct Grammar",
-                                                   sectionIndex: 1, isExpanded: false)
+                                                   sectionIndex: 1, isExpanded: true)
         let (correctContent, correctH) = buildCorrectGrammarSectionContent()
         content.addSubview(correctHeader)
         content.addSubview(correctContent)
         actionsSections.append(ActionSectionInfo(
             header: correctHeader, content: correctContent, contentH: correctH,
-            isExpanded: false,
+            isExpanded: true,
             chevronBtn: correctHeader.viewWithTag(101) as? NSButton))
 
         // ── Custom Actions (expanded by default) ──────────────────────────
@@ -1822,7 +1833,9 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 
     @objc private func toggleActionSection(_ sender: NSButton) {
-        let idx = sender.tag
+        // clickArea uses tag = sectionIndex (0/1/2)
+        // chevron uses tag = 100 + sectionIndex for lookup — normalize back
+        let idx = sender.tag >= 100 ? sender.tag - 100 : sender.tag
         guard idx >= 0, idx < actionsSections.count else { return }
         actionsSections[idx].isExpanded.toggle()
 
@@ -2288,6 +2301,17 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         tabView.selectTabViewItem(at: sender.selectedSegment)
     }
 
+    /// Open Preferences and switch directly to the Actions tab.
+    func showActionsTab() {
+        showWindow()
+        // Defer so showWindow() finishes building the UI before we switch tabs
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.tabView.selectTabViewItem(at: 3)
+            self.segmentedControl.selectedSegment = 3
+        }
+    }
+
     // MARK: - Save / Cancel
 
     @objc private func save() {
@@ -2341,6 +2365,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         }
 
         config.forceApply = forceApplyCheckbox.state == .on ? true : nil
+        config.quickActionsEnabled = quickActionsCheckbox.state == .off ? false : nil
 
         // Translation target language (nil = auto)
         if let popup = translateLanguagePopup, let selected = popup.selectedItem?.title {
