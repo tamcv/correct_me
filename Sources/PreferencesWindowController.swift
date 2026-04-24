@@ -61,6 +61,11 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var editAppStyleViewRef: NSTextView?
     private var editingIndex: Int = -1
 
+    // Actions tab — collapsible sections
+    private var actionsSections: [ActionSectionInfo] = []
+    private weak var actionsScrollContent: ActionsTabContentView?
+    private weak var addActionButtonRef: NSButton?   // direct ref for enable/disable
+
     // General tab
     private var autoStartCheckbox: NSButton!
     private var forceApplyCheckbox: NSButton!
@@ -1468,263 +1473,394 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 
     // MARK: - Actions Tab
-    // Merges: Translate config + Correct Grammar style + Custom Actions
-    // Uses a FlippedView inside NSScrollView so the tab scrolls top-to-bottom.
+    // Three collapsible sections: Translate / Correct Grammar / Custom Actions.
+    // Each header row is clickable (▶/▼ chevron) to expand or collapse.
+
+    private struct ActionSectionInfo {
+        var header:    NSView
+        var content:   NSView
+        var contentH:  CGFloat
+        var isExpanded: Bool
+        weak var chevronBtn: NSButton?
+    }
 
     private func makeActionsTab() -> NSTabViewItem {
         let item = NSTabViewItem(identifier: "actions")
         item.label = "Actions"
 
-        // ── Outer scroll view fills the tab pane ──────────────────────────
-        let tabH: CGFloat = H - 106   // matches tabView height in showWindow()
+        let tabH: CGFloat = H - 106
         let outerScroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: W, height: tabH))
         outerScroll.hasVerticalScroller = true
-        outerScroll.autohidesScrollers = true
-        outerScroll.borderType = .noBorder
-        outerScroll.drawsBackground = false
+        outerScroll.autohidesScrollers  = true
+        outerScroll.borderType          = .noBorder
+        outerScroll.drawsBackground     = false
 
-        // FlippedView: y=0 is at the TOP, increases downward — natural top-to-bottom layout.
+        let content = ActionsTabContentView(frame: NSRect(x: 0, y: 0, width: W, height: 800))
+        actionsScrollContent = content
+        actionsSections      = []
+
+        // ── Translate (expanded by default) ───────────────────────────────
+        let transHeader = buildCollapsibleHeader(title: "Translate",
+                                                 sectionIndex: 0, isExpanded: true)
+        let (transContent, transH) = buildTranslateSectionContent()
+        content.addSubview(transHeader)
+        content.addSubview(transContent)
+        actionsSections.append(ActionSectionInfo(
+            header: transHeader, content: transContent, contentH: transH,
+            isExpanded: true,
+            chevronBtn: transHeader.viewWithTag(100) as? NSButton))
+
+        // ── Correct Grammar (collapsed by default) ────────────────────────
+        let correctHeader = buildCollapsibleHeader(title: "Correct Grammar",
+                                                   sectionIndex: 1, isExpanded: false)
+        let (correctContent, correctH) = buildCorrectGrammarSectionContent()
+        content.addSubview(correctHeader)
+        content.addSubview(correctContent)
+        actionsSections.append(ActionSectionInfo(
+            header: correctHeader, content: correctContent, contentH: correctH,
+            isExpanded: false,
+            chevronBtn: correctHeader.viewWithTag(101) as? NSButton))
+
+        // ── Custom Actions (expanded by default) ──────────────────────────
+        let addBtn = NSButton(title: " Add Action…", target: self,
+                              action: #selector(addCustomAction))
+        addBtn.bezelStyle = .rounded
+        addBtn.font       = .systemFont(ofSize: 11)
+        if #available(macOS 11.0, *),
+           let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil) {
+            addBtn.image         = img.withSymbolConfiguration(
+                NSImage.SymbolConfiguration(pointSize: 9, weight: .medium))
+            addBtn.imagePosition = .imageLeft
+        }
+        addBtn.frame = NSRect(x: 0, y: 0, width: 110, height: 22)
+        addBtn.tag   = 900
+        addActionButtonRef = addBtn
+
+        let customHeader = buildCollapsibleHeader(title: "Custom Actions",
+                                                  sectionIndex: 2, isExpanded: true,
+                                                  trailingView: addBtn)
+        let (customContent, customH) = buildCustomActionsSectionContent()
+        content.addSubview(customHeader)
+        content.addSubview(customContent)
+        actionsSections.append(ActionSectionInfo(
+            header: customHeader, content: customContent, contentH: customH,
+            isExpanded: true,
+            chevronBtn: customHeader.viewWithTag(102) as? NSButton))
+
+        relayoutActionsSections(animated: false)
+        updateAddActionButtonInCurrentTab()
+
+        outerScroll.documentView = content
+        item.view = outerScroll
+        return item
+    }
+
+    /// Builds a clickable section header: chevron + bold title + optional trailing button.
+    private func buildCollapsibleHeader(
+        title: String,
+        sectionIndex: Int,
+        isExpanded: Bool,
+        trailingView: NSView? = nil
+    ) -> NSView {
+        let headerH: CGFloat = 34
+        let header = NSView(frame: NSRect(x: 0, y: 0, width: W, height: headerH))
+        header.wantsLayer = true
+
+        // Transparent click area placed first so non-interactive labels pass through events
+        let reservedW: CGFloat = trailingView != nil ? 130 : 0
+        let clickArea = NSButton(
+            frame: NSRect(x: 0, y: 0, width: W - reservedW, height: headerH))
+        clickArea.bezelStyle = .shadowlessSquare
+        clickArea.isBordered = false
+        clickArea.title      = ""
+        clickArea.tag        = sectionIndex
+        clickArea.target     = self
+        clickArea.action     = #selector(toggleActionSection(_:))
+        header.addSubview(clickArea)
+
+        // Chevron SF Symbol — tag = 100 + sectionIndex for later lookup
+        if #available(macOS 11.0, *) {
+            let symbolName = isExpanded ? "chevron.down" : "chevron.right"
+            let chevron = NSButton(
+                frame: NSRect(x: pad - 4, y: (headerH - 14) / 2, width: 14, height: 14))
+            chevron.bezelStyle       = .shadowlessSquare
+            chevron.isBordered       = false
+            chevron.imagePosition    = .imageOnly
+            chevron.contentTintColor = .secondaryLabelColor
+            chevron.tag              = 100 + sectionIndex
+            chevron.target           = self
+            chevron.action           = #selector(toggleActionSection(_:))
+            if let img = NSImage(systemSymbolName: symbolName,
+                                 accessibilityDescription: nil) {
+                chevron.image = img.withSymbolConfiguration(
+                    NSImage.SymbolConfiguration(pointSize: 10, weight: .medium))
+            }
+            header.addSubview(chevron)
+        }
+
+        // Section title (non-interactive label — clicks fall through to clickArea)
+        let titleLbl = NSTextField(labelWithString: title)
+        titleLbl.font      = .systemFont(ofSize: 13, weight: .semibold)
+        titleLbl.textColor = .labelColor
+        titleLbl.frame     = NSRect(x: pad + 16, y: (headerH - 16) / 2, width: 220, height: 16)
+        header.addSubview(titleLbl)
+
+        // Optional trailing button (e.g. "Add Action…")
+        if let tv = trailingView {
+            let tvW = tv.frame.width  > 0 ? tv.frame.width  : 110
+            let tvH = tv.frame.height > 0 ? tv.frame.height : 22
+            tv.frame = NSRect(x: W - pad - tvW, y: (headerH - tvH) / 2,
+                              width: tvW, height: tvH)
+            header.addSubview(tv)
+        }
+
+        // Hairline separator on top edge (between sections, not before the first)
+        if sectionIndex > 0 {
+            let line = NSView(frame: NSRect(x: 0, y: headerH - 1, width: W, height: 1))
+            line.wantsLayer = true
+            line.layer?.backgroundColor = NSColor.separatorColor.cgColor
+            header.addSubview(line)
+        }
+
+        return header
+    }
+
+    private func buildTranslateSectionContent() -> (NSView, CGFloat) {
         let contentW = W - pad * 2
-        let content = ActionsTabContentView(frame: NSRect(x: 0, y: 0, width: W, height: 1100))
-        var y: CGFloat = 20   // current pen position, starts 20px below top
+        let view = ActionsTabContentView(frame: .zero)
+        var y: CGFloat = 10
 
-        // ─────────────────────────────────────────────────────────────────
-        // SECTION: TRANSLATE
-        // ─────────────────────────────────────────────────────────────────
-        let translateHeader = makeSectionHeader("Translate")
-        translateHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
-        content.addSubview(translateHeader)
-        y += 28
-
-        let langRowLabel = NSTextField(labelWithString: "Target Language")
-        langRowLabel.font = .systemFont(ofSize: 13)
-        langRowLabel.textColor = .labelColor
-        langRowLabel.frame = NSRect(x: pad, y: y + 4, width: 134, height: 18)
-        content.addSubview(langRowLabel)
+        let langLabel = NSTextField(labelWithString: "Target Language")
+        langLabel.font      = .systemFont(ofSize: 13)
+        langLabel.textColor = .labelColor
+        langLabel.frame     = NSRect(x: pad, y: y + 4, width: 134, height: 18)
+        view.addSubview(langLabel)
 
         translateLanguagePopup = NSPopUpButton(
             frame: NSRect(x: pad + 138, y: y, width: contentW - 138, height: 26),
-            pullsDown: false
-        )
+            pullsDown: false)
         for lang in Config.TranslateLanguage.allCases {
             translateLanguagePopup.addItem(withTitle: lang.rawValue)
         }
-        let savedLang = config.translateTargetLanguage ?? Config.TranslateLanguage.auto.rawValue
+        let savedLang = config.translateTargetLanguage
+            ?? Config.TranslateLanguage.auto.rawValue
         if translateLanguagePopup.item(withTitle: savedLang) != nil {
             translateLanguagePopup.selectItem(withTitle: savedLang)
         } else {
             translateLanguagePopup.selectItem(at: 0)
         }
-        content.addSubview(translateLanguagePopup)
+        view.addSubview(translateLanguagePopup)
         y += 32
 
-        let langHint = makeDescriptionLabel("Used by the \"Translate\" action in the Quick Action Picker.")
-        langHint.frame = NSRect(x: pad, y: y, width: contentW, height: 14)
-        content.addSubview(langHint)
-        y += 26
+        let hint = makeDescriptionLabel(
+            "Used by the \"Translate\" action in the Quick Action Picker.")
+        hint.frame = NSRect(x: pad, y: y, width: contentW, height: 14)
+        view.addSubview(hint)
+        y += 22
 
-        content.addSubview(makeSeparator(x: pad, y: y, width: contentW))
-        y += 20
+        return (view, y)
+    }
 
-        // ─────────────────────────────────────────────────────────────────
-        // SECTION: CORRECT GRAMMAR
-        // ─────────────────────────────────────────────────────────────────
-        let correctHeader = makeSectionHeader("Correct Grammar")
-        correctHeader.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
-        content.addSubview(correctHeader)
-        y += 26
+    private func buildCorrectGrammarSectionContent() -> (NSView, CGFloat) {
+        let contentW = W - pad * 2
+        let view = ActionsTabContentView(frame: .zero)
+        var y: CGFloat = 10
 
-        let correctDesc = makeDescriptionLabel(
-            "Writing style applied by the \"Correct Grammar\" action. Has no effect on Translate, Summarize, or custom actions."
-        )
-        correctDesc.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
-        content.addSubview(correctDesc)
+        let desc = makeDescriptionLabel(
+            "Writing style applied by the \"Correct Grammar\" action. " +
+            "Has no effect on Translate, Summarize, or custom actions.")
+        desc.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
+        view.addSubview(desc)
         y += 36
 
-        // Global Style subsection
+        // ── Global Style ──────────────────────────────────────────────────
         let globalStyleLabel = NSTextField(labelWithString: "Global Style")
-        globalStyleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        globalStyleLabel.font      = .systemFont(ofSize: 12, weight: .semibold)
         globalStyleLabel.textColor = .secondaryLabelColor
-        globalStyleLabel.frame = NSRect(x: pad, y: y, width: contentW - 66, height: 16)
-        content.addSubview(globalStyleLabel)
+        globalStyleLabel.frame     = NSRect(x: pad, y: y, width: contentW - 66, height: 16)
+        view.addSubview(globalStyleLabel)
 
         let clearBtn = NSButton(title: "Reset", target: self, action: #selector(clearStyle))
-        clearBtn.bezelStyle = .rounded
-        clearBtn.font = .systemFont(ofSize: 11)
+        clearBtn.bezelStyle  = .rounded
+        clearBtn.font        = .systemFont(ofSize: 11)
         clearBtn.controlSize = .small
-        clearBtn.frame = NSRect(x: W - pad - 58, y: y - 1, width: 58, height: 20)
-        clearBtn.tag = 801
-        content.addSubview(clearBtn)
+        clearBtn.frame       = NSRect(x: W - pad - 58, y: y - 1, width: 58, height: 20)
+        clearBtn.tag         = 801
+        view.addSubview(clearBtn)
         y += 24
 
         let styleScrollH: CGFloat = 110
-        let styleScrollView = NSScrollView(frame: NSRect(x: pad, y: y, width: contentW, height: styleScrollH))
-        styleScrollView.hasVerticalScroller = true
-        styleScrollView.borderType = .bezelBorder
-
-        let textStorage = NSTextStorage()
-        let layoutManager = NSLayoutManager()
-        textStorage.addLayoutManager(layoutManager)
-        let styleContainer = NSTextContainer(
-            size: NSSize(width: styleScrollView.contentSize.width, height: .greatestFiniteMagnitude)
-        )
-        styleContainer.widthTracksTextView = true
-        layoutManager.addTextContainer(styleContainer)
-        let styleTv = NSTextView(frame: NSRect(origin: .zero, size: styleScrollView.contentSize),
-                                 textContainer: styleContainer)
-        styleTv.isEditable = true
-        styleTv.isRichText = false
-        styleTv.font = .systemFont(ofSize: 13)
-        styleTv.allowsUndo = true
-        styleTv.textContainerInset = NSSize(width: 4, height: 6)
-        styleTv.string = config.writingStyle ?? defaultWritingStyle
-        styleScrollView.documentView = styleTv
-        content.addSubview(styleScrollView)
+        let (styleScroll, styleTv) = makeStyleTextView(
+            frame: NSRect(x: pad, y: y, width: contentW, height: styleScrollH),
+            initialText: config.writingStyle ?? defaultWritingStyle,
+            placeholder: "e.g. Fix grammar and spelling only. Keep original tone.")
+        view.addSubview(styleScroll)
         styleTextView = styleTv
         y += styleScrollH + 6
 
-        let styleHint = NSTextField(labelWithString: "Instructions appended to the AI prompt. Reset restores the default.")
-        styleHint.font = .systemFont(ofSize: 10)
+        let styleHint = NSTextField(
+            labelWithString: "Instructions appended to the AI prompt. Reset restores the default.")
+        styleHint.font      = .systemFont(ofSize: 10)
         styleHint.textColor = .tertiaryLabelColor
-        styleHint.frame = NSRect(x: pad, y: y, width: contentW, height: 14)
-        content.addSubview(styleHint)
+        styleHint.frame     = NSRect(x: pad, y: y, width: contentW, height: 14)
+        view.addSubview(styleHint)
         y += 24
 
         // Thin sub-separator before per-app section
         let subSep = NSView(frame: NSRect(x: pad + 10, y: y, width: contentW - 20, height: 1))
         subSep.wantsLayer = true
         subSep.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.6).cgColor
-        content.addSubview(subSep)
+        view.addSubview(subSep)
         y += 16
 
-        // Per-App Styles subsection
+        // ── Per-App Overrides ─────────────────────────────────────────────
         let perAppLabel = NSTextField(labelWithString: "Per-App Overrides")
-        perAppLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        perAppLabel.font      = .systemFont(ofSize: 12, weight: .semibold)
         perAppLabel.textColor = .secondaryLabelColor
-        perAppLabel.frame = NSRect(x: pad, y: y, width: 180, height: 16)
-        content.addSubview(perAppLabel)
+        perAppLabel.frame     = NSRect(x: pad, y: y, width: 180, height: 16)
+        view.addSubview(perAppLabel)
 
         let addAppBtnW: CGFloat = 90
-        let addAppBtn = NSButton(title: " Add App…", target: self, action: #selector(addPerAppStyle))
+        let addAppBtn = NSButton(title: " Add App…", target: self,
+                                 action: #selector(addPerAppStyle))
         addAppBtn.bezelStyle = .rounded
-        addAppBtn.font = .systemFont(ofSize: 11)
+        addAppBtn.font       = .systemFont(ofSize: 11)
         if #available(macOS 11.0, *),
            let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil) {
             let cfg2 = NSImage.SymbolConfiguration(pointSize: 9, weight: .medium)
-            addAppBtn.image = img.withSymbolConfiguration(cfg2)
+            addAppBtn.image         = img.withSymbolConfiguration(cfg2)
             addAppBtn.imagePosition = .imageLeft
         }
-        addAppBtn.frame = NSRect(x: W - pad - addAppBtnW, y: y - 2, width: addAppBtnW, height: 22)
-        content.addSubview(addAppBtn)
+        addAppBtn.frame = NSRect(x: W - pad - addAppBtnW, y: y - 2,
+                                 width: addAppBtnW, height: 22)
+        view.addSubview(addAppBtn)
         y += 26
 
         let perAppDesc = makeDescriptionLabel(
-            "Override the global style for specific apps (e.g. casual in Slack, formal in Mail)."
-        )
+            "Override the global style for specific apps (e.g. casual in Slack, formal in Mail).")
         perAppDesc.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
-        content.addSubview(perAppDesc)
+        view.addSubview(perAppDesc)
         y += 34
 
         let perAppH: CGFloat = 130
-        let perAppScroll = NSScrollView(frame: NSRect(x: pad, y: y, width: contentW, height: perAppH))
+        let perAppScroll = NSScrollView(
+            frame: NSRect(x: pad, y: y, width: contentW, height: perAppH))
         perAppScroll.hasVerticalScroller = true
-        perAppScroll.borderType = .bezelBorder
-        perAppScroll.drawsBackground = true
+        perAppScroll.borderType          = .bezelBorder
+        perAppScroll.drawsBackground     = true
         let perAppContainer = NSView(
-            frame: NSRect(x: 0, y: 0, width: perAppScroll.contentSize.width, height: perAppH)
-        )
+            frame: NSRect(x: 0, y: 0,
+                          width: perAppScroll.contentSize.width, height: perAppH))
         perAppScroll.documentView = perAppContainer
-        content.addSubview(perAppScroll)
+        view.addSubview(perAppScroll)
         perAppStylesContainer = perAppContainer
         rebuildPerAppList()
-        y += perAppH + 26
+        y += perAppH + 16
 
-        // ─────────────────────────────────────────────────────────────────
-        // SECTION SEPARATOR
-        // ─────────────────────────────────────────────────────────────────
-        content.addSubview(makeSeparator(x: pad, y: y, width: contentW))
-        y += 20
+        return (view, y)
+    }
 
-        // ─────────────────────────────────────────────────────────────────
-        // SECTION: CUSTOM ACTIONS
-        // ─────────────────────────────────────────────────────────────────
-        let customHeader = makeSectionHeader("Custom Actions")
-        customHeader.frame = NSRect(x: pad, y: y, width: contentW - 116, height: 18)
-        content.addSubview(customHeader)
+    private func buildCustomActionsSectionContent() -> (NSView, CGFloat) {
+        let contentW = W - pad * 2
+        let view = ActionsTabContentView(frame: .zero)
+        var y: CGFloat = 10
 
-        let addActionBtnW: CGFloat = 110
-        let addActionBtn = NSButton(title: " Add Action…", target: self, action: #selector(addCustomAction))
-        addActionBtn.bezelStyle = .rounded
-        addActionBtn.font = .systemFont(ofSize: 11)
-        if #available(macOS 11.0, *),
-           let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil) {
-            let cfg2 = NSImage.SymbolConfiguration(pointSize: 9, weight: .medium)
-            addActionBtn.image = img.withSymbolConfiguration(cfg2)
-            addActionBtn.imagePosition = .imageLeft
-        }
-        addActionBtn.frame = NSRect(x: W - pad - addActionBtnW, y: y - 2, width: addActionBtnW, height: 22)
-        addActionBtn.tag = 900
-        content.addSubview(addActionBtn)
-        y += 28
-
-        let customDesc = makeDescriptionLabel(
-            "Add up to 5 custom actions (shortcuts 4–8). Language preservation is applied automatically."
-        )
-        customDesc.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
-        content.addSubview(customDesc)
+        let desc = makeDescriptionLabel(
+            "Add up to 5 custom actions (shortcuts 4–8). " +
+            "Language preservation is applied automatically.")
+        desc.frame = NSRect(x: pad, y: y, width: contentW, height: 28)
+        view.addSubview(desc)
         y += 36
 
         // Fixed-actions info box
         let fixedBox = NSBox()
-        fixedBox.boxType = .custom
-        fixedBox.borderWidth = 1
+        fixedBox.boxType      = .custom
+        fixedBox.borderWidth  = 1
         fixedBox.cornerRadius = 6
-        fixedBox.fillColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5)
-        fixedBox.borderColor = NSColor.separatorColor
-        fixedBox.frame = NSRect(x: pad, y: y, width: contentW, height: 48)
-        content.addSubview(fixedBox)
+        fixedBox.fillColor    = NSColor.controlBackgroundColor.withAlphaComponent(0.5)
+        fixedBox.borderColor  = NSColor.separatorColor
+        fixedBox.frame        = NSRect(x: pad, y: y, width: contentW, height: 48)
+        view.addSubview(fixedBox)
 
         let fixedLabel = NSTextField(labelWithString: "Fixed (always shown):")
-        fixedLabel.font = .systemFont(ofSize: 10, weight: .semibold)
+        fixedLabel.font      = .systemFont(ofSize: 10, weight: .semibold)
         fixedLabel.textColor = .secondaryLabelColor
-        fixedLabel.frame = NSRect(x: pad + 8, y: y + 28, width: contentW - 16, height: 12)
-        content.addSubview(fixedLabel)
+        fixedLabel.frame     = NSRect(x: pad + 8, y: y + 28, width: contentW - 16, height: 12)
+        view.addSubview(fixedLabel)
 
-        let fixedValue = NSTextField(labelWithString: "  ✏️  Correct grammar  ①     🌐  Translate  ②     ✂️  Summarize  ③")
-        fixedValue.font = .systemFont(ofSize: 12)
+        let fixedValue = NSTextField(
+            labelWithString: "  ✏️  Correct grammar  ①     🌐  Translate  ②     ✂️  Summarize  ③")
+        fixedValue.font      = .systemFont(ofSize: 12)
         fixedValue.textColor = .labelColor
-        fixedValue.frame = NSRect(x: pad + 8, y: y + 10, width: contentW - 16, height: 16)
-        content.addSubview(fixedValue)
+        fixedValue.frame     = NSRect(x: pad + 8, y: y + 10, width: contentW - 16, height: 16)
+        view.addSubview(fixedValue)
         y += 58
 
         let yourActionsLbl = NSTextField(labelWithString: "Your Custom Actions")
-        yourActionsLbl.font = .systemFont(ofSize: 12, weight: .semibold)
+        yourActionsLbl.font      = .systemFont(ofSize: 12, weight: .semibold)
         yourActionsLbl.textColor = .secondaryLabelColor
-        yourActionsLbl.frame = NSRect(x: pad, y: y, width: contentW, height: 16)
-        content.addSubview(yourActionsLbl)
+        yourActionsLbl.frame     = NSRect(x: pad, y: y, width: contentW, height: 16)
+        view.addSubview(yourActionsLbl)
         y += 24
 
-        let customContainerH: CGFloat = 200
-        let customScroll = NSScrollView(frame: NSRect(x: pad, y: y, width: contentW, height: customContainerH))
+        let customContainerH: CGFloat = 120
+        let customScroll = NSScrollView(
+            frame: NSRect(x: pad, y: y, width: contentW, height: customContainerH))
         customScroll.hasVerticalScroller = true
-        customScroll.borderType = .bezelBorder
-        customScroll.drawsBackground = true
+        customScroll.borderType          = .bezelBorder
+        customScroll.drawsBackground     = true
         let customContainer = NSView(
-            frame: NSRect(x: 0, y: 0, width: customScroll.contentSize.width, height: customContainerH)
-        )
+            frame: NSRect(x: 0, y: 0,
+                          width: customScroll.contentSize.width, height: customContainerH))
         customScroll.documentView = customContainer
-        content.addSubview(customScroll)
+        view.addSubview(customScroll)
         customActionsContainer = customContainer
         rebuildCustomActionList()
-        updateAddActionButton(in: content)
-        y += customContainerH + 24
+        y += customContainerH + 16
 
-        // Resize content to actual needed height
-        content.frame = NSRect(x: 0, y: 0, width: W, height: y)
+        return (view, y)
+    }
 
-        outerScroll.documentView = content
-        item.view = outerScroll
-        return item
+    @objc private func toggleActionSection(_ sender: NSButton) {
+        let idx = sender.tag
+        guard idx >= 0, idx < actionsSections.count else { return }
+        actionsSections[idx].isExpanded.toggle()
+
+        // Swap chevron direction
+        if #available(macOS 11.0, *),
+           let chevron = actionsSections[idx].header.viewWithTag(100 + idx) as? NSButton {
+            let symbolName = actionsSections[idx].isExpanded
+                ? "chevron.down" : "chevron.right"
+            if let img = NSImage(systemSymbolName: symbolName,
+                                 accessibilityDescription: nil) {
+                chevron.image = img.withSymbolConfiguration(
+                    NSImage.SymbolConfiguration(pointSize: 10, weight: .medium))
+            }
+        }
+
+        relayoutActionsSections(animated: true)
+    }
+
+    private func relayoutActionsSections(animated: Bool) {
+        guard let content = actionsScrollContent else { return }
+        let headerH: CGFloat = 34
+        var y: CGFloat = 0
+
+        for section in actionsSections {
+            section.header.frame = NSRect(x: 0, y: y, width: W, height: headerH)
+            y += headerH
+            if section.isExpanded {
+                section.content.isHidden = false
+                section.content.frame    = NSRect(x: 0, y: y,
+                                                  width: W, height: section.contentH)
+                y += section.contentH
+            } else {
+                section.content.isHidden = true
+                section.content.frame    = NSRect(x: 0, y: y, width: W, height: 0)
+            }
+        }
+        y += 12  // bottom padding
+        content.frame = NSRect(x: 0, y: 0, width: W, height: max(y, 100))
     }
 
     private func rebuildCustomActionList() {
@@ -1818,15 +1954,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 
     private func updateAddActionButtonInCurrentTab() {
-        // Walk up the hierarchy until we find a view with the Add button (tag 900).
-        var v: NSView? = customActionsContainer
-        while let parent = v?.superview {
-            if let btn = parent.viewWithTag(900) as? NSButton {
-                btn.isEnabled = customActionEntries.count < 5
-                return
-            }
-            v = parent
-        }
+        addActionButtonRef?.isEnabled = customActionEntries.count < 5
     }
 
     @objc private func addCustomAction() {
