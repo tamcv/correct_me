@@ -67,14 +67,11 @@ enum TextAction: String, CaseIterable {
 
         case .summarize:
             return """
-            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
-            Your output MUST use the EXACT same language(s). \
-            If the input is Vietnamese, output Vietnamese. \
-            If the input is English, output English. \
-            NEVER translate any word into a different language.
+            LANGUAGE RULE (highest priority): Respond in the exact same language as the input text. \
+            Do NOT translate or change the language under any circumstances.
 
-            Task: Summarize the text below concisely, capturing only the key points, in the same language(s) as the original.
-            - Return ONLY the summary — no explanations, no quotes, no markdown.
+            Summarize the text below concisely, capturing only the key points.
+            Return ONLY the summary — no explanations, no quotes, no markdown.
 
             Text:
             \(text)

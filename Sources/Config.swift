@@ -74,14 +74,12 @@ struct Config: Codable {
         /// Builds the full AI prompt: language-preservation rule + user's task instruction + text.
         func buildPrompt(for text: String) -> String {
             """
-            LANGUAGE RULE (highest priority): Detect the language(s) of the input text. \
-            Your output MUST use the EXACT same language(s). \
-            If the input is Vietnamese, output Vietnamese. \
-            If the input is English, output English. \
-            If the input mixes languages, keep that exact mix. \
-            NEVER translate any word into a different language.
+            LANGUAGE RULE (highest priority): \
+            Respond in the exact same language as the input text. \
+            Do NOT translate or change the language under any circumstances.
 
             \(prompt)
+            Return ONLY the result — no explanations, no quotes, no markdown.
 
             Text:
             \(text)
