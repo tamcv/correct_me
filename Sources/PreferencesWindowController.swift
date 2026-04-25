@@ -1521,15 +1521,15 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             isExpanded: true,
             chevronBtn: transHeader.viewWithTag(100) as? NSButton))
 
-        // ── Correct Grammar (expanded by default — contains per-app styles) ─
+        // ── Correct Grammar (collapsed by default) ────────────────────────────
         let correctHeader = buildCollapsibleHeader(title: "Correct Grammar",
-                                                   sectionIndex: 1, isExpanded: true)
+                                                   sectionIndex: 1, isExpanded: false)
         let (correctContent, correctH) = buildCorrectGrammarSectionContent()
         content.addSubview(correctHeader)
         content.addSubview(correctContent)
         actionsSections.append(ActionSectionInfo(
             header: correctHeader, content: correctContent, contentH: correctH,
-            isExpanded: true,
+            isExpanded: false,
             chevronBtn: correctHeader.viewWithTag(101) as? NSButton))
 
         // ── Custom Actions (expanded by default) ──────────────────────────
