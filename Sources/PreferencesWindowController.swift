@@ -1533,23 +1533,8 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             chevronBtn: correctHeader.viewWithTag(101) as? NSButton))
 
         // ── Custom Actions (expanded by default) ──────────────────────────
-        let addBtn = NSButton(title: " Add Action…", target: self,
-                              action: #selector(addCustomAction))
-        addBtn.bezelStyle = .rounded
-        addBtn.font       = .systemFont(ofSize: 11)
-        if #available(macOS 11.0, *),
-           let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil) {
-            addBtn.image         = img.withSymbolConfiguration(
-                NSImage.SymbolConfiguration(pointSize: 9, weight: .medium))
-            addBtn.imagePosition = .imageLeft
-        }
-        addBtn.frame = NSRect(x: 0, y: 0, width: 110, height: 22)
-        addBtn.tag   = 900
-        addActionButtonRef = addBtn
-
         let customHeader = buildCollapsibleHeader(title: "Custom Actions",
-                                                  sectionIndex: 2, isExpanded: true,
-                                                  trailingView: addBtn)
+                                                  sectionIndex: 2, isExpanded: true)
         let (customContent, customH) = buildCustomActionsSectionContent()
         content.addSubview(customHeader)
         content.addSubview(customContent)
@@ -1810,8 +1795,23 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         let yourActionsLbl = NSTextField(labelWithString: "Your Custom Actions")
         yourActionsLbl.font      = .systemFont(ofSize: 12, weight: .semibold)
         yourActionsLbl.textColor = .secondaryLabelColor
-        yourActionsLbl.frame     = NSRect(x: pad, y: y, width: contentW, height: 16)
+        yourActionsLbl.frame     = NSRect(x: pad, y: y, width: contentW - 120, height: 16)
         view.addSubview(yourActionsLbl)
+
+        let addBtn = NSButton(title: " Add Action…", target: self,
+                              action: #selector(addCustomAction))
+        addBtn.bezelStyle = .rounded
+        addBtn.font       = .systemFont(ofSize: 11)
+        if #available(macOS 11.0, *),
+           let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil) {
+            addBtn.image         = img.withSymbolConfiguration(
+                NSImage.SymbolConfiguration(pointSize: 9, weight: .medium))
+            addBtn.imagePosition = .imageLeft
+        }
+        addBtn.frame = NSRect(x: pad + contentW - 110, y: y - 3, width: 110, height: 22)
+        addBtn.tag   = 900
+        addActionButtonRef = addBtn
+        view.addSubview(addBtn)
         y += 24
 
         let customContainerH: CGFloat = 120
