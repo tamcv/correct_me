@@ -52,6 +52,7 @@ After installing, grant **Accessibility** permission when prompted — this is r
 | Provider | Type | Requires |
 |----------|------|----------|
 | **Ollama** | Local | [Ollama](https://ollama.com) installed and running |
+| **FreeLLMAPI** | Local (self-hosted) | [freellmapi](https://github.com/tashfeenahmed/freellmapi) proxy running locally (Node.js 20+) |
 | Claude Code CLI | Local | [Claude Code](https://claude.ai/code) installed |
 | Codex CLI | Local | Codex CLI installed |
 | GitHub Copilot CLI | Local | Copilot CLI installed |
@@ -61,6 +62,8 @@ After installing, grant **Accessibility** permission when prompted — this is r
 | OpenRouter | Cloud | OpenRouter API key (100+ models, free tier available) |
 
 **Ollama** is the recommended option for privacy — models run entirely on your machine, no data leaves your computer.
+
+**FreeLLMAPI** is a self-hosted proxy that aggregates ~14 free-tier AI providers (Gemini, Groq, Cerebras, Mistral, and more) behind a single OpenAI-compatible endpoint. No paid API key needed — run it locally and use `model: auto` to let the proxy pick the best available free model.
 
 ---
 

@@ -7,6 +7,7 @@ private enum KeychainAccount {
     static let gemini     = "gemini_api_key"
     static let openai     = "openai_api_key"
     static let openrouter = "openrouter_api_key"
+    static let freellmapi = "freellmapi_api_key"
     /// Value written to config.json when the real key lives in the Keychain.
     static let placeholder = "keychain"
 }
@@ -17,6 +18,8 @@ struct Config: Codable {
     var geminiAPIKey: String?
     var openaiAPIKey: String?
     var openrouterAPIKey: String?
+    var freellmAPIKey: String?
+    var freellmBaseURL: String?
     var hotkey: HotkeyConfig
     var customPrompt: String?
     var model: String?
@@ -37,6 +40,7 @@ struct Config: Codable {
         case copilot = "copilot"
         case openrouter = "openrouter"
         case ollama = "ollama"
+        case freellmapi = "freellmapi"
     }
 
     struct HotkeyConfig: Codable {
@@ -60,6 +64,8 @@ struct Config: Codable {
             geminiAPIKey: nil,
             openaiAPIKey: nil,
             openrouterAPIKey: nil,
+            freellmAPIKey: nil,
+            freellmBaseURL: nil,
             hotkey: .default,
             customPrompt: nil,
             model: nil,
@@ -79,6 +85,7 @@ struct Config: Codable {
         static let copilot = "gpt-5-mini"
         static let openrouter = "meta-llama/llama-3.1-8b-instruct:free"
         static let ollama = "llama3.2"
+        static let freellmapi = "auto"
     }
 
     static var configPath: URL {
@@ -109,6 +116,9 @@ struct Config: Codable {
         config.openrouterAPIKey = resolveAPIKey(config.openrouterAPIKey,
                                                 account: KeychainAccount.openrouter,
                                                 hadPlaintext: &hadPlaintext)
+        config.freellmAPIKey    = resolveAPIKey(config.freellmAPIKey,
+                                                account: KeychainAccount.freellmapi,
+                                                hadPlaintext: &hadPlaintext)
 
         // Flush any plaintext keys from disk right away.
         if hadPlaintext { try? config.save() }
@@ -124,6 +134,7 @@ struct Config: Codable {
         sanitized.geminiAPIKey    = storeAPIKey(geminiAPIKey,    account: KeychainAccount.gemini)
         sanitized.openaiAPIKey    = storeAPIKey(openaiAPIKey,    account: KeychainAccount.openai)
         sanitized.openrouterAPIKey = storeAPIKey(openrouterAPIKey, account: KeychainAccount.openrouter)
+        sanitized.freellmAPIKey    = storeAPIKey(freellmAPIKey,    account: KeychainAccount.freellmapi)
 
         let dir = Config.configPath.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
