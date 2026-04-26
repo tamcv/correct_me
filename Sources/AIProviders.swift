@@ -697,6 +697,91 @@ class OpenRouterProvider: AIProvider {
     }
 }
 
+// MARK: - FreeLLMAPI (self-hosted free-tier proxy, OpenAI-compatible)
+
+/// Resolves the FreeLLMAPI base URL from config or falls back to localhost:3001.
+func resolveFreeLLMBaseURL(from config: Config) -> String {
+    if let stored = config.freellmBaseURL, !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+            return trimmed
+        }
+        return "http://\(trimmed)"
+    }
+    return "http://localhost:3001"
+}
+
+/// Calls a self-hosted freellmapi proxy via its OpenAI-compatible /v1/chat/completions endpoint.
+/// Setup: https://github.com/tashfeenahmed/freellmapi
+class FreeLLMAPIProvider: AIProvider {
+    private let apiKey: String
+    private let model: String
+    private let baseURL: String
+
+    init(apiKey: String, model: String, baseURL: String = "http://localhost:3001") {
+        self.apiKey = apiKey
+        self.model = model
+        self.baseURL = baseURL
+    }
+
+    func runPrompt(_ prompt: String) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/v1/chat/completions") else {
+            throw AIError.commandFailed("Invalid FreeLLMAPI base URL: \(baseURL)")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30.0
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("close", forHTTPHeaderField: "Connection")
+
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [["role": "user", "content": prompt]]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let session = getFreshURLSession()
+        let (data, response) = try await session.data(for: request)
+        session.invalidateAndCancel()
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw AIError.apiError("FreeLLMAPI request failed (\(status)): \(parseErrorMessage(from: data))")
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let result = message["content"] as? String else {
+            throw AIError.parseError
+        }
+
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Check that the proxy is reachable by hitting /v1/models.
+    static func isReachable(baseURL: String, apiKey: String) -> Bool {
+        guard let url = URL(string: "\(baseURL)/v1/models") else { return false }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 5.0
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var reachable = false
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            reachable = (response as? HTTPURLResponse)?.statusCode == 200
+            semaphore.signal()
+        }.resume()
+        semaphore.wait()
+        return reachable
+    }
+}
+
 // MARK: - Ollama URL resolution
 
 /// Resolves the Ollama base URL from (in priority order):
@@ -889,6 +974,13 @@ func createAIProvider(from config: Config) throws -> AIProvider {
             )
         }
         return OllamaProvider(model: model, baseURL: baseURL)
+    case .freellmapi:
+        guard let apiKey = config.freellmAPIKey, !apiKey.isEmpty else {
+            throw AIError.noProviderConfigured
+        }
+        let model = config.model ?? Config.DefaultModels.freellmapi
+        let baseURL = resolveFreeLLMBaseURL(from: config)
+        return FreeLLMAPIProvider(apiKey: apiKey, model: model, baseURL: baseURL)
     }
 }
 
