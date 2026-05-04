@@ -9,8 +9,13 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  # ── Job 1: Build, sign, submit notarization ────────────────────────────────
+  build:
     runs-on: macos-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      tag: ${{ steps.version.outputs.TAG }}
+      submission_id: ${{ steps.notarize.outputs.SUBMISSION_ID }}
 
     steps:
     - name: Checkout code
@@ -55,22 +60,110 @@ jobs:
         security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
         echo "✅ Certificate imported"
 
-    - name: Build release DMG
+    - name: Build release DMG and submit notarization
+      id: notarize
       env:
         DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        NOTARIZE_WAIT: "false"
       run: |
         chmod +x scripts/build-release.sh
         ./scripts/build-release.sh
+        VERSION=${GITHUB_REF#refs/tags/v}
+        SUBMISSION_ID=$(cat .build/release-dmg/notarization_id.txt 2>/dev/null || echo "")
+        echo "SUBMISSION_ID=$SUBMISSION_ID" >> $GITHUB_OUTPUT
+
+    - name: Upload DMG artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-dmg
+        path: |
+          .build/release-dmg/*.dmg
+          .build/release-dmg/sha256.txt
+          .build/release-dmg/notarization_id.txt
+        retention-days: 1
+
+    - name: Cleanup keychain
+      if: always()
+      run: |
+        KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
+        [ -f "$KEYCHAIN_PATH" ] && security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+
+  # ── Job 2: Poll notarization, staple, publish ──────────────────────────────
+  publish:
+    runs-on: macos-latest
+    needs: build
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download DMG artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: release-dmg
+        path: dmg
+
+    - name: Poll notarization and staple
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        SUBMISSION_ID="${{ needs.build.outputs.submission_id }}"
+        DMG_PATH=$(ls dmg/*.dmg | head -1)
+
+        if [ -z "$SUBMISSION_ID" ]; then
+          echo "No submission ID — skipping notarization poll (unsigned build)"
+          exit 0
+        fi
+
+        echo "Polling notarization for submission: $SUBMISSION_ID"
+        POLL_INTERVAL=30
+        MAX_ATTEMPTS=120  # 120 × 30s = 60 minutes max
+        ATTEMPT=0
+        STATUS=""
+        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            sleep $POLL_INTERVAL
+            ATTEMPT=$((ATTEMPT + 1))
+            INFO_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" \
+                --output-format json 2>&1) || true
+            STATUS=$(echo "$INFO_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
+            echo "  [${ATTEMPT}/${MAX_ATTEMPTS}] Status: ${STATUS:-network error, retrying...}"
+            if [ "$STATUS" = "Accepted" ]; then break; fi
+            if [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+                echo "❌ Notarization failed: $STATUS"
+                xcrun notarytool log "$SUBMISSION_ID" \
+                    --apple-id "$APPLE_ID" \
+                    --password "$APPLE_APP_PASSWORD" \
+                    --team-id "$APPLE_TEAM_ID" 2>&1 || true
+                exit 1
+            fi
+        done
+
+        if [ "$STATUS" != "Accepted" ]; then
+            echo "❌ Timed out after $((MAX_ATTEMPTS * POLL_INTERVAL))s (last status: $STATUS)"
+            exit 1
+        fi
+
+        echo "Stapling notarization ticket..."
+        xcrun stapler staple "$DMG_PATH"
+        echo "✅ Notarized and stapled: $DMG_PATH"
 
     - name: Sign DMG for Sparkle
       env:
         SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
       run: |
-        VERSION="${{ steps.version.outputs.VERSION }}"
-        DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
+        VERSION="${{ needs.build.outputs.version }}"
+        DMG_PATH=$(ls dmg/*.dmg | head -1)
+
+        # Resolve sign_update binary — build it from the checked-out repo
+        swift package resolve
         SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
 
         SIG_OUTPUT=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - "$DMG_PATH")
@@ -84,10 +177,10 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        VERSION="${{ steps.version.outputs.VERSION }}"
-        TAG="${{ steps.version.outputs.TAG }}"
-        DMG_PATH=".build/release-dmg/CorrectMe-v${VERSION}-macos.dmg"
-        SHA256=$(cat .build/release-dmg/sha256.txt)
+        VERSION="${{ needs.build.outputs.version }}"
+        TAG="${{ needs.build.outputs.tag }}"
+        DMG_PATH=$(ls dmg/*.dmg | head -1)
+        SHA256=$(cat dmg/sha256.txt)
         REPO="${{ github.repository }}"
 
         cat > /tmp/release-notes.md << EOF
@@ -115,9 +208,9 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        VERSION="${{ steps.version.outputs.VERSION }}"
-        TAG="${{ steps.version.outputs.TAG }}"
-        SHA256=$(cat .build/release-dmg/sha256.txt)
+        VERSION="${{ needs.build.outputs.version }}"
+        TAG="${{ needs.build.outputs.tag }}"
+        SHA256=$(cat dmg/sha256.txt)
         ED_SIG="${{ env.ED_SIG }}"
         DMG_LENGTH="${{ env.DMG_LENGTH }}"
         REPO="${{ github.repository }}"
@@ -127,7 +220,6 @@ jobs:
         PATCH=$(echo "$VERSION" | cut -d. -f3)
         BUNDLE_VERSION=$((MAJOR * 100 + MINOR * 10 + PATCH))
 
-        # Public repo: DMG served directly from GitHub releases
         DMG_URL="https://github.com/${REPO}/releases/download/${TAG}/CorrectMe-${TAG}-macos.dmg"
 
         git config user.name "github-actions[bot]"
@@ -152,9 +244,3 @@ jobs:
         git add -f dist/latest.json
         git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
         git diff --staged --quiet || (git commit -m "release: update appcast.xml and latest.json for $TAG" && git push origin main)
-
-    - name: Cleanup keychain
-      if: always()
-      run: |
-        KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
-        [ -f "$KEYCHAIN_PATH" ] && security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
