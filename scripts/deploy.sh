@@ -18,7 +18,7 @@ rsync -a --delete .build/CorrectMe.app/ /Applications/CorrectMe.app/
 xattr -c /Applications/CorrectMe.app 2>/dev/null || true
 
 # 4. Re-sign so TCC keeps tracking by bundle ID (not binary hash)
-CERT_NAME="CorrectMe Dev"
+CERT_NAME="Developer ID Application: Tam Chau (854GZSP8M7)"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$CERT_NAME\""; then
     codesign --force --deep --sign "$CERT_NAME" /Applications/CorrectMe.app/ 2>/dev/null
     echo "✓ Re-signed with $CERT_NAME"
