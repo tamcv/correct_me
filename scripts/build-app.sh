@@ -77,14 +77,19 @@ echo ""
 # A persistent local certificate preserves macOS Accessibility permissions
 # across rebuilds (the designated requirement stays stable). Ad-hoc signing
 # generates a new binary hash every build, which invalidates the TCC entry.
-CERT_NAME="CorrectMe Dev"
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$CERT_NAME\""; then
-    SIGN_IDENTITY="$CERT_NAME"
-    echo "🔑 Signing with persistent certificate: $CERT_NAME"
+if [ -n "$DEVELOPER_ID" ]; then
+    SIGN_IDENTITY="$DEVELOPER_ID"
+    echo "🔑 Signing with Developer ID: $DEVELOPER_ID"
 else
-    SIGN_IDENTITY="-"
-    echo "⚠️  Signing ad-hoc (Accessibility permissions will need re-granting after each rebuild)"
-    echo "   Run ./scripts/setup-dev-cert.sh once to fix this permanently."
+    CERT_NAME="Developer ID Application: Tam Chau (854GZSP8M7)"
+    if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$CERT_NAME\""; then
+        SIGN_IDENTITY="$CERT_NAME"
+        echo "🔑 Signing with persistent certificate: $CERT_NAME"
+    else
+        SIGN_IDENTITY="-"
+        echo "⚠️  Signing ad-hoc (Accessibility permissions will need re-granting after each rebuild)"
+        echo "   Run ./scripts/setup-dev-cert.sh once to fix this permanently."
+    fi
 fi
 
 # Code sign the bundle
