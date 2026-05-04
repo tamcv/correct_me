@@ -98,11 +98,49 @@ echo ""
 # ── Step 5: Notarize ──
 if [ "$SIGNED" = true ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
     echo "▶ Step 5: Submitting for notarization..."
-    xcrun notarytool submit "$DMG_PATH" \
+    SUBMIT_OUTPUT=$(xcrun notarytool submit "$DMG_PATH" \
         --apple-id "$APPLE_ID" \
         --password "$APPLE_APP_PASSWORD" \
         --team-id "$APPLE_TEAM_ID" \
-        --wait
+        --output-format json 2>&1)
+    SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null)
+    if [ -z "$SUBMISSION_ID" ]; then
+        echo "❌ Failed to get submission ID. Output:"
+        echo "$SUBMIT_OUTPUT"
+        exit 1
+    fi
+    echo "  Submission ID: $SUBMISSION_ID"
+
+    echo "  Polling for result (retries on network errors)..."
+    POLL_INTERVAL=30
+    MAX_ATTEMPTS=40  # 40 × 30s = 20 minutes max
+    ATTEMPT=0
+    STATUS=""
+    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+        sleep $POLL_INTERVAL
+        ATTEMPT=$((ATTEMPT + 1))
+        INFO_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --output-format json 2>&1) || true
+        STATUS=$(echo "$INFO_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
+        echo "  [${ATTEMPT}/${MAX_ATTEMPTS}] Status: ${STATUS:-network error, retrying...}"
+        if [ "$STATUS" = "Accepted" ]; then break; fi
+        if [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+            echo "❌ Notarization failed with status: $STATUS"
+            xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" 2>&1 || true
+            exit 1
+        fi
+    done
+
+    if [ "$STATUS" != "Accepted" ]; then
+        echo "❌ Notarization timed out after $((MAX_ATTEMPTS * POLL_INTERVAL))s (last status: $STATUS)"
+        exit 1
+    fi
 
     echo "  Stapling notarization ticket..."
     xcrun stapler staple "$DMG_PATH"
