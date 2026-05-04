@@ -100,13 +100,6 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
                 cost: "100% Free (local)",
                 badge: running ? "Running ✓" : "Not running"
             )
-        case .freellmapi:
-            return ProviderMeta(
-                description: "Self-hosted FreeLLMAPI proxy — OpenAI-compatible, routes to free-tier models. Requires a local server running on port 3001.",
-                recommendedModel: Config.DefaultModels.freellmapi,
-                cost: "100% Free (self-hosted)",
-                badge: "Self-hosted"
-            )
         }
     }
 

@@ -223,18 +223,18 @@ struct CorrectMeApp {
         guard let rawProvider = providerRaw else {
             print("Error: --provider is required.")
             print("Usage: correctme quicksetup --provider <provider> [--api-key <key>] [--model <model>] [--hotkey <hotkey>]")
-            print("Providers: claude, gemini, codex, openrouter, freellmapi, claude-code, codex-code, copilot, ollama")
+            print("Providers: claude, gemini, codex, openrouter, claude-code, codex-code, copilot, ollama")
             exit(1)
         }
 
         guard let provider = Config.AIProvider(rawValue: rawProvider) else {
             print("Error: unknown provider '\(rawProvider)'.")
-            print("Valid providers: claude, gemini, codex, openrouter, freellmapi, claude-code, codex-code, copilot, ollama")
+            print("Valid providers: claude, gemini, codex, openrouter, claude-code, codex-code, copilot, ollama")
             exit(1)
         }
 
         // Validate --api-key for providers that need it
-        let requiresAPIKey: Set<Config.AIProvider> = [.claude, .gemini, .codex, .openrouter, .freellmapi]
+        let requiresAPIKey: Set<Config.AIProvider> = [.claude, .gemini, .codex, .openrouter]
         if requiresAPIKey.contains(provider) && (apiKey == nil || apiKey!.isEmpty) {
             print("Error: --api-key is required for provider '\(rawProvider)'.")
             exit(1)
@@ -259,7 +259,6 @@ struct CorrectMeApp {
             case .codex:       return Config.DefaultModels.openaiCodex
             case .openrouter:  return Config.DefaultModels.openrouter
             case .ollama:      return Config.DefaultModels.ollama
-            case .freellmapi:  return Config.DefaultModels.freellmapi
             }
         }()
 
@@ -289,7 +288,6 @@ struct CorrectMeApp {
         case .gemini:      config.geminiAPIKey = apiKey
         case .codex:       config.openaiAPIKey = apiKey
         case .openrouter:  config.openrouterAPIKey = apiKey
-        case .freellmapi:  config.freellmAPIKey = apiKey
         default: break
         }
 
@@ -402,22 +400,6 @@ struct CorrectMeApp {
             if !hasKey {
                 print("    → Set your OpenRouter API key in Preferences → Provider")
                 allGood = false
-            }
-        case .freellmapi:
-            let hasKey = !(cfg.freellmAPIKey ?? "").isEmpty
-            printCheck(hasKey, "FreeLLMAPI bearer token configured")
-            if !hasKey {
-                print("    → Set your FreeLLMAPI token in Preferences → Provider")
-                allGood = false
-            } else {
-                let baseURL = resolveFreeLLMBaseURL(from: cfg)
-                let reachable = FreeLLMAPIProvider.isReachable(baseURL: baseURL, apiKey: cfg.freellmAPIKey ?? "")
-                printCheck(reachable, "FreeLLMAPI proxy reachable at \(baseURL)")
-                if !reachable {
-                    print("    → Start your freellmapi server: node server/dist/index.js")
-                    print("    → Setup guide: github.com/tashfeenahmed/freellmapi")
-                    allGood = false
-                }
             }
         case .ollama:
             let baseURL = resolveOllamaBaseURL(from: cfg)

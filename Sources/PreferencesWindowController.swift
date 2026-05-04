@@ -28,7 +28,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var apiKeyHint: NSTextField!
     private var ollamaURLField: NSTextField!   // shown only when Ollama is selected
     private var ollamaPickModelBtn: NSButton!  // shown only when Ollama is selected
-    private var freellmURLField: NSTextField!  // shown only when FreeLLMAPI is selected
 
     // Hotkey tab
     private var hotkeyDisplayLabel: NSTextField!
@@ -321,7 +320,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             ("Codex Code (CLI)", .codexCode),
             ("GitHub Copilot (CLI)", .copilot),
             ("Ollama (local, no API key)", .ollama),
-            ("FreeLLMAPI (self-hosted, free)", .freellmapi),
             ("Claude API", .claude),
             ("Gemini API", .gemini),
             ("OpenAI/Codex API", .codex),
@@ -447,29 +445,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         ollamaURLHint.textColor = .tertiaryLabelColor
         ollamaURLHint.tag = 812
         view.addSubview(ollamaURLHint)
-        y -= 50
-
-        // FreeLLMAPI base URL (shown only when FreeLLMAPI provider is selected)
-        let freellmURLLabel = makeSectionHeader("FreeLLMAPI Server URL")
-        freellmURLLabel.frame = NSRect(x: pad, y: y, width: contentW, height: 18)
-        freellmURLLabel.tag = 820
-        view.addSubview(freellmURLLabel)
-        y -= 26
-
-        freellmURLField = NSTextField(frame: NSRect(x: pad, y: y, width: contentW, height: 24))
-        freellmURLField.placeholderString = "http://localhost:3001"
-        freellmURLField.stringValue = config.freellmBaseURL ?? ""
-        freellmURLField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        freellmURLField.controlSize = .large
-        freellmURLField.tag = 821
-        view.addSubview(freellmURLField)
-
-        let freellmURLHint = NSTextField(labelWithString: "Leave blank to use the default (localhost:3001). Setup: github.com/tashfeenahmed/freellmapi")
-        freellmURLHint.frame = NSRect(x: pad, y: y - 18, width: contentW, height: 14)
-        freellmURLHint.font = .systemFont(ofSize: 10)
-        freellmURLHint.textColor = .tertiaryLabelColor
-        freellmURLHint.tag = 822
-        view.addSubview(freellmURLHint)
         y -= 50
 
         // Fallback models (OpenRouter-specific, shown/hidden via updateProviderUI)
@@ -598,7 +573,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     private func providerNeedsAPIKey(_ provider: Config.AIProvider) -> Bool {
         switch provider {
-        case .claude, .gemini, .codex, .openrouter, .freellmapi: return true
+        case .claude, .gemini, .codex, .openrouter: return true
         case .claudeCode, .codexCode, .copilot, .ollama: return false
         }
     }
@@ -612,9 +587,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         apiKeyLabel.textColor = needsKey ? .labelColor : .tertiaryLabelColor
         testButton.isEnabled = needsKey
 
-        if provider == .freellmapi {
-            apiKeyHint.stringValue = "Bearer token from your local freellmapi proxy. Stored securely in the macOS Keychain.\nSetup guide: github.com/tashfeenahmed/freellmapi"
-        } else if needsKey {
+        if needsKey {
             apiKeyHint.stringValue = "Your API key is stored securely in the macOS Keychain."
         } else if provider == .ollama {
             apiKeyHint.stringValue = "🔒 100% local — your text never leaves this Mac. No API key, no internet, no data sent anywhere.\nInstall: https://ollama.com  •  Recommended model: ollama pull gemma3:4b"
@@ -644,13 +617,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         ollamaURLField?.isHidden = !showOllamaURL
         ollamaPickModelBtn?.isHidden = !showOllamaURL
 
-        // Show FreeLLMAPI URL field only for FreeLLMAPI
-        let showFreellmURL = provider == .freellmapi
-        for tag in 820...822 {
-            apiKeyField.superview?.viewWithTag(tag)?.isHidden = !showFreellmURL
-        }
-        freellmURLField?.isHidden = !showFreellmURL
-
         loadAPIKeyForCurrentProvider()
         updateAPIKeyPreview()
     }
@@ -668,7 +634,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         case .gemini:      value = config.geminiAPIKey ?? ""
         case .codex:       value = config.openaiAPIKey ?? ""
         case .openrouter:  value = config.openrouterAPIKey ?? ""
-        case .freellmapi:  value = config.freellmAPIKey ?? ""
         default:           value = ""
         }
         setAPIKeyValue(value)
@@ -885,7 +850,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         case .copilot:     return Config.DefaultModels.copilot
         case .openrouter:  return Config.DefaultModels.openrouter
         case .ollama:      return Config.DefaultModels.ollama
-        case .freellmapi:  return Config.DefaultModels.freellmapi
         }
     }
 
@@ -2324,7 +2288,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
             case .gemini:      config.geminiAPIKey = key
             case .codex:       config.openaiAPIKey = key
             case .openrouter:  config.openrouterAPIKey = key
-            case .freellmapi:  config.freellmAPIKey = key
             default: break
             }
         }
@@ -2346,12 +2309,6 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         if let urlField = ollamaURLField {
             let urlStr = urlField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             config.ollamaBaseURL = urlStr.isEmpty ? nil : urlStr
-        }
-
-        // FreeLLMAPI base URL (nil = use default localhost:3001)
-        if let urlField = freellmURLField {
-            let urlStr = urlField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            config.freellmBaseURL = urlStr.isEmpty ? nil : urlStr
         }
 
         if perAppEntries.isEmpty {
