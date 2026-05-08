@@ -31,9 +31,11 @@ class QuickActionPickerWindow: NSPanel {
     private var rowViews: [NSView] = []
     private var rowActions: [PickerAction] = []   // parallel array to rowViews
     private var keyMonitor: Any?
+    private var showPickerCheckbox: NSButton?
 
     private let rowH:      CGFloat = 40
     private let headerH:   CGFloat = 30
+    private let footerH:   CGFloat = 30
     private let winW:      CGFloat = 238
     private let vPad:      CGFloat = 6
     /// Extra vertical space carved out for the separator between fixed and custom rows.
@@ -142,7 +144,7 @@ class QuickActionPickerWindow: NSPanel {
         let hasCustom    = !customItems.isEmpty
         let totalRows    = fixedItems.count + customItems.count
         let extraH: CGFloat = hasCustom ? sepBlockH : 0
-        let H = rowH * CGFloat(totalRows) + extraH + headerH + vPad * 2
+        let H = rowH * CGFloat(totalRows) + extraH + headerH + footerH + vPad * 2
         setContentSize(NSSize(width: winW, height: H))
 
         let bg = NSView(frame: NSRect(x: 0, y: 0, width: winW, height: H))
@@ -226,6 +228,30 @@ class QuickActionPickerWindow: NSPanel {
             rowViews.append(row)
             rowActions.append(item.action)
         }
+
+        // ── Footer: "Show picker on hotkey" toggle ────────────────────────────
+        let footerSep = NSView(frame: NSRect(x: 8, y: footerH - 1, width: winW - 16, height: 1))
+        footerSep.wantsLayer = true
+        footerSep.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.07).cgColor
+        bg.addSubview(footerSep)
+
+        let checkbox = NSButton(checkboxWithTitle: "Show picker on hotkey",
+                                target: self,
+                                action: #selector(showPickerToggled(_:)))
+        checkbox.font        = .systemFont(ofSize: 11)
+        checkbox.contentTintColor = NSColor(white: 0.55, alpha: 1)
+        checkbox.state       = (cfg.quickActionsEnabled != false) ? .on : .off
+        let chkW: CGFloat    = winW - 24
+        let chkH: CGFloat    = 16
+        checkbox.frame       = NSRect(x: 12, y: (footerH - chkH) / 2 - 1, width: chkW, height: chkH)
+        bg.addSubview(checkbox)
+        showPickerCheckbox = checkbox
+    }
+
+    @objc private func showPickerToggled(_ sender: NSButton) {
+        var cfg = Config.load()
+        cfg.quickActionsEnabled = (sender.state == .on)
+        try? cfg.save()
     }
 
     private func makeRow(
