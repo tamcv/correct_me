@@ -1,0 +1,152 @@
+name: Publish - Manual Trigger
+
+# Standalone manual trigger for the publish step.
+# Use this when workflow_dispatch on release-publish.yml doesn't fire,
+# or when you need to force-process a pending draft release.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout main branch
+      uses: actions/checkout@v4
+      with:
+        ref: main
+
+    - name: Find and publish pending draft releases
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      run: |
+        DRAFT_TAGS=$(gh release list --json tagName,isDraft \
+          --jq '[.[] | select(.isDraft == true) | .tagName] | .[]')
+
+        COUNT=0
+        > /tmp/pending.txt
+
+        for TAG in $DRAFT_TAGS; do
+          BODY=$(gh release view "$TAG" --json body --jq '.body' 2>/dev/null || echo "")
+          if echo "$BODY" | grep -q "notarization-submission-id:"; then
+            SUBMISSION_ID=$(echo "$BODY" | python3 -c "
+import sys, re
+m = re.search(r'notarization-submission-id:\s*([a-f0-9\-]+)', sys.stdin.read())
+if m: print(m.group(1))
+" 2>/dev/null)
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "$TAG|$SUBMISSION_ID" >> /tmp/pending.txt
+              COUNT=$((COUNT + 1))
+            fi
+          fi
+        done
+
+        echo "Pending draft releases: $COUNT"
+        cat /tmp/pending.txt
+
+        if [ "$COUNT" -eq 0 ]; then
+          echo "No pending draft releases — nothing to do."
+          exit 0
+        fi
+
+        while IFS='|' read -r TAG SUBMISSION_ID; do
+          [ -z "$TAG" ] && continue
+          echo ""
+          echo "━━━ $TAG  (submission: $SUBMISSION_ID) ━━━"
+
+          # Check notarization status (poll up to 20 min)
+          ATTEMPT=0
+          STATUS=""
+          while [ $ATTEMPT -lt 40 ]; do
+            [ $ATTEMPT -gt 0 ] && sleep 30
+            ATTEMPT=$((ATTEMPT + 1))
+            INFO=$(xcrun notarytool info "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --output-format json 2>&1) || true
+            STATUS=$(echo "$INFO" | python3 -c \
+              "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
+            echo "  [${ATTEMPT}/40] status: ${STATUS:-network error, retrying...}"
+            [ "$STATUS" = "Accepted" ] && break
+            if [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+              echo "❌ Notarization failed for $TAG: $STATUS"
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" 2>&1 || true
+              exit 1
+            fi
+          done
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "⏳ $TAG not ready (status: ${STATUS:-unknown}) — try again later."
+            continue
+          fi
+
+          echo "✅ Notarization accepted — stapling and publishing $TAG"
+
+          mkdir -p /tmp/dmg-work
+          gh release download "$TAG" --pattern "*.dmg" --dir /tmp/dmg-work
+          DMG_PATH=$(ls /tmp/dmg-work/*.dmg | head -1)
+
+          xcrun stapler staple "$DMG_PATH"
+          echo "✅ Stapled"
+
+          swift package resolve
+          SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+          SIG_OUTPUT=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - "$DMG_PATH")
+          ED_SIG=$(echo "$SIG_OUTPUT" | grep -o 'edSignature="[^"]*"' | cut -d'"' -f2)
+          DMG_LENGTH=$(stat -f%z "$DMG_PATH")
+          SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
+
+          gh release upload "$TAG" "$DMG_PATH" --clobber
+          echo "✅ Stapled DMG re-uploaded"
+
+          CLEAN_BODY=$(gh release view "$TAG" --json body --jq '.body' \
+            | grep -v 'notarization-submission-id')
+          gh release edit "$TAG" --draft=false --notes "$CLEAN_BODY"
+          echo "✅ Published $TAG"
+
+          VERSION="${TAG#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          BUNDLE_VERSION=$((MAJOR * 100 + MINOR * 10 + PATCH))
+          REPO="${{ github.repository }}"
+          DMG_URL="https://github.com/${REPO}/releases/download/${TAG}/CorrectMe-${TAG}-macos.dmg"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+
+          python3 scripts/update-appcast.py \
+            --version "$VERSION" \
+            --tag "$TAG" \
+            --bundle-version "$BUNDLE_VERSION" \
+            --dmg-url "$DMG_URL" \
+            --length "$DMG_LENGTH" \
+            --signature "$ED_SIG" \
+            --pub-date "$(date -u '+%a, %d %b %Y %H:%M:%S +0000')" \
+            --appcast "dist/appcast.xml"
+
+          printf '{\n  "tag": "%s",\n  "version": "%s",\n  "asset": "CorrectMe-%s-macos.dmg",\n  "url": "%s",\n  "sha256": "%s",\n  "published_at": "%s"\n}\n' \
+            "$TAG" "$VERSION" "$TAG" "$DMG_URL" "$SHA256" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/latest.json
+
+          git add -f dist/appcast.xml dist/latest.json
+          git remote set-url origin \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${REPO}.git"
+          git diff --staged --quiet || \
+            git commit -m "release: update appcast.xml and latest.json for $TAG" && \
+            git push origin main
+
+          echo "🎉 Release $TAG complete!"
+          rm -rf /tmp/dmg-work
+        done < /tmp/pending.txt
