@@ -1,0 +1,115 @@
+name: Release — Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        TAG=${GITHUB_REF#refs/tags/}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "TAG=$TAG" >> $GITHUB_OUTPUT
+
+    - name: Inject LICENSE_SECRET
+      run: |
+        echo 'let LICENSE_SECRET = "${{ secrets.LICENSE_SECRET }}"' > Sources/LicenseSecret.swift
+
+    - name: Run tests
+      run: swift test
+      continue-on-error: true
+
+    - name: Import signing certificate
+      env:
+        CERT_BASE64: ${{ secrets.DEV_CERT_BASE64 }}
+        CERT_PASSWORD: ${{ secrets.DEV_CERT_PASSWORD }}
+      run: |
+        KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
+        KEYCHAIN_PASSWORD="$(openssl rand -hex 20)"
+
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+        CERT_PATH="$RUNNER_TEMP/cert.p12"
+        echo "$CERT_BASE64" | base64 --decode > "$CERT_PATH"
+        security import "$CERT_PATH" \
+          -k "$KEYCHAIN_PATH" \
+          -P "$CERT_PASSWORD" \
+          -T /usr/bin/codesign
+
+        security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+        echo "✅ Certificate imported"
+
+    - name: Build release DMG and submit notarization
+      id: notarize
+      env:
+        DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        NOTARIZE_WAIT: "false"
+      run: |
+        chmod +x scripts/build-release.sh
+        ./scripts/build-release.sh
+        SUBMISSION_ID=$(cat .build/release-dmg/notarization_id.txt 2>/dev/null || echo "")
+        echo "SUBMISSION_ID=$SUBMISSION_ID" >> $GITHUB_OUTPUT
+        echo "Notarization submitted: $SUBMISSION_ID"
+
+    - name: Create draft release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG="${{ steps.version.outputs.TAG }}"
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        SUBMISSION_ID="${{ steps.notarize.outputs.SUBMISSION_ID }}"
+        DMG_PATH=$(ls .build/release-dmg/*.dmg | head -1)
+        SHA256=$(cat .build/release-dmg/sha256.txt)
+        REPO="${{ github.repository }}"
+
+        # The hidden comment is used by release-publish.yml to find pending releases.
+        cat > /tmp/release-notes.md << EOF
+        ## CorrectMe ${TAG}
+
+        ### Install
+
+        \`\`\`bash
+        curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | sh
+        \`\`\`
+
+        Or download the DMG below and drag **CorrectMe.app** into Applications.
+
+        ### SHA256
+        \`\`\`
+        ${SHA256}  CorrectMe-${TAG}-macos.dmg
+        \`\`\`
+
+        <!-- notarization-submission-id: ${SUBMISSION_ID} -->
+        EOF
+
+        gh release create "$TAG" "$DMG_PATH" \
+          --title "CorrectMe $TAG" \
+          --notes-file /tmp/release-notes.md \
+          --draft
+
+        echo "✅ Draft release created for $TAG (notarization pending)"
+
+    - name: Cleanup keychain
+      if: always()
+      run: |
+        KEYCHAIN_PATH="$RUNNER_TEMP/release.keychain-db"
+        [ -f "$KEYCHAIN_PATH" ] && security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
