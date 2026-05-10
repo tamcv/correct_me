@@ -30,11 +30,28 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # List all draft releases whose body contains a notarization submission ID.
-        DRAFTS=$(gh release list --json tagName,isDraft,body \
-          --jq '[.[] | select(.isDraft == true) | select(.body | contains("notarization-submission-id:"))]')
+        # gh release list does not expose the body field — fetch it per-release via view.
+        DRAFT_TAGS=$(gh release list --json tagName,isDraft \
+          --jq '[.[] | select(.isDraft == true) | .tagName] | .[]')
 
-        COUNT=$(echo "$DRAFTS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+        COUNT=0
+        > /tmp/pending.txt
+
+        for TAG in $DRAFT_TAGS; do
+          BODY=$(gh release view "$TAG" --json body --jq '.body' 2>/dev/null || echo "")
+          if echo "$BODY" | grep -q "notarization-submission-id:"; then
+            SUBMISSION_ID=$(echo "$BODY" | python3 -c "
+import sys, re
+m = re.search(r'notarization-submission-id:\s*([a-f0-9\-]+)', sys.stdin.read())
+if m: print(m.group(1))
+" 2>/dev/null)
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "$TAG|$SUBMISSION_ID" >> /tmp/pending.txt
+              COUNT=$((COUNT + 1))
+            fi
+          fi
+        done
+
         echo "Pending draft releases: $COUNT"
 
         if [ "$COUNT" -eq 0 ]; then
@@ -44,18 +61,6 @@ jobs:
         fi
 
         echo "FOUND=true" >> $GITHUB_OUTPUT
-
-        # Write TAG|SUBMISSION_ID lines to a file for the next step.
-        echo "$DRAFTS" | python3 - << 'PYEOF'
-        import sys, json, re
-        drafts = json.load(sys.stdin)
-        for d in drafts:
-            m = re.search(r'notarization-submission-id:\s*([a-f0-9\-]+)', d['body'])
-            if m:
-                print(f"{d['tagName']}|{m.group(1)}")
-        PYEOF
-        ) > /tmp/pending.txt
-
         cat /tmp/pending.txt
 
     - name: Process pending releases
