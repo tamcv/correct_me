@@ -40,11 +40,9 @@ jobs:
         for TAG in $DRAFT_TAGS; do
           BODY=$(gh release view "$TAG" --json body --jq '.body' 2>/dev/null || echo "")
           if echo "$BODY" | grep -q "notarization-submission-id:"; then
-            SUBMISSION_ID=$(echo "$BODY" | python3 -c "
-import sys, re
-m = re.search(r'notarization-submission-id:\s*([a-f0-9\-]+)', sys.stdin.read())
-if m: print(m.group(1))
-" 2>/dev/null)
+            SUBMISSION_ID=$(echo "$BODY" | python3 -c \
+              "import sys,re; m=re.search(r'notarization-submission-id:\s*([a-f0-9-]+)',sys.stdin.read()); print(m.group(1)) if m else None" \
+              2>/dev/null)
             if [ -n "$SUBMISSION_ID" ]; then
               echo "$TAG|$SUBMISSION_ID" >> /tmp/pending.txt
               COUNT=$((COUNT + 1))
