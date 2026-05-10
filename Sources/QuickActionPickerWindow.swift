@@ -235,11 +235,17 @@ class QuickActionPickerWindow: NSPanel {
         footerSep.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.07).cgColor
         bg.addSubview(footerSep)
 
-        let checkbox = NSButton(checkboxWithTitle: "Show picker on hotkey",
+        let checkbox = NSButton(checkboxWithTitle: "",
                                 target: self,
                                 action: #selector(showPickerToggled(_:)))
-        checkbox.font        = .systemFont(ofSize: 11)
-        checkbox.contentTintColor = NSColor(white: 0.55, alpha: 1)
+        let attrTitle = NSAttributedString(
+            string: "Show picker on hotkey",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: NSColor(white: 0.78, alpha: 1)
+            ]
+        )
+        checkbox.attributedTitle = attrTitle
         checkbox.state       = (cfg.quickActionsEnabled != false) ? .on : .off
         let chkW: CGFloat    = winW - 24
         let chkH: CGFloat    = 16
