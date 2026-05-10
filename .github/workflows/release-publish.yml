@@ -1,4 +1,4 @@
-name: Release — Publish
+name: Release - Publish
 
 # Triggered three ways:
 #   1. Automatically when Release — Build completes (catches fast notarizations)
