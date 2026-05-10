@@ -95,5 +95,20 @@
         sparkle:edSignature="D1/suQkfa5WVIQL0RtThEcoVEXvt66xlJVxDBwc5+1P37d4f0lSK3C7+pYNvtw61AHmO68Or0sMeVrved7NGCg=="
       />
     </item>
+
+    <item>
+      <title>CorrectMe 0.5.8</title>
+      <sparkle:version>58</sparkle:version>
+      <sparkle:shortVersionString>0.5.8</sparkle:shortVersionString>
+      <pubDate>Sun, 10 May 2026 07:36:49 +0000</pubDate>
+      <enclosure
+        url="https://github.com/tamcv/correct_me/releases/download/v0.5.8/CorrectMe-v0.5.8-macos.dmg"
+        sparkle:version="58"
+        sparkle:shortVersionString="0.5.8"
+        length="1859369"
+        type="application/octet-stream"
+        sparkle:edSignature="B1Uc3/Ca345dL7mk9sodsNQ8bcYTYoXFQPy5CTUYcpq3/P/z6aV4hEVnjCtBJzfZDDz+O+/bT6Qf9/VVGee6AQ=="
+      />
+    </item>
   </channel>
 </rss>
