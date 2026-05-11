@@ -18,6 +18,8 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     private var selectedHotkey: Config.HotkeyConfig = .default
     private var selectedModel: String?
     private var selectedTranslateLanguage: String = Config.TranslateLanguage.auto.rawValue
+    private var selectedShowPicker: Bool = true    // quickActionsEnabled
+    private var selectedPreviewResults: Bool = true // forceApply = false → show diff preview
 
     // Provider step views
     private var providerInfoBox: NSBox?
@@ -1010,24 +1012,111 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         let cx = bounds.width / 2
 
         let icon = makeSFSymbol("checkmark.circle.fill", size: 56, color: .systemGreen)
-        icon.frame = NSRect(x: cx - 40, y: bounds.height - 130, width: 80, height: 80)
+        icon.frame = NSRect(x: cx - 40, y: bounds.height - 118, width: 80, height: 80)
         icon.autoresizingMask = [.minXMargin, .maxXMargin]
         contentView.addSubview(icon)
 
         let title = makeTitle("You're all set!")
-        title.frame = NSRect(x: contentPad, y: bounds.height - 180, width: bounds.width - contentPad * 2, height: 32)
+        title.frame = NSRect(x: contentPad, y: bounds.height - 160, width: bounds.width - contentPad * 2, height: 32)
         title.autoresizingMask = [.width]
         contentView.addSubview(title)
 
-        let desc = makeSubtitle("CorrectMe is configured and ready.\n\nSelect any text and press \(selectedHotkey.displayName) to correct it.\nYou can change settings anytime from the menu bar icon.")
-        desc.frame = NSRect(x: contentPad + 20, y: bounds.height - 280, width: bounds.width - contentPad * 2 - 40, height: 80)
+        let desc = makeSubtitle("CorrectMe is ready. Select any text and press \(selectedHotkey.displayName) to correct it.")
+        desc.frame = NSRect(x: contentPad + 20, y: bounds.height - 210, width: bounds.width - contentPad * 2 - 40, height: 40)
         desc.autoresizingMask = [.width]
         contentView.addSubview(desc)
 
+        // ── Behavior preferences card ────────────────────────────────────────
+        let cardW = bounds.width - contentPad * 2
+        let cardX = contentPad
+        let cardY: CGFloat = 130
+        let cardH: CGFloat = 164
+        let card = NSBox(frame: NSRect(x: cardX, y: cardY, width: cardW, height: cardH))
+        card.boxType = .custom
+        card.cornerRadius = 10
+        card.borderColor = NSColor.separatorColor
+        card.fillColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5)
+        card.borderWidth = 1
+        contentView.addSubview(card)
+
+        let cardTitle = NSTextField(labelWithString: "Behavior")
+        cardTitle.font = .systemFont(ofSize: 11, weight: .semibold)
+        cardTitle.textColor = .secondaryLabelColor
+        cardTitle.frame = NSRect(x: 14, y: cardH - 26, width: cardW - 28, height: 16)
+        card.addSubview(cardTitle)
+
+        let sepLine = NSView(frame: NSRect(x: 14, y: cardH - 34, width: cardW - 28, height: 1))
+        sepLine.wantsLayer = true
+        sepLine.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        card.addSubview(sepLine)
+
+        // ── Row 1: Quick Actions ─────────────────────────────────────────────
+        let chkW = cardW - 28
+        let row1Y: CGFloat = cardH - 75
+        let pickerChk = NSButton(checkboxWithTitle: "", target: self, action: #selector(pickerToggled(_:)))
+        pickerChk.state = selectedShowPicker ? .on : .off
+        pickerChk.frame = NSRect(x: 14, y: row1Y + 18, width: 20, height: 20)
+        card.addSubview(pickerChk)
+
+        let pickerLabel = NSTextField(labelWithString: "Show Quick Actions on hotkey")
+        pickerLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        pickerLabel.textColor = .labelColor
+        pickerLabel.frame = NSRect(x: 38, y: row1Y + 20, width: chkW - 24, height: 16)
+        card.addSubview(pickerLabel)
+
+        let pickerHint = NSTextField(labelWithString: "Choose between Correct, Translate, Summarize and custom actions each time.")
+        pickerHint.font = .systemFont(ofSize: 11)
+        pickerHint.textColor = .secondaryLabelColor
+        pickerHint.cell?.wraps = true
+        pickerHint.frame = NSRect(x: 38, y: row1Y, width: chkW - 24, height: 18)
+        card.addSubview(pickerHint)
+
+        // ── Divider ──────────────────────────────────────────────────────────
+        let rowSep = NSView(frame: NSRect(x: 14, y: cardH - 115, width: cardW - 28, height: 1))
+        rowSep.wantsLayer = true
+        rowSep.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
+        card.addSubview(rowSep)
+
+        // ── Row 2: Preview results ───────────────────────────────────────────
+        let row2Y: CGFloat = cardH - 160
+        let previewChk = NSButton(checkboxWithTitle: "", target: self, action: #selector(previewToggled(_:)))
+        previewChk.state = selectedPreviewResults ? .on : .off
+        previewChk.frame = NSRect(x: 14, y: row2Y + 18, width: 20, height: 20)
+        card.addSubview(previewChk)
+
+        let previewLabel = NSTextField(labelWithString: "Preview corrections before applying")
+        previewLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        previewLabel.textColor = .labelColor
+        previewLabel.frame = NSRect(x: 38, y: row2Y + 20, width: chkW - 24, height: 16)
+        card.addSubview(previewLabel)
+
+        let previewHint = NSTextField(labelWithString: "See a diff view — accept, reject or edit before the text is replaced.")
+        previewHint.font = .systemFont(ofSize: 11)
+        previewHint.textColor = .secondaryLabelColor
+        previewHint.cell?.wraps = true
+        previewHint.frame = NSRect(x: 38, y: row2Y, width: chkW - 24, height: 18)
+        card.addSubview(previewHint)
+
         let startBtn = makeAccentButton("Start CorrectMe", target: self, action: #selector(finishOnboarding))
-        startBtn.frame = NSRect(x: (bounds.width - 180) / 2, y: 70, width: 180, height: 36)
+        startBtn.frame = NSRect(x: (bounds.width - 180) / 2, y: 76, width: 180, height: 36)
         startBtn.autoresizingMask = [.minXMargin, .maxXMargin]
         contentView.addSubview(startBtn)
+
+        let changeHint = NSTextField(labelWithString: "You can change these anytime in Preferences.")
+        changeHint.font = .systemFont(ofSize: 10)
+        changeHint.textColor = .tertiaryLabelColor
+        changeHint.alignment = .center
+        changeHint.frame = NSRect(x: contentPad, y: 56, width: bounds.width - contentPad * 2, height: 14)
+        changeHint.autoresizingMask = [.width]
+        contentView.addSubview(changeHint)
+    }
+
+    @objc private func pickerToggled(_ sender: NSButton) {
+        selectedShowPicker = sender.state == .on
+    }
+
+    @objc private func previewToggled(_ sender: NSButton) {
+        selectedPreviewResults = sender.state == .on
     }
 
     @objc private func finishOnboarding() {
@@ -1200,6 +1289,10 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         // Translation target language (nil = auto)
         let isAuto = selectedTranslateLanguage == Config.TranslateLanguage.auto.rawValue
         config.translateTargetLanguage = isAuto ? nil : selectedTranslateLanguage
+
+        // Behavior preferences chosen on Done step
+        config.quickActionsEnabled = selectedShowPicker   // false = skip picker, go straight to "Correct"
+        config.forceApply = !selectedPreviewResults       // forceApply=true → no diff preview
 
         do {
             try config.save()
