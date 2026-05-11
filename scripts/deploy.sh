@@ -10,21 +10,32 @@ fi
 pkill -x correctme 2>/dev/null || true
 sleep 0.8
 
-# 2. Replace app bundle
+# 2. Copy binary only (framework files are unchanged between dev builds)
+BINARY_SRC=".build/debug/CorrectMe"
+BINARY_DST="/Applications/CorrectMe.app/Contents/MacOS/correctme"
+
+# Prefer debug binary if it exists, otherwise fall back to .build/CorrectMe.app bundle binary
+[ -f "$BINARY_SRC" ] || BINARY_SRC=".build/CorrectMe.app/Contents/MacOS/correctme"
+
 echo "Installing app..."
-rsync -a --delete .build/CorrectMe.app/ /Applications/CorrectMe.app/
+NEED_SUDO=false
+if ! cp "$BINARY_SRC" "$BINARY_DST" 2>/dev/null; then
+    sudo cp "$BINARY_SRC" "$BINARY_DST"
+    NEED_SUDO=true
+fi
 
-# 3. Clear quarantine flag (prevents macOS from showing permission prompts)
-xattr -c /Applications/CorrectMe.app 2>/dev/null || true
-
-# 4. Re-sign so TCC keeps tracking by bundle ID (not binary hash)
+# 3. Re-sign binary so TCC keeps tracking by bundle ID (not binary hash)
 CERT_NAME="Developer ID Application: Tam Chau (854GZSP8M7)"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$CERT_NAME\""; then
-    codesign --force --deep --sign "$CERT_NAME" /Applications/CorrectMe.app/ 2>/dev/null
+    if [ "$NEED_SUDO" = true ]; then
+        sudo codesign --force --sign "$CERT_NAME" "$BINARY_DST" 2>/dev/null
+    else
+        codesign --force --sign "$CERT_NAME" "$BINARY_DST" 2>/dev/null \
+            || sudo codesign --force --sign "$CERT_NAME" "$BINARY_DST" 2>/dev/null
+    fi
     echo "✓ Re-signed with $CERT_NAME"
 else
     echo "⚠️  No '$CERT_NAME' certificate found — accessibility permissions may need re-granting"
-    echo "   Run ./scripts/setup-dev-cert.sh once to fix this permanently"
 fi
 
 # 5. Start fresh
