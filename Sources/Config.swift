@@ -146,7 +146,8 @@ struct Config: Codable {
     }
 
     enum DefaultModels {
-        static let claudeCode = "claude-haiku-4-5"
+        // claude CLI alias — always resolves to the latest Haiku model
+        static let claudeCode = "haiku"
         static let anthropic = "claude-haiku-4-5-20251001"
         static let gemini = "gemini-2.0-flash"
         static let openaiCodex = "gpt-5.1-codex-mini"
@@ -155,12 +156,15 @@ struct Config: Codable {
         static let openrouter = "meta-llama/llama-3.1-8b-instruct:free"
         static let ollama = "llama3.2"
 
-        // Predefined model choices for CLI providers
+        // Claude Code CLI model picker.
+        // Uses stable model aliases (haiku/sonnet/opus) so the picker stays
+        // accurate across claude CLI upgrades — no app update needed.
         static let claudeCodeModels: [(id: String, label: String)] = [
-            ("claude-haiku-4-5",   "claude-haiku-4-5 · fast & cheap (default)"),
-            ("claude-sonnet-4-5",  "claude-sonnet-4-5 · balanced"),
-            ("claude-opus-4-5",    "claude-opus-4-5 · most capable"),
+            ("haiku",   "haiku · fast & cheap (default)"),
+            ("sonnet",  "sonnet · balanced"),
+            ("opus",    "opus · most capable"),
         ]
+        // Codex CLI model list — update when OpenAI adds new models.
         static let codexCLIModels: [(id: String, label: String)] = [
             ("codex-mini-latest",  "codex-mini-latest · fast & cheap (default)"),
             ("o4-mini",            "o4-mini · smarter"),
