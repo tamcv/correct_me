@@ -150,9 +150,22 @@ struct Config: Codable {
         static let anthropic = "claude-haiku-4-5-20251001"
         static let gemini = "gemini-2.0-flash"
         static let openaiCodex = "gpt-5.1-codex-mini"
+        static let codexCLI = "codex-mini-latest"
         static let copilot = "gpt-5-mini"
         static let openrouter = "meta-llama/llama-3.1-8b-instruct:free"
         static let ollama = "llama3.2"
+
+        // Predefined model choices for CLI providers
+        static let claudeCodeModels: [(id: String, label: String)] = [
+            ("claude-haiku-4-5",   "claude-haiku-4-5 · fast & cheap (default)"),
+            ("claude-sonnet-4-5",  "claude-sonnet-4-5 · balanced"),
+            ("claude-opus-4-5",    "claude-opus-4-5 · most capable"),
+        ]
+        static let codexCLIModels: [(id: String, label: String)] = [
+            ("codex-mini-latest",  "codex-mini-latest · fast & cheap (default)"),
+            ("o4-mini",            "o4-mini · smarter"),
+            ("o3",                 "o3 · most capable"),
+        ]
     }
 
     static var configPath: URL {

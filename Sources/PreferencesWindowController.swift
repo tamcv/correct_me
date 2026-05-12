@@ -28,6 +28,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var apiKeyHint: NSTextField!
     private var ollamaURLField: NSTextField!   // shown only when Ollama is selected
     private var ollamaPickModelBtn: NSButton!  // shown only when Ollama is selected
+    private var cliModelPickBtn: NSButton!     // shown only for claudeCode / codexCode
 
     // Hotkey tab
     private var hotkeyDisplayLabel: NSTextField!
@@ -422,6 +423,15 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         ollamaPickModelBtn.frame = NSRect(x: pad + modelFieldW + 6, y: y, width: pickBtnW, height: 24)
         ollamaPickModelBtn.isHidden = config.aiProvider != .ollama
         view.addSubview(ollamaPickModelBtn)
+
+        // "Pick Model" button — only visible for claudeCode / codexCode
+        cliModelPickBtn = NSButton(title: "▾ Model", target: self, action: #selector(pickCLIModel))
+        cliModelPickBtn.bezelStyle = .rounded
+        cliModelPickBtn.font = .systemFont(ofSize: 11)
+        cliModelPickBtn.frame = NSRect(x: pad + modelFieldW + 6, y: y, width: pickBtnW, height: 24)
+        let isCLI = [Config.AIProvider.claudeCode, .codexCode].contains(config.aiProvider)
+        cliModelPickBtn.isHidden = !isCLI
+        view.addSubview(cliModelPickBtn)
         y -= 30
 
         // Ollama base URL (shown only when Ollama provider is selected)
@@ -563,6 +573,34 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         modelField.stringValue = sender.title
     }
 
+    @objc private func pickCLIModel() {
+        let provider = selectedProvider()
+        let models: [(id: String, label: String)]
+        switch provider {
+        case .claudeCode: models = Config.DefaultModels.claudeCodeModels
+        case .codexCode:  models = Config.DefaultModels.codexCLIModels
+        default:          return
+        }
+
+        let menu = NSMenu()
+        for (id, label) in models {
+            let item = NSMenuItem(title: label, action: #selector(cliModelMenuItemSelected(_:)), keyEquivalent: "")
+            item.representedObject = id
+            item.target = self
+            // Check current selection
+            if modelField.stringValue == id { item.state = .on }
+            menu.addItem(item)
+        }
+        if let event = NSApp.currentEvent {
+            NSMenu.popUpContextMenu(menu, with: event, for: cliModelPickBtn)
+        }
+    }
+
+    @objc private func cliModelMenuItemSelected(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        modelField.stringValue = id
+    }
+
     private func selectedProvider() -> Config.AIProvider {
         guard let raw = providerPopUp.selectedItem?.representedObject as? String,
               let provider = Config.AIProvider(rawValue: raw) else {
@@ -616,6 +654,10 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         }
         ollamaURLField?.isHidden = !showOllamaURL
         ollamaPickModelBtn?.isHidden = !showOllamaURL
+
+        // Show CLI model picker only for claudeCode / codexCode
+        let showCLIPicker = provider == .claudeCode || provider == .codexCode
+        cliModelPickBtn?.isHidden = !showCLIPicker
 
         loadAPIKeyForCurrentProvider()
         updateAPIKeyPreview()
@@ -846,7 +888,7 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         case .claude:      return Config.DefaultModels.anthropic
         case .gemini:      return Config.DefaultModels.gemini
         case .codex:       return Config.DefaultModels.openaiCodex
-        case .codexCode:   return Config.DefaultModels.openaiCodex
+        case .codexCode:   return Config.DefaultModels.codexCLI
         case .copilot:     return Config.DefaultModels.copilot
         case .openrouter:  return Config.DefaultModels.openrouter
         case .ollama:      return Config.DefaultModels.ollama
