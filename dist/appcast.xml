@@ -140,5 +140,20 @@
         sparkle:edSignature="vZMEa06o2fcuuT5ypFirNt3kWLoo2GGCEGlKKFjJoB5Su07Ty7mmOxnFcT/GEjI8cI7NVFcWQaV3QRB3AhHFCg=="
       />
     </item>
+
+    <item>
+      <title>CorrectMe 0.6.1</title>
+      <sparkle:version>61</sparkle:version>
+      <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
+      <pubDate>Thu, 14 May 2026 09:45:49 +0000</pubDate>
+      <enclosure
+        url="https://github.com/tamcv/correct_me/releases/download/v0.6.1/CorrectMe-v0.6.1-macos.dmg"
+        sparkle:version="61"
+        sparkle:shortVersionString="0.6.1"
+        length="1862936"
+        type="application/octet-stream"
+        sparkle:edSignature="AKeW9g8C2pUZkbabYpgjFCqUiS6CC+ikdGFAGB+v0hXUd7YvUynjG2YaAytEMTGLTfuzn93UEu32Qzp5HvJcBw=="
+      />
+    </item>
   </channel>
 </rss>
