@@ -26,6 +26,89 @@ enum DaemonManager {
         FileManager.default.fileExists(atPath: launchAgentPlistPath.path)
     }
 
+    // MARK: - Login Item (GUI-safe, no exit() calls)
+
+    /// Writes the LaunchAgent plist and bootstraps it into launchd so the daemon
+    /// auto-starts at login. Safe to call from the GUI (no exit()).
+    @discardableResult
+    static func enableLoginItem() -> Bool {
+        let targetPlist = launchAgentPlistPath
+
+        // Already installed — nothing to do.
+        if FileManager.default.fileExists(atPath: targetPlist.path) { return true }
+
+        let launchAgentsDir = targetPlist.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: launchAgentsDir, withIntermediateDirectories: true)
+
+        let executablePath = "/Applications/CorrectMe.app/Contents/MacOS/correctme"
+        let logDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".correctme")
+
+        let plistContent = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>Label</key>
+            <string>com.correctme.daemon</string>
+
+            <key>ProgramArguments</key>
+            <array>
+                <string>\(executablePath)</string>
+                <string>__daemon_start</string>
+            </array>
+
+            <key>RunAtLoad</key>
+            <true/>
+
+            <key>KeepAlive</key>
+            <dict>
+                <key>SuccessfulExit</key>
+                <false/>
+            </dict>
+
+            <key>StandardOutPath</key>
+            <string>\(logDir.path)/correctme.log</string>
+
+            <key>StandardErrorPath</key>
+            <string>\(logDir.path)/correctme.error.log</string>
+        </dict>
+        </plist>
+        """
+
+        do {
+            try plistContent.write(to: targetPlist, atomically: true, encoding: .utf8)
+        } catch {
+            debugLog("enableLoginItem: failed to write plist: \(error)")
+            return false
+        }
+
+        // bootstrap is the modern replacement for the deprecated `launchctl load`.
+        let uid = getuid()
+        let result = runLaunchctl(["bootstrap", "gui/\(uid)", targetPlist.path])
+        return result == 0
+    }
+
+    /// Removes the LaunchAgent plist so the daemon no longer starts at login.
+    /// Safe to call from the GUI (no exit()).
+    @discardableResult
+    static func disableLoginItem() -> Bool {
+        let targetPlist = launchAgentPlistPath
+
+        guard FileManager.default.fileExists(atPath: targetPlist.path) else { return true }
+
+        let uid = getuid()
+        runLaunchctl(["bootout", "gui/\(uid)", targetPlist.path])
+
+        do {
+            try FileManager.default.removeItem(at: targetPlist)
+            return true
+        } catch {
+            debugLog("disableLoginItem: failed to remove plist: \(error)")
+            return false
+        }
+    }
+
     /// Returns true if launchd currently has our service registered (i.e. background access is working).
     static var isLaunchAgentLoaded: Bool {
         let process = Process()

@@ -2068,28 +2068,30 @@ struct CorrectMeApp {
             exit(1)
         }
 
-        // Load the LaunchAgent
-        let loadProcess = Process()
-        loadProcess.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        loadProcess.arguments = ["load", targetPlist.path]
+        // Bootstrap the LaunchAgent into launchd.
+        // `launchctl bootstrap` is the modern replacement for the deprecated `load`.
+        let uid = getuid()
+        let bootstrapProcess = Process()
+        bootstrapProcess.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        bootstrapProcess.arguments = ["bootstrap", "gui/\(uid)", targetPlist.path]
+        bootstrapProcess.standardOutput = Pipe()
+        bootstrapProcess.standardError = Pipe()
 
         do {
-            try loadProcess.run()
-            loadProcess.waitUntilExit()
+            try bootstrapProcess.run()
+            bootstrapProcess.waitUntilExit()
 
-            if loadProcess.terminationStatus == 0 {
+            if bootstrapProcess.terminationStatus == 0 {
                 print("✅ Auto-start enabled!")
                 print("  CorrectMe will now start automatically at login")
                 print("  LaunchAgent: \(targetPlist.path)")
             } else {
-                print("⚠️  LaunchAgent created but failed to load")
-                print("  You may need to load it manually:")
-                print("  launchctl load \(targetPlist.path)")
+                print("⚠️  LaunchAgent created but failed to bootstrap")
+                print("  Try manually: launchctl bootstrap gui/\(uid) \(targetPlist.path)")
             }
         } catch {
-            print("❌ Failed to load LaunchAgent: \(error)")
+            print("❌ Failed to bootstrap LaunchAgent: \(error)")
             print("  Plist created at: \(targetPlist.path)")
-            print("  Load it manually with: launchctl load \(targetPlist.path)")
         }
     }
 
@@ -2104,17 +2106,15 @@ struct CorrectMeApp {
             return
         }
 
-        // Unload the LaunchAgent
-        let unloadProcess = Process()
-        unloadProcess.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        unloadProcess.arguments = ["unload", targetPlist.path]
-
-        do {
-            try unloadProcess.run()
-            unloadProcess.waitUntilExit()
-        } catch {
-            print("⚠️  Warning: Failed to unload LaunchAgent: \(error)")
-        }
+        // Bootout — modern replacement for the deprecated `launchctl unload`.
+        let uid = getuid()
+        let bootoutProcess = Process()
+        bootoutProcess.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        bootoutProcess.arguments = ["bootout", "gui/\(uid)", targetPlist.path]
+        bootoutProcess.standardOutput = Pipe()
+        bootoutProcess.standardError = Pipe()
+        try? bootoutProcess.run()
+        bootoutProcess.waitUntilExit()
 
         // Remove the plist file
         do {

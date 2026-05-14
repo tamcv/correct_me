@@ -2366,6 +2366,16 @@ class PreferencesWindowController: NSObject, NSWindowDelegate {
         config.forceApply = forceApplyCheckbox.state == .on ? true : nil
         config.quickActionsEnabled = quickActionsCheckbox.state == .off ? false : nil
 
+        // Auto-start at login: install or remove the LaunchAgent plist.
+        let wantsAutoStart = autoStartCheckbox.state == .on
+        if wantsAutoStart != DaemonManager.isLaunchAgentInstalled {
+            if wantsAutoStart {
+                DaemonManager.enableLoginItem()
+            } else {
+                DaemonManager.disableLoginItem()
+            }
+        }
+
         // Translation target language (nil = auto)
         if let popup = translateLanguagePopup, let selected = popup.selectedItem?.title {
             let isAuto = selected == Config.TranslateLanguage.auto.rawValue
