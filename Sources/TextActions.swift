@@ -67,8 +67,7 @@ enum TextAction: String, CaseIterable {
 
         case .summarize:
             return """
-            LANGUAGE RULE (highest priority): Respond in the exact same language as the input text. \
-            Do NOT translate or change the language under any circumstances.
+            LANGUAGE: Respond in the EXACT same language as the input text. DO NOT translate.
 
             Summarize the text below concisely, capturing only the key points.
             Return ONLY the summary — no explanations, no quotes, no markdown.

@@ -895,10 +895,10 @@ func createAIProvider(from config: Config) throws -> AIProvider {
 /// Build correction prompt, appending user's writing style requirements if set.
 /// Reads config fresh each call so changes in Preferences take effect immediately.
 ///
-/// Language handling: the prompt explicitly instructs the model to detect the
-/// language of the input and correct it in that language. Vietnamese (tiếng Việt)
-/// is called out explicitly because tone marks and diacritics are commonly
-/// mishandled by generic spell-checkers.
+/// Language handling: the LANGUAGE LOCK line is placed first so even small local
+/// models (e.g. gemma3:4b, llama3.2) cannot miss it. Avoid naming specific
+/// languages in the rules — small models sometimes interpret "For Vietnamese: …"
+/// as an instruction to output Vietnamese, regardless of the input language.
 /// - `writingStyleOverride`: when non-nil, use this style directly (bypasses auto per-app lookup).
 ///   Pass `nil` to use the automatic logic (per-app style > global style > none).
 ///   Pass an empty string `""` to force no style (pure grammar-only correction).
@@ -921,32 +921,33 @@ func buildCorrectionPrompt(text: String, context: String = "", writingStyleOverr
         }
     }
 
+    // Language lock — placed first so it takes highest priority even for small models.
+    // Do NOT name specific languages here; small models can misread "For Vietnamese"
+    // as an output-language directive.
+    let languageLock = "LANGUAGE: Respond in the EXACT same language as the input text. DO NOT translate.\n\n"
+
     if writingStyle.isEmpty {
         return """
-        \(context)Fix the spelling and grammar of the following text.
+        \(languageLock)\(context)Fix only the spelling and grammar of the following text.
         Rules:
-        - DO NOT translate. Keep every word in its original language.
-        - If the text mixes languages (e.g. English + Vietnamese), keep that exact mix — do not normalise to one language.
         - Return ONLY the corrected text — no explanations, no markdown, no quotes.
-        - For Vietnamese: fix tone marks (dấu) and diacritics while keeping the meaning intact.
+        - Preserve all diacritics, tone marks, and special characters exactly as in the original.
         - Preserve the original formatting and line breaks.
         - If the text is already correct, return it unchanged.
 
-        Text to correct:
+        Text:
         \(text)
         """
     } else {
         return """
-        \(context)Rewrite/improve the following text while applying the style requirements below.
+        \(languageLock)\(context)Rewrite/improve the following text while applying the style requirements below.
         Style requirements: \(writingStyle)
         Rules:
-        - DO NOT translate. Keep every word in its original language.
-        - If the text mixes languages, keep that exact mix — do not normalise to one language.
         - Return ONLY the rewritten text — no explanations, no markdown, no quotes.
-        - For Vietnamese: ensure tone marks (dấu) and diacritics are correct.
+        - Preserve all diacritics, tone marks, and special characters exactly as in the original language.
         - Preserve the original formatting and line breaks.
 
-        Text to rewrite:
+        Text:
         \(text)
         """
     }
