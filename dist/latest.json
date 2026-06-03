@@ -1,8 +1,8 @@
 {
-  "tag": "v0.6.1",
-  "version": "0.6.1",
-  "asset": "CorrectMe-v0.6.1-macos.dmg",
-  "url": "https://github.com/tamcv/correct_me/releases/download/v0.6.1/CorrectMe-v0.6.1-macos.dmg",
-  "sha256": "e3f741e20ab0c5004256c5641c52bc65fc8eee78ffaf50b84ac0e7d8fa47999c",
-  "published_at": "2026-05-14T09:45:49Z"
+  "tag": "v0.6.2",
+  "version": "0.6.2",
+  "asset": "CorrectMe-v0.6.2-macos.dmg",
+  "url": "https://github.com/tamcv/correct_me/releases/download/v0.6.2/CorrectMe-v0.6.2-macos.dmg",
+  "sha256": "473bbb3868a3b22e86a888e5753278881ca808dc37b6325393639df549924ce5",
+  "published_at": "2026-06-03T08:49:49Z"
 }
